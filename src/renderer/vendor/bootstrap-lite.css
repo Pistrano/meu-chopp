@@ -1,0 +1,127 @@
+/* ==========================================================
+   MeuChopp — base de layout (subconjunto do Bootstrap 5.3, MIT)
+   Contém apenas o que o aplicativo usa: reboot, grade, formulários,
+   botões, dropdown, alerta, spinner e utilitários. Funciona offline.
+   ========================================================== */
+
+/* ---------- Reboot ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-size: 1rem; font-weight: 400; line-height: 1.5; }
+h1, h2, h3, h4, h5, h6 { margin-top: 0; margin-bottom: .5rem; font-weight: 500; line-height: 1.2; }
+h1 { font-size: 2rem; } h2 { font-size: 1.6rem; } h3 { font-size: 1.35rem; }
+p { margin-top: 0; margin-bottom: 1rem; }
+ul { margin-top: 0; margin-bottom: 1rem; padding-left: 2rem; }
+a { color: var(--mc-info, #3d6b8c); text-decoration: underline; }
+img, svg { vertical-align: middle; }
+label { display: inline-block; }
+button, input, select, textarea { margin: 0; font-family: inherit; font-size: inherit; line-height: inherit; }
+button { padding: 0; color: inherit; background-color: transparent; border: 0; border-radius: 0; text-transform: none; }
+button:not(:disabled) { cursor: pointer; }
+button:focus:not(:focus-visible) { outline: 0; }
+[hidden] { display: none !important; }
+
+/* ---------- Grade ---------- */
+.row {
+  --bs-gutter-x: 1.5rem; --bs-gutter-y: 0;
+  display: flex; flex-wrap: wrap;
+  margin-top: calc(-1 * var(--bs-gutter-y));
+  margin-right: calc(-.5 * var(--bs-gutter-x));
+  margin-left: calc(-.5 * var(--bs-gutter-x));
+}
+.row > * {
+  flex-shrink: 0; width: 100%; max-width: 100%;
+  padding-right: calc(var(--bs-gutter-x) * .5);
+  padding-left: calc(var(--bs-gutter-x) * .5);
+  margin-top: var(--bs-gutter-y);
+}
+.g-0 { --bs-gutter-x: 0; --bs-gutter-y: 0; }
+.g-3 { --bs-gutter-x: 1rem; --bs-gutter-y: 1rem; }
+.col { flex: 1 0 0%; }
+.row-cols-2 > * { flex: 0 0 auto; width: 50%; }
+.col-6  { flex: 0 0 auto; width: 50%; }
+.col-12 { flex: 0 0 auto; width: 100%; }
+@media (min-width: 768px) {
+  .row-cols-md-3 > * { flex: 0 0 auto; width: 33.33333333%; }
+  .col-md-2 { flex: 0 0 auto; width: 16.66666667%; }
+  .col-md-3 { flex: 0 0 auto; width: 25%; }
+  .col-md-4 { flex: 0 0 auto; width: 33.33333333%; }
+  .col-md-5 { flex: 0 0 auto; width: 41.66666667%; }
+}
+@media (min-width: 992px) { .col-lg-6 { flex: 0 0 auto; width: 50%; } }
+@media (min-width: 1200px) { .row-cols-xl-5 > * { flex: 0 0 auto; width: 20%; } }
+
+/* ---------- Formulários ---------- */
+.form-label { margin-bottom: .5rem; }
+.form-control, .form-select {
+  display: block; width: 100%;
+  padding: .375rem .75rem;
+  font-size: 1rem; font-weight: 400; line-height: 1.5;
+  color: var(--mc-text, #1c2027);
+  background-color: #fff; background-clip: padding-box;
+  border: 1px solid #dee2e6; border-radius: .375rem;
+  -webkit-appearance: none; appearance: none;
+  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+.form-control:focus, .form-select:focus { outline: 0; }
+.form-control[type="search"] { -webkit-appearance: none; }
+.form-select {
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat; background-position: right .75rem center; background-size: 16px 12px;
+}
+.form-control:disabled, .form-select:disabled { background-color: #e9ecef; opacity: 1; }
+
+/* ---------- Botões ---------- */
+.btn {
+  display: inline-block; padding: .375rem .75rem;
+  font-weight: 400; line-height: 1.5; text-align: center; text-decoration: none; vertical-align: middle;
+  -webkit-user-select: none; user-select: none;
+  background-color: transparent; border: 1px solid transparent; border-radius: .375rem;
+}
+.btn:disabled { pointer-events: none; opacity: .65; }
+
+/* ---------- Alerta ---------- */
+.alert { position: relative; padding: 1rem; margin-bottom: 1rem; border: 1px solid transparent; border-radius: .375rem; }
+
+/* ---------- Spinner ---------- */
+.spinner-border {
+  display: inline-block; width: 2rem; height: 2rem; vertical-align: -.125em;
+  border: .25em solid currentcolor; border-right-color: transparent; border-radius: 50%;
+  animation: mc-spin .75s linear infinite;
+}
+.spinner-border-sm { width: 1rem; height: 1rem; border-width: .2em; }
+@keyframes mc-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Dropdown (os scripts do Bootstrap controlam abrir/fechar) ---------- */
+.dropdown { position: relative; }
+.dropdown-toggle { white-space: nowrap; }
+.dropdown-toggle::after {
+  display: inline-block; margin-left: .255em; vertical-align: .255em; content: "";
+  border-top: .3em solid; border-right: .3em solid transparent; border-bottom: 0; border-left: .3em solid transparent;
+}
+.dropdown-menu {
+  position: absolute; z-index: 1000; display: none;
+  min-width: 10rem; padding: .5rem 0; margin: 0;
+  font-size: 1rem; color: var(--mc-text, #1c2027); text-align: left; list-style: none;
+  background-color: #fff; background-clip: padding-box;
+  border: 1px solid rgba(0, 0, 0, .15); border-radius: .5rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .12);
+}
+.dropdown-menu.show { display: block; }
+.dropdown-menu[data-bs-popper] { top: 100%; left: 0; margin-top: .125rem; }
+.dropdown-menu-end[data-bs-popper] { right: 0; left: auto; }
+.dropdown-item {
+  display: block; width: 100%; padding: .4rem 1rem; clear: both;
+  font-weight: 400; color: var(--mc-text, #1c2027); text-align: inherit; text-decoration: none; white-space: nowrap;
+  background-color: transparent; border: 0;
+}
+.dropdown-item:hover, .dropdown-item:focus { background-color: #eef0f3; color: var(--mc-text, #1c2027); }
+
+/* ---------- Utilitários ---------- */
+.d-none { display: none !important; }
+.w-100 { width: 100% !important; }
+.mb-3 { margin-bottom: 1rem !important; }
+.mb-4 { margin-bottom: 1.5rem !important; }
+.align-items-end { align-items: flex-end !important; }
+.text-decoration-none { text-decoration: none !important; }

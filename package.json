@@ -1,0 +1,32 @@
+{
+  "name": "meu-chopp",
+  "version": "1.0.0",
+  "description": "MeuChopp - Sistema de controle de barris de chopp",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "sql.js": "^1.12.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "br.com.meuchopp.app",
+    "productName": "MeuChopp",
+    "files": [
+      "src/**/*",
+      "build/icon.ico",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    }
+  }
+}

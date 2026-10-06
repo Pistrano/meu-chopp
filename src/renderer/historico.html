@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Histórico | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Histórico</h1><p id="subtitle">Quem fez cada operação, com data e hora.</p></div>
+      <button id="btnExport" class="btn btn-mc btn-mc-sm" type="button">Exportar relatório (CSV)</button>
+    </div>
+
+    <div id="tabs" class="tabs d-none">
+      <button type="button" class="active" data-tab="mov">Movimentações</button>
+      <button type="button" data-tab="aud">Auditoria do sistema</button>
+    </div>
+
+    <section id="tabMov">
+      <div class="filters">
+        <input id="q" class="form-control" type="search" placeholder="Buscar pelo código do barril">
+        <select id="operacao" class="form-select">
+          <option value="">Todas as operações</option><option value="entrada">Entrada</option>
+          <option value="transferencia">Transferência</option><option value="utilizacao">Utilização</option><option value="esgotado">Chopp Esgotado</option>
+        </select>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Data</th><th>Barril</th><th>Operação</th><th>Rota</th><th>Responsável</th><th>Observação</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tabAud" class="d-none">
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Data</th><th>Usuário</th><th>Ação</th><th>Detalhe</th></tr></thead>
+          <tbody id="tbodyAud"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/historico.js"></script>
+</body>
+</html>

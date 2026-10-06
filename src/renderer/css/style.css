@@ -1,0 +1,357 @@
+/* ==========================================================
+   MeuChopp — estilos globais e da tela de login
+   Os tokens em :root serão reaproveitados nas próximas telas.
+   ========================================================== */
+
+:root {
+  --mc-ink: #16181d;
+  --mc-ink-2: #20242c;
+  --mc-ink-3: #3a404b;
+  --mc-gold: #d9a441;
+  --mc-gold-dark: #b9852a;
+  --mc-gold-soft: #f6e9cc;
+  --mc-bg: #f4f5f7;
+  --mc-surface: #ffffff;
+  --mc-text: #1c2027;
+  --mc-muted: #626b78;
+  --mc-line: #d5d9e0;
+  --mc-danger: #b3372f;
+  --mc-danger-soft: #fbeceb;
+  --mc-success: #1f7a4d;
+  --mc-success-soft: #e6f4ec;
+  --mc-info: #3d6b8c;
+  --mc-info-soft: #e7eef2;
+
+  --mc-header-h: 64px;
+  --mc-radius: 10px;
+  --mc-font-body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mc-font-display: "Sora", "Manrope", system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--mc-font-body);
+  color: var(--mc-text);
+  background: var(--mc-bg);
+  overflow-x: hidden;
+}
+
+:focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+
+/* ---------- Layout ---------- */
+.login-layout { min-height: 100vh; }
+
+/* ---------- Painel da marca ---------- */
+.brand-panel { background: var(--mc-ink); color: #fff; display: flex; }
+
+.brand-inner {
+  width: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  padding: 3rem 3rem 3rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 3rem;
+}
+
+.brand-logo { display: flex; align-items: center; gap: .75rem; }
+
+.brand-name {
+  font-family: var(--mc-font-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+  letter-spacing: -.01em;
+}
+
+.brand-message h2 {
+  font-family: var(--mc-font-display);
+  font-weight: 600;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  line-height: 1.25;
+  margin-bottom: 1rem;
+}
+.brand-message p { color: #b8bfca; max-width: 34ch; margin: 0; }
+
+/* Trilha de rastreabilidade: linha vertical ligando as etapas */
+.trace {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.5rem;
+  position: relative;
+  color: #d7dbe2;
+  font-weight: 500;
+}
+.trace::before {
+  content: "";
+  position: absolute;
+  left: 5px; top: 10px; bottom: 10px;
+  width: 2px;
+  background: var(--mc-ink-3);
+}
+.trace li { position: relative; padding: .45rem 0; }
+.trace li::before {
+  content: "";
+  position: absolute;
+  left: -1.5rem; top: 50%;
+  width: 12px; height: 12px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: var(--mc-ink);
+  border: 2px solid var(--mc-gold);
+}
+.trace li:last-child::before { background: var(--mc-gold); }
+
+/* ---------- Painel do formulário ---------- */
+.form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.25rem;
+}
+.login-card { width: 100%; max-width: 420px; }
+
+.login-card h1 {
+  font-family: var(--mc-font-display);
+  font-weight: 700;
+  font-size: 1.85rem;
+  margin-bottom: .35rem;
+}
+.login-subtitle { color: var(--mc-muted); margin-bottom: 1.75rem; }
+
+.form-label { font-weight: 600; font-size: .92rem; margin-bottom: .4rem; }
+
+.form-control {
+  min-height: 48px;
+  border: 1.5px solid var(--mc-line);
+  border-radius: var(--mc-radius);
+  background: var(--mc-surface);
+  font-size: 1rem;
+  padding: .65rem .9rem;
+}
+.form-control::placeholder { color: #8a92a0; }
+.form-control:focus {
+  border-color: var(--mc-gold-dark);
+  box-shadow: 0 0 0 .2rem rgba(217, 164, 65, .3);
+}
+.form-control.is-invalid { border-color: var(--mc-danger); background-image: none; padding-right: .9rem; }
+.form-control.is-invalid:focus { box-shadow: 0 0 0 .2rem rgba(179, 55, 47, .2); }
+
+.field-error { color: var(--mc-danger); font-size: .87rem; font-weight: 500; margin-top: .35rem; }
+
+/* Campo de senha */
+.password-wrap { position: relative; }
+.password-wrap .form-control,
+.password-wrap .form-control.is-invalid { padding-right: 3.2rem; }
+.toggle-password {
+  position: absolute;
+  top: 0; right: 0;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--mc-radius);
+  color: var(--mc-muted);
+}
+.toggle-password:hover { color: var(--mc-ink); }
+
+/* Botão principal */
+.btn-mc {
+  min-height: 50px;
+  background: var(--mc-gold);
+  border: 1.5px solid var(--mc-gold);
+  color: var(--mc-ink);
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: var(--mc-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  transition: background-color .15s, border-color .15s;
+}
+.btn-mc:hover, .btn-mc:focus { background: var(--mc-gold-dark); border-color: var(--mc-gold-dark); color: #fff; }
+.btn-mc:active { background: #9c6f1f; border-color: #9c6f1f; color: #fff; }
+.btn-mc:disabled { background: var(--mc-gold); border-color: var(--mc-gold); color: var(--mc-ink); opacity: .7; }
+
+/* Alertas */
+.alert { border-radius: var(--mc-radius); font-size: .93rem; font-weight: 500; padding: .8rem 1rem; }
+.alert-error   { background: var(--mc-danger-soft);  color: var(--mc-danger);  border: 1px solid #efc3bf; }
+.alert-success { background: var(--mc-success-soft); color: var(--mc-success); border: 1px solid #b9dcc8; }
+
+.demo-note {
+  margin: 1.75rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--mc-line);
+  color: var(--mc-muted);
+  font-size: .85rem;
+  line-height: 1.6;
+}
+.demo-note strong { color: var(--mc-text); }
+
+/* ---------- Responsividade ---------- */
+@media (max-width: 991.98px) {
+  .login-layout { min-height: 100dvh; display: flex; flex-direction: column; }
+  .brand-panel { flex: 0 0 auto; }
+  .brand-inner { max-width: none; padding: 1.25rem; gap: 0; }
+  .brand-message, .trace { display: none; }
+  .form-panel { flex: 1 0 auto; align-items: flex-start; padding-top: 2rem; }
+}
+
+@media (max-width: 400px) {
+  .login-card h1 { font-size: 1.6rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation-duration: .01ms !important; }
+}
+
+/* ==========================================================
+   Cabeçalho do aplicativo (app-header)
+   Componente compartilhado por todas as telas internas
+   (Dashboard e as que virão depois do login).
+   ========================================================== */
+
+.app-header {
+  height: var(--mc-header-h);
+  background: var(--mc-ink);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.app-header .brand-logo { flex: 0 0 auto; }
+.app-header .brand-name { font-size: 1.15rem; }
+
+.app-header-spacer { flex: 1 1 auto; }
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+/* Seletor de unidade */
+.unit-select {
+  background: var(--mc-ink-2);
+  border: 1.5px solid var(--mc-ink-3);
+  color: #fff;
+  border-radius: var(--mc-radius);
+  padding: .45rem .8rem;
+  font-size: .9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  max-width: 220px;
+}
+.unit-select:hover, .unit-select:focus {
+  background: var(--mc-ink-3);
+  color: #fff;
+}
+.unit-select .unit-select-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.unit-menu { min-width: 260px; }
+.unit-menu .unit-option {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  width: 100%;
+}
+.unit-menu .unit-check {
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--mc-gold-dark);
+}
+
+/* Botão de alertas */
+.alerts-btn {
+  position: relative;
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--mc-ink-2);
+  border: 1.5px solid var(--mc-ink-3);
+  border-radius: var(--mc-radius);
+  color: #fff;
+}
+.alerts-btn:hover, .alerts-btn:focus { background: var(--mc-ink-3); color: #fff; }
+.alerts-badge {
+  position: absolute;
+  top: -6px; right: -6px;
+  min-width: 18px; height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--mc-danger);
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+.alerts-menu {
+  min-width: 300px;
+  max-width: 90vw;
+  padding: .5rem 0;
+}
+.alerts-menu-header {
+  padding: .4rem 1rem .6rem;
+  font-weight: 700;
+  font-size: .82rem;
+  letter-spacing: .02em;
+  color: var(--mc-muted);
+  border-bottom: 1px solid var(--mc-line);
+}
+.alert-item {
+  display: flex;
+  gap: .6rem;
+  padding: .65rem 1rem;
+  font-size: .88rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+.alert-item .alert-icon { color: var(--mc-gold-dark); flex: 0 0 auto; margin-top: .1rem; }
+.alerts-empty {
+  padding: 1rem;
+  color: var(--mc-muted);
+  font-size: .88rem;
+  text-align: center;
+}
+
+/* Usuário */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .3rem .5rem .3rem .3rem;
+  border-radius: var(--mc-radius);
+  color: #fff;
+}
+.user-chip:hover, .user-chip:focus { background: var(--mc-ink-2); color: #fff; }
+.user-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--mc-gold);
+  color: var(--mc-ink);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: .95rem;
+  flex: 0 0 auto;
+}
+.user-info { line-height: 1.15; text-align: left; }
+.user-info .user-name { font-weight: 700; font-size: .88rem; display: block; }
+.user-info .user-role { font-size: .74rem; color: #b8bfca; display: block; }
+
+@media (max-width: 767.98px) {
+  .app-header { padding: 0 .85rem; gap: .6rem; }
+  .app-header .brand-name { display: none; }
+  .unit-select { max-width: 130px; padding: .4rem .55rem; }
+  .user-info { display: none; }
+  .user-chip { padding: .3rem; }
+}

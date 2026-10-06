@@ -1,0 +1,83 @@
+/* ==========================================================
+   MeuChopp — componentes das telas internas (desktop)
+   ========================================================== */
+
+/* Navegação no cabeçalho */
+.app-nav { display: flex; gap: .25rem; margin-left: 1.25rem; }
+.app-nav a {
+  color: #b8bfca; text-decoration: none; font-weight: 600; font-size: .9rem;
+  padding: .45rem .8rem; border-radius: var(--mc-radius);
+}
+.app-nav a:hover { color: #fff; background: var(--mc-ink-2); }
+.app-nav a.active { color: var(--mc-ink); background: var(--mc-gold); }
+
+/* Cabeçalho de página */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.page-head h1 { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.6rem; margin: 0 0 .2rem; }
+.page-head p { color: var(--mc-muted); margin: 0; }
+
+/* Painéis e formulários */
+.panel { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: 1.25rem; margin-bottom: 1.5rem; }
+.panel-title { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.05rem; margin: 0 0 1rem; }
+.form-control, .form-select { min-height: 44px; border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius); }
+.form-select:focus { border-color: var(--mc-gold-dark); box-shadow: 0 0 0 .2rem rgba(217,164,65,.3); }
+.btn-mc-sm { min-height: 44px; padding: 0 1.2rem; }
+.btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 34px; padding: 0 .75rem; font-size: .83rem; font-weight: 700;
+  background: var(--mc-surface); border: 1.5px solid var(--mc-line); border-radius: 8px; color: var(--mc-text);
+}
+.btn-ghost:hover { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
+.btn-ghost--danger:hover { border-color: var(--mc-danger); background: var(--mc-danger-soft); color: var(--mc-danger); }
+.row-actions { display: flex; gap: .4rem; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Tabelas */
+.table-card { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); overflow-x: auto; }
+.table-card table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.table-card th { text-align: left; font-size: .8rem; color: var(--mc-muted); font-weight: 700; padding: .75rem 1rem; border-bottom: 1px solid var(--mc-line); white-space: nowrap; }
+.table-card td { padding: .75rem 1rem; border-top: 1px solid var(--mc-line); vertical-align: middle; }
+.table-card tbody tr:first-child td { border-top: 0; }
+.table-card .t-strong { font-weight: 700; }
+.table-card .t-muted { color: var(--mc-muted); font-size: .82rem; }
+.table-empty { padding: 2.2rem 1rem; text-align: center; color: var(--mc-muted); }
+
+/* Status extras (reaproveita .op-badge) */
+.op-badge--disponivel { background: var(--mc-success-soft); color: var(--mc-success); }
+.op-badge--em_uso { background: #f6e9cc; color: var(--mc-gold-dark); }
+.op-badge--em_transferencia, .op-badge--pendente { background: var(--mc-info-soft); color: var(--mc-info); }
+.op-badge--confirmada { background: var(--mc-success-soft); color: var(--mc-success); }
+.op-badge--cancelada, .op-badge--inativo { background: #ececee; color: var(--mc-muted); }
+
+/* Filtros */
+.filters { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.filters .form-control { max-width: 260px; }
+.filters .form-select { max-width: 200px; }
+
+/* Abas simples */
+.tabs { display: flex; gap: .25rem; margin-bottom: 1rem; border-bottom: 1px solid var(--mc-line); }
+.tabs button { background: none; border: 0; padding: .6rem 1rem; font-weight: 700; color: var(--mc-muted); border-bottom: 3px solid transparent; }
+.tabs button.active { color: var(--mc-text); border-bottom-color: var(--mc-gold); }
+
+/* Aviso flutuante */
+.toast-mc {
+  position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 2000; max-width: 380px;
+  padding: .85rem 1.1rem; border-radius: var(--mc-radius); font-weight: 600; font-size: .92rem;
+  box-shadow: 0 6px 24px rgba(0,0,0,.18);
+}
+.toast-mc--ok  { background: var(--mc-success-soft); color: var(--mc-success); border: 1px solid #b9dcc8; }
+.toast-mc--err { background: var(--mc-danger-soft);  color: var(--mc-danger);  border: 1px solid #efc3bf; }
+
+@media (max-width: 991.98px) { .app-nav { display: none; } }
+
+/* Janelas mais estreitas: cabeçalho compacto para não estourar a largura */
+.app-header { min-width: 0; }
+@media (max-width: 1280px) {
+  .app-nav { margin-left: .5rem; }
+  .app-nav a { padding: .45rem .55rem; font-size: .86rem; }
+  .unit-select { max-width: 210px; }
+}
+@media (max-width: 1100px) {
+  .user-info { display: none; }
+  .app-header .brand-name { display: none; }
+  .unit-select { max-width: 160px; }
+}

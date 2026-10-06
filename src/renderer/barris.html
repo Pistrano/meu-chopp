@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barris | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Barris</h1><p id="subtitle">Estoque da unidade.</p></div>
+    </div>
+
+    <section class="panel">
+      <h2 class="panel-title">Cadastrar barril</h2>
+      <form id="formBarril" class="row g-3 align-items-end" novalidate>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="codigo">Código</label>
+          <input id="codigo" class="form-control" placeholder="Ex.: 0241" maxlength="12" required>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="estilo">Estilo</label>
+          <input id="estilo" class="form-control" list="estilos" placeholder="Ex.: Pilsen" required>
+          <datalist id="estilos"><option value="Pilsen"><option value="IPA"><option value="Weiss"><option value="Vienna"><option value="Lager"><option value="Stout"></datalist>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="tamanho">Tamanho</label>
+          <select id="tamanho" class="form-select"><option value="30">30 litros</option><option value="50">50 litros</option><option value="20">20 litros</option></select>
+        </div>
+        <div class="col-6 col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar barril</button></div>
+      </form>
+    </section>
+
+    <div class="filters">
+      <input id="q" class="form-control" type="search" placeholder="Buscar por código ou estilo">
+      <select id="status" class="form-select">
+        <option value="">Todos os status</option><option value="disponivel">Disponível</option>
+        <option value="em_uso">Em uso</option><option value="em_transferencia">Em transferência</option><option value="esgotado">Esgotado</option>
+      </select>
+    </div>
+
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Barril</th><th>Estilo</th><th>Tamanho</th><th>Status</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/barris.js"></script>
+</body>
+</html>

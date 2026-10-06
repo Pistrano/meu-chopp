@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div class="login-layout row g-0">
+    <aside class="brand-panel col-lg-6">
+      <div class="brand-inner">
+        <div class="brand-logo">
+          <img src="assets/icon-64.png" width="40" height="40" alt="">
+          <span class="brand-name">MeuChopp</span>
+        </div>
+        <div class="brand-message">
+          <h2>Cada barril rastreado, do primeiro ao último chopp.</h2>
+          <p>Estoque, transferências e histórico de quem fez o quê, em um só lugar.</p>
+        </div>
+        <ul class="trace">
+          <li>Entrada do barril</li>
+          <li>Transferência entre quiosques</li>
+          <li>Utilização</li>
+          <li>Chopp esgotado</li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="form-panel col-lg-6">
+      <div class="login-card">
+        <h1>Entrar</h1>
+        <p class="login-subtitle">Acesse com o seu usuário e senha.</p>
+
+        <div id="formAlert" class="alert d-none" role="alert"></div>
+
+        <form id="loginForm" novalidate>
+          <div class="mb-3">
+            <label for="identifier" class="form-label">Usuário</label>
+            <input id="identifier" class="form-control" type="text" autocomplete="username" placeholder="Seu usuário" autofocus>
+            <div id="identifierError" class="field-error" aria-live="polite"></div>
+          </div>
+
+          <div class="mb-4">
+            <label for="password" class="form-label">Senha</label>
+            <div class="password-wrap">
+              <input id="password" class="form-control" type="password" autocomplete="current-password" placeholder="Sua senha">
+              <button id="togglePassword" class="toggle-password" type="button" aria-label="Mostrar senha" aria-pressed="false">
+                <svg class="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="icon-eye-off d-none" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 19c-6.4 0-10-7-10-7a17.7 17.7 0 0 1 4.1-5M9.9 5.2A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.2 3.2M1 1l22 22"/></svg>
+              </button>
+            </div>
+            <div id="passwordError" class="field-error" aria-live="polite"></div>
+          </div>
+
+          <button id="submitBtn" type="submit" class="btn btn-mc w-100">
+            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
+            <span class="btn-label">Entrar</span>
+          </button>
+        </form>
+
+        <p class="demo-note">
+          <strong>Primeiro acesso:</strong> usuário <strong>admin</strong> e senha <strong>admin123</strong>.
+          Troque a senha depois de entrar (menu do usuário &rsaquo; Alterar minha senha).
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script src="js/login.js"></script>
+</body>
+</html>

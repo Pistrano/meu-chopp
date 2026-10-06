@@ -1,0 +1,139 @@
+/* ==========================================================
+   MeuChopp — estilos do Dashboard (Etapa 2)
+   Depende dos tokens e do .app-header definidos em style.css
+   ========================================================== */
+
+.dashboard-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+/* ---------- Saudação ---------- */
+.greeting h1 {
+  font-family: var(--mc-font-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+  margin-bottom: .25rem;
+}
+.greeting p { color: var(--mc-muted); margin-bottom: 1.75rem; }
+
+/* ---------- Cards de indicadores ---------- */
+.stat-card {
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-line);
+  border-left: 4px solid var(--mc-accent, var(--mc-gold));
+  border-radius: var(--mc-radius);
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  align-items: flex-start;
+  gap: .85rem;
+  height: 100%;
+}
+
+.stat-icon {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--mc-accent-soft, var(--mc-gold-soft));
+  color: var(--mc-accent, var(--mc-gold-dark));
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+
+.stat-value {
+  font-family: var(--mc-font-display);
+  font-weight: 700;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  display: block;
+}
+.stat-label {
+  color: var(--mc-muted);
+  font-size: .85rem;
+  font-weight: 600;
+}
+
+.stat-card--total    { --mc-accent: var(--mc-ink);     --mc-accent-soft: #e7e8ea; }
+.stat-card--disponivel{ --mc-accent: var(--mc-success); --mc-accent-soft: var(--mc-success-soft); }
+.stat-card--uso       { --mc-accent: var(--mc-gold-dark); --mc-accent-soft: #f6e9cc; }
+.stat-card--transfer  { --mc-accent: var(--mc-info);    --mc-accent-soft: var(--mc-info-soft); }
+.stat-card--esgotado  { --mc-accent: var(--mc-danger);  --mc-accent-soft: var(--mc-danger-soft); }
+
+/* ---------- Seção genérica ---------- */
+.section-title {
+  font-family: var(--mc-font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 2.25rem 0 1rem;
+}
+
+/* ---------- Movimentações recentes ---------- */
+.movement-list {
+  background: var(--mc-surface);
+  border: 1px solid var(--mc-line);
+  border-radius: var(--mc-radius);
+  overflow: hidden;
+}
+
+.movement-row {
+  display: grid;
+  grid-template-columns: 90px 1.1fr 1.3fr 120px 90px;
+  align-items: center;
+  gap: 1rem;
+  padding: .85rem 1.1rem;
+}
+.movement-row + .movement-row { border-top: 1px solid var(--mc-line); }
+
+.movement-row .m-barril { font-weight: 700; }
+.movement-row .m-estilo { color: var(--mc-muted); font-size: .82rem; display: block; }
+
+.movement-route {
+  font-size: .87rem;
+  color: var(--mc-text);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: wrap;
+}
+.movement-route .arrow { color: var(--mc-muted); }
+
+.movement-responsavel { font-size: .87rem; }
+.movement-hora { color: var(--mc-muted); font-size: .85rem; text-align: right; }
+
+.op-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .6rem;
+  border-radius: 999px;
+  font-size: .76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.op-badge::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.op-badge--entrada      { background: var(--mc-success-soft); color: var(--mc-success); }
+.op-badge--transferencia{ background: var(--mc-info-soft);    color: var(--mc-info); }
+.op-badge--utilizacao   { background: #f6e9cc;                color: var(--mc-gold-dark); }
+.op-badge--esgotado     { background: var(--mc-danger-soft);  color: var(--mc-danger); }
+
+.movement-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--mc-muted);
+}
+
+/* ---------- Responsivo: linhas viram cartões empilhados ---------- */
+@media (max-width: 767.98px) {
+  .movement-row {
+    grid-template-columns: 1fr;
+    gap: .4rem;
+    padding: 1rem;
+  }
+  .movement-row .op-badge { order: -1; align-self: flex-start; }
+  .movement-hora { text-align: left; }
+}

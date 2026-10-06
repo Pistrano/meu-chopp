@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Usuários</h1><p>Quem tem acesso ao sistema e em qual unidade atua.</p></div>
+    </div>
+
+    <section class="panel">
+      <h2 class="panel-title">Novo usuário</h2>
+      <form id="formUser" class="row g-3 align-items-end" novalidate>
+        <div class="col-md-3"><label class="form-label" for="nome">Nome</label><input id="nome" class="form-control" required></div>
+        <div class="col-md-2"><label class="form-label" for="usuario">Usuário</label><input id="usuario" class="form-control" autocomplete="off" required></div>
+        <div class="col-md-2"><label class="form-label" for="senha">Senha inicial</label><input id="senha" class="form-control" type="text" autocomplete="off" placeholder="Mín. 6 caracteres" required></div>
+        <div class="col-md-2"><label class="form-label" for="cargo">Cargo</label>
+          <select id="cargo" class="form-select"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
+        <div class="col-md-3"><label class="form-label" for="unidade">Unidade</label><select id="unidade" class="form-select"></select></div>
+        <div class="col-12"><button class="btn btn-mc btn-mc-sm" type="submit">Criar usuário</button></div>
+      </form>
+    </section>
+
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Nome</th><th>Usuário</th><th>Cargo</th><th>Unidade</th><th>Situação</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/usuarios.js"></script>
+</body>
+</html>
