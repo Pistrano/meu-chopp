@@ -1,6 +1,6 @@
 {
   "name": "meu-chopp",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "MeuChopp - Sistema de controle de barris de chopp",
   "main": "src/main/main.js",
   "scripts": {

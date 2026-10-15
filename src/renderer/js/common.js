@@ -90,8 +90,14 @@ const MC = (() => {
   function dialog({ title, intro, fields = [], submitLabel = "Confirmar", rules = false, onSubmit }) {
     return new Promise((resolve) => {
       const inputs = fields
-        .map((f) => `<div class="mb-3"><label class="form-label" for="mcf_${f.id}">${esc(f.label)}</label>
-          <input class="form-control" id="mcf_${f.id}" type="${f.type || "text"}" autocomplete="${f.autocomplete || "off"}"></div>`)
+        .map((f) =>
+          f.type === "checks"
+            ? `<div class="mb-3"><div class="form-label">${esc(f.label)}</div><div class="check-list" id="mcf_${f.id}">${f.options
+                .map((o) => `<label class="check-item"><input type="checkbox" value="${esc(o.value)}" ${o.checked ? "checked" : ""}><span>${esc(o.label)}</span></label>`)
+                .join("")}</div></div>`
+            : `<div class="mb-3"><label class="form-label" for="mcf_${f.id}">${esc(f.label)}</label>
+          <input class="form-control" id="mcf_${f.id}" type="${f.type || "text"}" autocomplete="${f.autocomplete || "off"}" value="${esc(f.value || "")}"></div>`
+        )
         .join("");
       const overlay = openOverlay(`<h2>${esc(title)}</h2>${intro ? `<p class="mc-modal-intro">${esc(intro)}</p>` : ""}
         <form novalidate>${inputs}${rules ? '<ul class="pw-rules" id="mcRules"></ul>' : ""}
@@ -110,7 +116,10 @@ const MC = (() => {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const values = {};
-        fields.forEach((f) => (values[f.id] = overlay.querySelector(`#mcf_${f.id}`).value));
+        fields.forEach((f) => {
+          const el = overlay.querySelector(`#mcf_${f.id}`);
+          values[f.id] = f.type === "checks" ? [...el.querySelectorAll("input:checked")].map((i) => i.value) : el.value;
+        });
         const btn = form.querySelector('[type="submit"]');
         btn.disabled = true;
         errEl.textContent = "";

@@ -21,9 +21,10 @@ const PERMITIDOS_TROCA = new Set(["auth:me", "auth:logout", "auth:ping", "auth:c
 let lastActivity = 0;
 
 class AppError extends Error {
-  constructor(message, code) {
+  constructor(message, code, detail) {
     super(message);
     this.appCode = code;
+    this.detail = detail;
   }
 }
 
@@ -46,6 +47,9 @@ function handle(channel, fn, { auth = true, admin = false } = {}) {
     } catch (err) {
       if (err && String(err.code).startsWith("SQLITE_CONSTRAINT_UNIQUE"))
         return { ok: false, error: "Já existe um registro com esse valor." };
+      if (err && err.appCode === "FORBIDDEN" && session) {
+        try { audit("acesso_negado", `${channel}: ${err.detail || err.message}`); } catch (_) { /* ignora */ }
+      }
       return { ok: false, error: err.message || "Erro inesperado.", code: err.appCode };
     }
   });
@@ -104,18 +108,36 @@ function logMovement({ barrilId, operacao, origem = null, destino = null, obs = 
     .run(barrilId, operacao, session.id, origem, destino, obs);
 }
 
-/* Operador só enxerga/mexe na própria unidade; admin em todas */
-function assertUnit(unitId) {
-  if (session.cargo !== "admin" && session.unidade_id !== unitId)
-    throw new Error("Você não tem permissão para operar nesta unidade.");
+/* ---------- Acesso por quiosque ----------
+   Administrador: todos os quiosques ativos.
+   Operador: somente os quiosques que um administrador liberou para ele. */
+function allowedUnitIds() {
+  if (session.cargo === "admin")
+    return getDb().prepare("SELECT id FROM unidades WHERE ativo = 1 ORDER BY id").all().map((r) => r.id);
+  return getDb()
+    .prepare(
+      `SELECT u.id FROM usuario_unidades ua JOIN unidades u ON u.id = ua.unidade_id
+        WHERE ua.usuario_id = ? AND u.ativo = 1 ORDER BY u.id`
+    )
+    .all(session.id)
+    .map((r) => r.id);
 }
 
-function resolveUnit(unitId) {
-  if (session.cargo !== "admin") return session.unidade_id;
+function assertUnit(unitId) {
   const id = Number(unitId);
-  if (id) return id;
-  const first = getDb().prepare("SELECT id FROM unidades ORDER BY id LIMIT 1").get();
-  return first ? first.id : null;
+  if (!allowedUnitIds().includes(id))
+    throw new AppError("Você não tem acesso a este quiosque.", "FORBIDDEN", `quiosque ${id}`);
+}
+
+/* Quiosque em uso na tela: o pedido (se permitido) ou o primeiro liberado para o usuário */
+function resolveUnit(unitId) {
+  const allowed = allowedUnitIds();
+  if (!allowed.length)
+    throw new AppError("Você ainda não tem acesso a nenhum quiosque. Peça a um administrador para liberar.");
+  const id = Number(unitId);
+  if (!id) return allowed[0];
+  if (!allowed.includes(id)) throw new AppError("Você não tem acesso a este quiosque.", "FORBIDDEN", `quiosque ${id}`);
+  return id;
 }
 
 function loadBarril(id) {
@@ -133,7 +155,6 @@ function publicUser(u) {
     usuario: u.usuario,
     cargo: u.cargo,
     cargoLabel: CARGO_LABEL[u.cargo],
-    unidade_id: u.unidade_id,
     iniciais: u.nome.trim().charAt(0).toUpperCase(),
     trocarSenha: !!u.trocar_senha || !u.email,
   };
@@ -290,12 +311,87 @@ function registerHandlers() {
     return true;
   });
 
-  /* ======== Unidades ======== */
+  /* ======== Quiosques ======== */
+  // Quiosques que o usuário pode acessar (alimenta o seletor do cabeçalho)
   handle("units:list", () => {
-    if (session.cargo === "admin") return db().prepare("SELECT * FROM unidades ORDER BY id").all();
-    return db().prepare("SELECT * FROM unidades WHERE id = ?").all(session.unidade_id);
+    const ids = allowedUnitIds();
+    return db().prepare("SELECT id, nome, nome_curto FROM unidades ORDER BY id").all().filter((u) => ids.includes(u.id));
   });
-  handle("units:all", () => db().prepare("SELECT * FROM unidades ORDER BY id").all());
+  // Destinos possíveis de uma transferência: só nomes dos quiosques ativos (nenhum dado deles)
+  handle("units:all", () => db().prepare("SELECT id, nome, nome_curto FROM unidades WHERE ativo = 1 ORDER BY id").all());
+
+  handle(
+    "units:adminList",
+    () =>
+      db()
+        .prepare(
+          `SELECT u.id, u.nome, u.nome_curto, u.ativo,
+                  (SELECT COUNT(*) FROM barris b WHERE b.unidade_id = u.id) AS barris,
+                  (SELECT COUNT(*) FROM usuario_unidades ua JOIN usuarios us ON us.id = ua.usuario_id
+                    WHERE ua.unidade_id = u.id AND us.ativo = 1) AS usuarios
+             FROM unidades u ORDER BY u.id`
+        )
+        .all(),
+    { admin: true }
+  );
+
+  const cleanUnitNames = ({ nome, nomeCurto }, exceptId = 0) => {
+    const full = String(nome || "").trim();
+    const short = String(nomeCurto || "").trim() || full;
+    if (full.length < 2) throw new AppError("Informe o nome do quiosque.");
+    if (full.length > 60 || short.length > 30) throw new AppError("Nome muito longo (máximo 60 e 30 caracteres).");
+    if (db().prepare("SELECT 1 FROM unidades WHERE lower(nome) = lower(?) AND id <> ?").get(full, exceptId))
+      throw new AppError(`Já existe um quiosque chamado "${full}".`);
+    return { full, short };
+  };
+
+  handle(
+    "units:create",
+    (p) => {
+      const { full, short } = cleanUnitNames(p);
+      db().prepare("INSERT INTO unidades (nome, nome_curto) VALUES (?, ?)").run(full, short);
+      audit("quiosque_criado", full);
+      return true;
+    },
+    { admin: true }
+  );
+
+  handle(
+    "units:update",
+    (p) => {
+      const id = Number(p.id);
+      if (!db().prepare("SELECT 1 FROM unidades WHERE id = ?").get(id)) throw new AppError("Quiosque não encontrado.");
+      const { full, short } = cleanUnitNames(p, id);
+      db().prepare("UPDATE unidades SET nome = ?, nome_curto = ? WHERE id = ?").run(full, short, id);
+      audit("quiosque_editado", full);
+      return true;
+    },
+    { admin: true }
+  );
+
+  handle(
+    "units:toggle",
+    ({ id }) => {
+      const u = db().prepare("SELECT * FROM unidades WHERE id = ?").get(Number(id));
+      if (!u) throw new AppError("Quiosque não encontrado.");
+      if (u.ativo) {
+        const emEstoque = db()
+          .prepare("SELECT COUNT(*) AS n FROM barris WHERE unidade_id = ? AND status <> 'esgotado'")
+          .get(u.id).n;
+        const recebendo = db()
+          .prepare("SELECT COUNT(*) AS n FROM transferencias WHERE destino_id = ? AND status = 'pendente'")
+          .get(u.id).n;
+        if (emEstoque || recebendo)
+          throw new AppError(
+            `Este quiosque ainda tem ${emEstoque} barril(is) em estoque e ${recebendo} transferência(s) a receber. Resolva antes de desativar.`
+          );
+      }
+      db().prepare("UPDATE unidades SET ativo = ? WHERE id = ?").run(u.ativo ? 0 : 1, u.id);
+      audit(u.ativo ? "quiosque_desativado" : "quiosque_reativado", u.nome);
+      return true;
+    },
+    { admin: true }
+  );
 
   /* ======== Dashboard ======== */
   handle("dashboard:get", ({ unitId }) => {
@@ -435,7 +531,7 @@ function registerHandlers() {
       const b = loadBarril(barrilId);
       const destino = Number(destinoId);
       if (!destino || destino === b.unidade_id) throw new Error("Escolha uma unidade de destino diferente da origem.");
-      if (!db().prepare("SELECT 1 FROM unidades WHERE id = ?").get(destino)) throw new Error("Unidade de destino inválida.");
+      if (!db().prepare("SELECT 1 FROM unidades WHERE id = ? AND ativo = 1").get(destino)) throw new AppError("Quiosque de destino inválido ou desativado.");
       if (b.status !== "disponivel") throw new Error(`Só é possível transferir barris disponíveis (#${b.codigo} está indisponível).`);
 
       db().prepare("UPDATE barris SET status = 'em_transferencia' WHERE id = ?").run(b.id);
@@ -522,37 +618,76 @@ function registerHandlers() {
   );
 
   /* ======== Usuários (somente administrador) ======== */
+  const cleanUnitIds = (ids) => {
+    const list = [...new Set((Array.isArray(ids) ? ids : [ids]).map(Number).filter(Boolean))];
+    if (!list.length) throw new AppError("Escolha ao menos um quiosque para o operador.");
+    const valid = db().prepare("SELECT id FROM unidades WHERE ativo = 1").all().map((r) => r.id);
+    if (list.some((id) => !valid.includes(id))) throw new AppError("Quiosque inválido ou desativado.");
+    return list;
+  };
+
   handle(
     "users:list",
-    () =>
-      db()
+    () => {
+      const access = db()
+        .prepare("SELECT ua.usuario_id, u.id, u.nome_curto FROM usuario_unidades ua JOIN unidades u ON u.id = ua.unidade_id ORDER BY u.id")
+        .all();
+      return db()
         .prepare(
-          `SELECT u.id, u.nome, u.email, u.usuario, u.cargo, u.ativo, u.unidade_id, u.trocar_senha,
-                  u.bloqueado_ate, u.ultimo_login, un.nome_curto AS unidade
-             FROM usuarios u LEFT JOIN unidades un ON un.id = u.unidade_id ORDER BY u.nome`
+          `SELECT id, nome, email, usuario, cargo, ativo, trocar_senha, bloqueado_ate, ultimo_login
+             FROM usuarios ORDER BY nome`
         )
         .all()
-        .map((u) => ({ ...u, bloqueado: (u.bloqueado_ate || 0) > Date.now() })),
+        .map((u) => ({
+          ...u,
+          bloqueado: (u.bloqueado_ate || 0) > Date.now(),
+          unidadeIds: access.filter((a) => a.usuario_id === u.id).map((a) => a.id),
+          unidades: access.filter((a) => a.usuario_id === u.id).map((a) => a.nome_curto),
+        }));
+    },
     { admin: true }
   );
 
   /* Cria o usuário com uma senha temporária aleatória, exibida uma única vez ao administrador */
   handle(
     "users:create",
-    ({ nome, email, cargo, unidadeId }) => {
+    ({ nome, email, cargo, unidadeIds }) => {
       const name = String(nome || "").trim();
       if (!name) throw new AppError("Informe o nome.");
       const em = normalizeEmail(email);
       if (!["admin", "operador"].includes(cargo)) throw new AppError("Cargo inválido.");
-      if (cargo === "operador" && !Number(unidadeId)) throw new AppError("Escolha a unidade do operador.");
+      const units = cargo === "operador" ? cleanUnitIds(unidadeIds) : [];
       if (emailTaken(em)) throw new AppError(`O e-mail ${em} já está cadastrado.`);
 
       const senha = generateTempPassword();
-      db()
-        .prepare("INSERT INTO usuarios (nome, usuario, email, senha_hash, cargo, unidade_id, trocar_senha) VALUES (?, ?, ?, ?, ?, ?, 1)")
-        .run(name, em, em, hashPassword(senha), cargo, cargo === "operador" ? Number(unidadeId) : null);
-      audit("usuario_criado", `${em} (${cargo})`);
-      return { email: em, senha };
+      return db().transaction(() => {
+        const info = db()
+          .prepare("INSERT INTO usuarios (nome, usuario, email, senha_hash, cargo, trocar_senha) VALUES (?, ?, ?, ?, ?, 1)")
+          .run(name, em, em, hashPassword(senha), cargo);
+        units.forEach((uid) =>
+          db().prepare("INSERT INTO usuario_unidades (usuario_id, unidade_id) VALUES (?, ?)").run(info.lastInsertRowid, uid)
+        );
+        audit("usuario_criado", `${em} (${cargo})`);
+        return { email: em, senha };
+      })();
+    },
+    { admin: true }
+  );
+
+  /* Altera a quais quiosques o operador tem acesso */
+  handle(
+    "users:setUnits",
+    ({ id, unidadeIds }) => {
+      const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(Number(id));
+      if (!u) throw new AppError("Usuário não encontrado.");
+      if (u.cargo === "admin") throw new AppError("Administradores têm acesso a todos os quiosques.");
+      const units = cleanUnitIds(unidadeIds);
+      db().transaction(() => {
+        db().prepare("DELETE FROM usuario_unidades WHERE usuario_id = ?").run(u.id);
+        units.forEach((uid) => db().prepare("INSERT INTO usuario_unidades (usuario_id, unidade_id) VALUES (?, ?)").run(u.id, uid));
+        audit("acesso_alterado", `${u.email || u.usuario}: quiosques ${units.join(", ")}`);
+      })();
+      return true;
     },
     { admin: true }
   );

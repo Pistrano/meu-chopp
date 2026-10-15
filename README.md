@@ -13,6 +13,15 @@ os dados ficam em um arquivo `meuchopp.db` no computador.
 3. Na primeira vez, o app abre a tela **Configuração inicial**: crie o administrador com o seu e-mail e uma senha.
    Não existe usuário nem senha padrão.
 
+## Quiosques e acesso exclusivo
+- Cada quiosque tem **estoque, histórico, transferências e relatórios próprios**.
+- O **administrador** vê e gerencia todos os quiosques e cadastra novos na aba *Quiosques*.
+- O **operador** só enxerga os quiosques que um administrador liberou para ele (um ou vários), em *Usuários > Quiosques*.
+  A permissão é conferida no sistema a cada ação, não só na tela, e vale na hora.
+- Uma transferência só é confirmada por quem tem acesso ao quiosque de destino, e só é cancelada por quem tem acesso ao de origem.
+- Tentativas de acessar um quiosque sem permissão ficam registradas em *Histórico > Auditoria do sistema* (`acesso negado`).
+- Um quiosque só pode ser desativado quando não tem barris em estoque nem transferências a receber.
+
 ## Segurança do login
 - Entrada com **e-mail** e senha. Senha com no mínimo 8 caracteres, com letras e números, sem senhas comuns.
 - **5 tentativas erradas bloqueiam o acesso por 15 minutos** (o administrador pode desbloquear).

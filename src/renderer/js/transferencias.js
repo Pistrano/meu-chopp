@@ -9,7 +9,7 @@
   const preselect = Number(new URLSearchParams(location.search).get("barril")) || null;
   const allUnits = await MC.call("units:all");
 
-  const canAct = (unitId) => ctx.user.cargo === "admin" || ctx.user.unidade_id === unitId;
+  const canAct = (unitId) => ctx.units.some((u) => u.id === unitId); // quiosques liberados para este usuário
 
   async function loadForm() {
     const barris = (await MC.call("barris:list", { unitId: ctx.unitId, status: "disponivel" })) || [];

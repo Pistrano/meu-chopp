@@ -1,17 +1,20 @@
-/* MeuChopp — gestão de usuários (somente administrador) */
+/* MeuChopp — gestão de usuários e do acesso de cada um aos quiosques (somente administrador) */
 (async () => {
   const ctx = await MCLayout.init("usuarios");
   if (!ctx) return;
 
   const tbody = document.getElementById("tbody");
   const cargo = document.getElementById("cargo");
-  const unidade = document.getElementById("unidade");
+  const unitsBox = document.getElementById("unitsBox");
+  const unidades = document.getElementById("unidades");
   const units = await MC.call("units:all");
 
-  unidade.innerHTML = units.map((u) => `<option value="${u.id}">${MC.esc(u.nome_curto)}</option>`).join("");
-  const syncUnit = () => { unidade.disabled = cargo.value === "admin"; };
-  cargo.addEventListener("change", syncUnit);
-  syncUnit();
+  unidades.innerHTML = units
+    .map((u) => `<label class="check-item"><input type="checkbox" value="${u.id}"><span>${MC.esc(u.nome_curto)}</span></label>`)
+    .join("") || `<span class="t-muted">Cadastre um quiosque primeiro (aba Quiosques).</span>`;
+  const syncCargo = () => unitsBox.classList.toggle("d-none", cargo.value === "admin");
+  cargo.addEventListener("change", syncCargo);
+  syncCargo();
 
   function situacao(u) {
     if (!u.ativo) return ["inativo", "Inativo"];
@@ -20,16 +23,20 @@
     return ["disponivel", "Ativo"];
   }
 
+  let users = [];
   async function load() {
     const list = await MC.run(() => MC.call("users:list"));
     if (!list) return;
+    users = list;
     tbody.innerHTML = list.map((u) => {
       const [cls, label] = situacao(u);
+      const quiosques = u.cargo === "admin" ? "Todos" : u.unidades.length ? MC.esc(u.unidades.join(", ")) : '<span class="t-muted">Nenhum</span>';
       return `<tr>
         <td class="t-strong">${MC.esc(u.nome)}</td><td>${MC.esc(u.email || u.usuario)}</td>
-        <td>${u.cargo === "admin" ? "Administrador" : "Operador"}</td><td>${MC.esc(u.unidade || "Todas")}</td>
+        <td>${u.cargo === "admin" ? "Administrador" : "Operador"}</td><td>${quiosques}</td>
         <td><span class="op-badge op-badge--${cls}">${label}</span></td>
         <td><div class="row-actions">
+          ${u.cargo === "operador" ? `<button class="btn-ghost" data-act="units" data-id="${u.id}">Quiosques</button>` : ""}
           ${u.bloqueado ? `<button class="btn-ghost" data-act="unlock" data-id="${u.id}">Desbloquear</button>` : ""}
           <button class="btn-ghost" data-act="reset" data-id="${u.id}">Gerar senha temporária</button>
           ${u.id === ctx.user.id ? "" : `<button class="btn-ghost ${u.ativo ? "btn-ghost--danger" : ""}" data-act="toggle" data-id="${u.id}">${u.ativo ? "Desativar" : "Reativar"}</button>`}
@@ -39,10 +46,11 @@
 
   document.getElementById("formUser").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const f = { nome: nome.value, email: email.value, cargo: cargo.value, unidadeId: unidade.value };
+    const unidadeIds = [...unidades.querySelectorAll("input:checked")].map((i) => Number(i.value));
+    const f = { nome: nome.value, email: email.value, cargo: cargo.value, unidadeIds };
     const r = await MC.run(() => MC.call("users:create", f));
     if (!r) return;
-    e.target.reset(); syncUnit(); load();
+    e.target.reset(); syncCargo(); load();
     MC.showSecret({ title: "Usuário criado", intro: `Senha temporária para ${r.email}:`, secret: r.senha });
   });
 
@@ -50,10 +58,20 @@
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const id = Number(btn.dataset.id);
+    const user = users.find((u) => u.id === id);
     if (btn.dataset.act === "toggle") {
       if (await MC.run(() => MC.call("users:toggle", { id }), "Situação do usuário atualizada.")) load();
     } else if (btn.dataset.act === "unlock") {
       if (await MC.run(() => MC.call("users:unlock", { id }), "Usuário desbloqueado.")) load();
+    } else if (btn.dataset.act === "units") {
+      const saved = await MC.dialog({
+        title: `Quiosques de ${user.nome}`,
+        intro: "Marque os quiosques que esta pessoa pode acessar. Ela só vê e altera o que for marcado.",
+        fields: [{ id: "ids", label: "Quiosques", type: "checks", options: units.map((u) => ({ value: u.id, label: u.nome_curto, checked: user.unidadeIds.includes(u.id) })) }],
+        submitLabel: "Salvar acesso",
+        onSubmit: (v) => MC.call("users:setUnits", { id, unidadeIds: v.ids.map(Number) }),
+      });
+      if (saved) { MC.toast("Acesso atualizado."); load(); }
     } else if (btn.dataset.act === "reset") {
       if (!window.confirm("Gerar uma nova senha temporária? A senha atual deixa de funcionar.")) return;
       const r = await MC.run(() => MC.call("users:resetPassword", { id }));

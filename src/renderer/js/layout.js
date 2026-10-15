@@ -8,6 +8,7 @@ const MCLayout = (() => {
     { id: "barris", label: "Barris", href: "barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
     { id: "historico", label: "Histórico", href: "historico.html" },
+    { id: "quiosques", label: "Quiosques", href: "quiosques.html", admin: true },
     { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
   ];
 
@@ -150,16 +151,35 @@ const MCLayout = (() => {
     }
     if (!ctx.user) { window.location.href = "index.html"; return null; }
     if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
-    if (pageId === "usuarios" && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
+    if (["usuarios", "quiosques"].includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
     ctx.units = await MC.call("units:list");
     const saved = Number(localStorage.getItem("mc_unit"));
-    ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units[0].id;
+    ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units.length ? ctx.units[0].id : null;
 
     buildHeader(pageId);
     watchInactivity();
     renderUnitMenu();
-    renderAlerts();
+
+    // Com um único quiosque não há o que escolher: o seletor vira só um rótulo
+    if (ctx.units.length <= 1) {
+      const btn = document.querySelector(".unit-select");
+      btn.removeAttribute("data-bs-toggle");
+      btn.classList.remove("dropdown-toggle");
+      btn.classList.add("unit-select--single");
+    }
+
+    // Quem ainda não foi liberado para nenhum quiosque não tem o que ver (exceto as telas de administração)
+    if (!ctx.units.length && !["usuarios", "quiosques"].includes(pageId)) {
+      const main = document.querySelector("main");
+      main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhum quiosque liberado</h2>
+        <p class="t-muted mb-0">${ctx.user.cargo === "admin"
+          ? "Não há quiosques ativos. Cadastre ou reative um na aba Quiosques."
+          : "Você ainda não tem acesso a nenhum quiosque. Peça a um administrador para liberar o seu acesso."}</p></div>`;
+      return null;
+    }
+
+    if (ctx.unitId) renderAlerts();
     return ctx;
   }
 

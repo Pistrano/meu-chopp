@@ -31,6 +31,12 @@ async function initDatabase(userDataDir) {
       criado_em  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS usuario_unidades (
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+      PRIMARY KEY (usuario_id, unidade_id)
+    );
+
     CREATE TABLE IF NOT EXISTS barris (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo     TEXT NOT NULL UNIQUE,
@@ -101,6 +107,18 @@ function migrate() {
   // Usuários antigos (sem e-mail) precisam completar o cadastro e trocar a senha no próximo login
   if (emailAdded) db.exec("UPDATE usuarios SET trocar_senha = 1 WHERE email IS NULL");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email COLLATE NOCASE)");
+
+  // Quiosques podem ser desativados
+  const unitCols = db.prepare("PRAGMA table_info(unidades)").all().map((c) => c.name);
+  if (!unitCols.includes("ativo")) db.exec("ALTER TABLE unidades ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
+
+  // v2: acesso por quiosque. Operadores antigos (1 unidade fixa) passam para a nova tabela de acessos.
+  const version = db.prepare("PRAGMA user_version").get().user_version;
+  if (version < 2) {
+    db.exec(`INSERT OR IGNORE INTO usuario_unidades (usuario_id, unidade_id)
+             SELECT id, unidade_id FROM usuarios WHERE cargo = 'operador' AND unidade_id IS NOT NULL`);
+    db.exec("PRAGMA user_version = 2");
+  }
 }
 
 /* Dados iniciais: só roda quando o banco está vazio */

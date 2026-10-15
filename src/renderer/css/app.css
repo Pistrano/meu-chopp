@@ -108,3 +108,15 @@
 /* ---------- Situação de usuário ---------- */
 .op-badge--bloqueado { background: var(--mc-danger-soft); color: var(--mc-danger); }
 .op-badge--primeiro { background: var(--mc-gold-soft); color: var(--mc-gold-dark); }
+
+/* ---------- Seleção de quiosques ---------- */
+.check-list { display: flex; flex-wrap: wrap; gap: .5rem; }
+.check-item {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .5rem .85rem; cursor: pointer;
+  background: var(--mc-surface); border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius); font-weight: 600; font-size: .9rem;
+}
+.check-item:hover { border-color: var(--mc-gold-dark); }
+.check-item input { width: 16px; height: 16px; accent-color: var(--mc-gold-dark); margin: 0; }
+.unit-select--single { cursor: default; }
+.unit-select--single::after { display: none; }
+.ms-2 { margin-left: .5rem; }
