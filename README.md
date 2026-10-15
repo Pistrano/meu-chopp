@@ -10,7 +10,17 @@ os dados ficam em um arquivo `meuchopp.db` no computador.
    npm install
    npm start
    ```
-3. Primeiro acesso: usuário `admin`, senha `admin123` (troque em *menu do usuário > Alterar minha senha*).
+3. Na primeira vez, o app abre a tela **Configuração inicial**: crie o administrador com o seu e-mail e uma senha.
+   Não existe usuário nem senha padrão.
+
+## Segurança do login
+- Entrada com **e-mail** e senha. Senha com no mínimo 8 caracteres, com letras e números, sem senhas comuns.
+- **5 tentativas erradas bloqueiam o acesso por 15 minutos** (o administrador pode desbloquear).
+- A sessão **expira após 15 minutos sem uso**.
+- O administrador cria usuários e redefine senhas gerando uma **senha temporária aleatória**; a pessoa é obrigada
+  a criar a própria senha no primeiro acesso.
+- Toda entrada, falha, bloqueio e troca de senha fica na aba *Histórico > Auditoria do sistema*.
+- Esqueceu a senha? Peça a um administrador para gerar uma senha temporária (Usuários > Gerar senha temporária).
 
 ## Gerar o instalador (.exe)
 ```

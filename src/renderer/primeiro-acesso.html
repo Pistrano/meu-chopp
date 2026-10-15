@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Primeiro acesso | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+  <div class="login-layout row g-0">
+    <aside class="brand-panel col-lg-6">
+      <div class="brand-inner">
+        <div class="brand-logo">
+          <img src="assets/icon-64.png" width="40" height="40" alt="">
+          <span class="brand-name">MeuChopp</span>
+        </div>
+        <div class="brand-message">
+          <h2>Falta só um passo.</h2>
+          <p>A senha que você recebeu é temporária. Crie uma nova, que só você conhece.</p>
+        </div>
+        <ul class="trace">
+          <li>Acesso com e-mail e senha pessoais</li>
+          <li>Senha forte e protegida</li>
+          <li>Bloqueio após tentativas erradas</li>
+          <li>Histórico de quem fez cada ação</li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="form-panel col-lg-6">
+      <div class="login-card">
+        <h1>Primeiro acesso</h1>
+        <p class="login-subtitle">Defina o seu e-mail e crie uma senha pessoal para continuar.</p>
+        <div id="formAlert" class="alert d-none" role="alert"></div>
+        <form id="authForm" novalidate>
+          <div class="mb-3">
+            <label for="email" class="form-label">E-mail</label>
+            <input id="email" class="form-control" type="text" autocomplete="username" placeholder="voce@empresa.com" >
+          </div>
+          <div class="mb-3">
+            <label for="senha" class="form-label">Nova senha</label>
+            <input id="senha" class="form-control" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres" autofocus>
+          </div>
+          <div class="mb-3">
+            <label for="confirma" class="form-label">Repita a nova senha</label>
+            <input id="confirma" class="form-control" type="password" autocomplete="new-password" placeholder="" >
+          </div>
+          <ul class="pw-rules" id="rules"></ul>
+          <button id="submitBtn" type="submit" class="btn btn-mc w-100">Salvar e entrar</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/primeiro-acesso.js"></script>
+</body>
+</html>

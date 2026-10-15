@@ -6,6 +6,7 @@
 const { ipcMain, dialog, BrowserWindow } = require("electron");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
+const crypto = require("crypto");
 const { getDb } = require("./db");
 
 let session = null; // usuário logado
@@ -13,20 +14,80 @@ let session = null; // usuário logado
 const CARGO_LABEL = { admin: "Administrador", operador: "Operador" };
 
 /* ---------- Infraestrutura ---------- */
+const IDLE_MS = 15 * 60 * 1000;          // sessão expira após 15 min sem atividade
+const MAX_FALHAS = 5;                     // tentativas erradas antes de bloquear
+const BLOQUEIO_MS = 15 * 60 * 1000;       // duração do bloqueio
+const PERMITIDOS_TROCA = new Set(["auth:me", "auth:logout", "auth:ping", "auth:completeProfile"]);
+let lastActivity = 0;
+
+class AppError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.appCode = code;
+  }
+}
+
 function handle(channel, fn, { auth = true, admin = false } = {}) {
   ipcMain.handle(channel, async (_event, payload) => {
     try {
-      if (auth && !session) throw new Error("Sessão expirada. Faça login novamente.");
-      if (admin && session.cargo !== "admin")
-        throw new Error("Apenas administradores podem executar esta ação.");
+      if (auth) {
+        if (session && Date.now() - lastActivity > IDLE_MS) {
+          audit("sessao_expirada", "Encerrada por inatividade");
+          session = null;
+          throw new AppError("Sua sessão expirou por inatividade. Entre novamente.", "SESSION");
+        }
+        if (!session) throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
+        if (session.trocarSenha && !PERMITIDOS_TROCA.has(channel))
+          throw new AppError("Defina sua senha para continuar.", "MUST_CHANGE");
+        lastActivity = Date.now();
+      }
+      if (admin && session.cargo !== "admin") throw new AppError("Apenas administradores podem executar esta ação.");
       return { ok: true, data: await fn(payload || {}) };
     } catch (err) {
       if (err && String(err.code).startsWith("SQLITE_CONSTRAINT_UNIQUE"))
         return { ok: false, error: "Já existe um registro com esse valor." };
-      return { ok: false, error: err.message || "Erro inesperado." };
+      return { ok: false, error: err.message || "Erro inesperado.", code: err.appCode };
     }
   });
 }
+
+/* ---------- Segurança de senhas e e-mails ---------- */
+const hashPassword = (pw) => bcrypt.hashSync(String(pw), 12);
+const SENHAS_COMUNS = new Set([
+  "12345678", "123456789", "1234567890", "11111111", "password", "password1", "senha123", "senha1234",
+  "admin123", "admin1234", "qwerty123", "abc12345", "chopp123", "meuchopp1", "meuchopp123",
+]);
+
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
+    throw new AppError("Informe um e-mail válido, como nome@empresa.com.");
+  return email;
+}
+
+function checkPassword(password, email) {
+  const pw = String(password || "");
+  if (pw.length < 8) throw new AppError("A senha precisa ter ao menos 8 caracteres.");
+  if (pw.length > 72) throw new AppError("A senha pode ter no máximo 72 caracteres.");
+  if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) throw new AppError("A senha precisa ter letras e números.");
+  if (SENHAS_COMUNS.has(pw.toLowerCase())) throw new AppError("Essa senha é muito comum. Escolha outra.");
+  const local = String(email || "").split("@")[0];
+  if (local.length >= 4 && pw.toLowerCase().includes(local))
+    throw new AppError("A senha não pode conter o seu e-mail.");
+}
+
+/* Senha temporária aleatória (10 caracteres, sem letras ambíguas como I, l, O, 0) */
+function generateTempPassword() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  for (;;) {
+    let pw = "";
+    for (let i = 0; i < 10; i++) pw += chars[crypto.randomInt(chars.length)];
+    if (/[A-Za-z]/.test(pw) && /\d/.test(pw)) return pw;
+  }
+}
+
+const emailTaken = (email, exceptId = 0) =>
+  !!getDb().prepare("SELECT 1 FROM usuarios WHERE lower(email) = ? AND id <> ?").get(email, exceptId);
 
 function audit(acao, detalhe, userId = session ? session.id : null) {
   getDb()
@@ -68,11 +129,13 @@ function publicUser(u) {
   return {
     id: u.id,
     nome: u.nome,
+    email: u.email || null,
     usuario: u.usuario,
     cargo: u.cargo,
     cargoLabel: CARGO_LABEL[u.cargo],
     unidade_id: u.unidade_id,
     iniciais: u.nome.trim().charAt(0).toUpperCase(),
+    trocarSenha: !!u.trocar_senha || !u.email,
   };
 }
 
@@ -101,18 +164,91 @@ function registerHandlers() {
   const db = getDb;
 
   /* ======== Autenticação ======== */
+  const GENERIC = "E-mail ou senha incorretos.";
+  const unknownAttempts = new Map(); // tentativas com e-mails que não existem (também limitadas)
+  let dummyHash = null;              // evita revelar, pelo tempo de resposta, se o e-mail existe
+
+  const lockMessage = (until) => {
+    const min = Math.max(1, Math.ceil((until - Date.now()) / 60000));
+    return `Muitas tentativas. Tente novamente em ${min} minuto${min > 1 ? "s" : ""}.`;
+  };
+
+  const startSession = (user) => {
+    session = publicUser(user);
+    lastActivity = Date.now();
+    return session;
+  };
+
+  handle("auth:needsSetup", () => db().prepare("SELECT COUNT(*) AS n FROM usuarios").get().n === 0, { auth: false });
+
+  handle(
+    "auth:setup",
+    ({ nome, email, senha }) => {
+      if (db().prepare("SELECT COUNT(*) AS n FROM usuarios").get().n > 0)
+        throw new AppError("O sistema já foi configurado. Entre com o seu e-mail e senha.");
+      const name = String(nome || "").trim();
+      if (!name) throw new AppError("Informe o seu nome.");
+      const em = normalizeEmail(email);
+      checkPassword(senha, em);
+      const info = db()
+        .prepare("INSERT INTO usuarios (nome, usuario, email, senha_hash, cargo) VALUES (?, ?, ?, ?, 'admin')")
+        .run(name, em, em, hashPassword(senha));
+      const user = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(info.lastInsertRowid);
+      startSession(user);
+      audit("configuracao_inicial", `Administrador ${em} criado`);
+      return session;
+    },
+    { auth: false }
+  );
+
   handle(
     "auth:login",
     ({ identifier, password }) => {
+      const ident = String(identifier || "").trim().toLowerCase();
+      const pass = String(password || "");
+      if (!ident || !pass) throw new AppError(GENERIC);
+
       const user = db()
-        .prepare("SELECT * FROM usuarios WHERE usuario = ? AND ativo = 1")
-        .get(String(identifier || "").trim());
-      const ok = user && bcrypt.compareSync(String(password || ""), user.senha_hash);
-      if (!ok) {
-        audit("login_falhou", `Tentativa com usuário "${identifier}"`, user ? user.id : null);
-        throw new Error("Usuário ou senha incorretos.");
+        .prepare("SELECT * FROM usuarios WHERE lower(email) = @i OR lower(usuario) = @i")
+        .get({ i: ident });
+      const now = Date.now();
+      const unknown = unknownAttempts.get(ident);
+      const lockedUntil = user ? user.bloqueado_ate || 0 : unknown ? unknown.until : 0;
+      if (lockedUntil > now) {
+        audit("login_bloqueado", `Tentativa durante bloqueio (${ident})`, user ? user.id : null);
+        throw new AppError(lockMessage(lockedUntil));
       }
-      session = publicUser(user);
+
+      if (!dummyHash) dummyHash = hashPassword("senha-ficticia-meuchopp");
+      const match = bcrypt.compareSync(pass, user && user.ativo ? user.senha_hash : dummyHash);
+
+      if (!(user && user.ativo && match)) {
+        let until = 0;
+        if (user) {
+          const falhas = (user.falhas || 0) + 1;
+          if (falhas >= MAX_FALHAS) {
+            until = now + BLOQUEIO_MS;
+            db().prepare("UPDATE usuarios SET falhas = 0, bloqueado_ate = ? WHERE id = ?").run(until, user.id);
+          } else {
+            db().prepare("UPDATE usuarios SET falhas = ? WHERE id = ?").run(falhas, user.id);
+          }
+        } else {
+          if (unknownAttempts.size > 1000) unknownAttempts.clear();
+          const rec = unknown || { count: 0, until: 0 };
+          rec.count += 1;
+          if (rec.count >= MAX_FALHAS) { rec.until = now + BLOQUEIO_MS; rec.count = 0; }
+          unknownAttempts.set(ident, rec);
+          until = rec.until;
+        }
+        audit("login_falhou", `Tentativa com "${ident}"`, user ? user.id : null);
+        throw new AppError(until > now ? lockMessage(until) : GENERIC);
+      }
+
+      db()
+        .prepare("UPDATE usuarios SET falhas = 0, bloqueado_ate = NULL, ultimo_login = datetime('now','localtime') WHERE id = ?")
+        .run(user.id);
+      unknownAttempts.delete(ident);
+      startSession(user);
       audit("login", "Entrou no sistema");
       return session;
     },
@@ -126,12 +262,30 @@ function registerHandlers() {
   });
 
   handle("auth:me", () => session);
+  handle("auth:ping", () => true); // mantém a sessão viva enquanto o usuário está ativo
+
+  /* Primeiro acesso / senha temporária: define e-mail (se faltar) e uma senha nova */
+  handle("auth:completeProfile", ({ email, nova }) => {
+    const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(session.id);
+    const em = normalizeEmail(email || u.email);
+    checkPassword(nova, em);
+    if (bcrypt.compareSync(String(nova), u.senha_hash))
+      throw new AppError("A nova senha precisa ser diferente da senha temporária.");
+    if (emailTaken(em, u.id)) throw new AppError("Este e-mail já está sendo usado por outro usuário.");
+    db()
+      .prepare("UPDATE usuarios SET email = ?, usuario = ?, senha_hash = ?, trocar_senha = 0 WHERE id = ?")
+      .run(em, em, hashPassword(nova), u.id);
+    startSession(db().prepare("SELECT * FROM usuarios WHERE id = ?").get(u.id));
+    audit("primeiro_acesso", "Definiu e-mail e nova senha");
+    return session;
+  });
 
   handle("auth:changePassword", ({ atual, nova }) => {
-    if (!nova || String(nova).length < 6) throw new Error("A nova senha precisa ter ao menos 6 caracteres.");
     const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(session.id);
-    if (!bcrypt.compareSync(String(atual || ""), u.senha_hash)) throw new Error("Senha atual incorreta.");
-    db().prepare("UPDATE usuarios SET senha_hash = ? WHERE id = ?").run(bcrypt.hashSync(String(nova), 10), u.id);
+    if (!bcrypt.compareSync(String(atual || ""), u.senha_hash)) throw new AppError("Senha atual incorreta.");
+    checkPassword(nova, u.email);
+    if (String(nova) === String(atual)) throw new AppError("A nova senha precisa ser diferente da atual.");
+    db().prepare("UPDATE usuarios SET senha_hash = ? WHERE id = ?").run(hashPassword(nova), u.id);
     audit("senha_alterada", "Alterou a própria senha");
     return true;
   });
@@ -368,34 +522,63 @@ function registerHandlers() {
   );
 
   /* ======== Usuários (somente administrador) ======== */
-  handle("users:list", () =>
-    db()
-      .prepare(
-        `SELECT u.id, u.nome, u.usuario, u.cargo, u.ativo, u.unidade_id, un.nome_curto AS unidade
-           FROM usuarios u LEFT JOIN unidades un ON un.id = u.unidade_id ORDER BY u.nome`
-      )
-      .all(),
+  handle(
+    "users:list",
+    () =>
+      db()
+        .prepare(
+          `SELECT u.id, u.nome, u.email, u.usuario, u.cargo, u.ativo, u.unidade_id, u.trocar_senha,
+                  u.bloqueado_ate, u.ultimo_login, un.nome_curto AS unidade
+             FROM usuarios u LEFT JOIN unidades un ON un.id = u.unidade_id ORDER BY u.nome`
+        )
+        .all()
+        .map((u) => ({ ...u, bloqueado: (u.bloqueado_ate || 0) > Date.now() })),
+    { admin: true }
+  );
+
+  /* Cria o usuário com uma senha temporária aleatória, exibida uma única vez ao administrador */
+  handle(
+    "users:create",
+    ({ nome, email, cargo, unidadeId }) => {
+      const name = String(nome || "").trim();
+      if (!name) throw new AppError("Informe o nome.");
+      const em = normalizeEmail(email);
+      if (!["admin", "operador"].includes(cargo)) throw new AppError("Cargo inválido.");
+      if (cargo === "operador" && !Number(unidadeId)) throw new AppError("Escolha a unidade do operador.");
+      if (emailTaken(em)) throw new AppError(`O e-mail ${em} já está cadastrado.`);
+
+      const senha = generateTempPassword();
+      db()
+        .prepare("INSERT INTO usuarios (nome, usuario, email, senha_hash, cargo, unidade_id, trocar_senha) VALUES (?, ?, ?, ?, ?, ?, 1)")
+        .run(name, em, em, hashPassword(senha), cargo, cargo === "operador" ? Number(unidadeId) : null);
+      audit("usuario_criado", `${em} (${cargo})`);
+      return { email: em, senha };
+    },
     { admin: true }
   );
 
   handle(
-    "users:create",
-    ({ nome, usuario, senha, cargo, unidadeId }) => {
-      nome = String(nome || "").trim();
-      usuario = String(usuario || "").trim();
-      if (!nome || !usuario) throw new Error("Informe nome e usuário.");
-      if (!senha || String(senha).length < 6) throw new Error("A senha precisa ter ao menos 6 caracteres.");
-      if (!["admin", "operador"].includes(cargo)) throw new Error("Cargo inválido.");
-      if (cargo === "operador" && !Number(unidadeId)) throw new Error("Escolha a unidade do operador.");
-      try {
-        db()
-          .prepare("INSERT INTO usuarios (nome, usuario, senha_hash, cargo, unidade_id) VALUES (?, ?, ?, ?, ?)")
-          .run(nome, usuario, bcrypt.hashSync(String(senha), 10), cargo, cargo === "operador" ? Number(unidadeId) : null);
-      } catch (e) {
-        if (String(e.code).startsWith("SQLITE_CONSTRAINT")) throw new Error(`O usuário "${usuario}" já existe.`);
-        throw e;
-      }
-      audit("usuario_criado", `${usuario} (${cargo})`);
+    "users:resetPassword",
+    ({ id }) => {
+      const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(Number(id));
+      if (!u) throw new AppError("Usuário não encontrado.");
+      const senha = generateTempPassword();
+      db()
+        .prepare("UPDATE usuarios SET senha_hash = ?, trocar_senha = 1, falhas = 0, bloqueado_ate = NULL WHERE id = ?")
+        .run(hashPassword(senha), u.id);
+      audit("senha_temporaria_gerada", u.email || u.usuario);
+      return { email: u.email || u.usuario, senha };
+    },
+    { admin: true }
+  );
+
+  handle(
+    "users:unlock",
+    ({ id }) => {
+      const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(Number(id));
+      if (!u) throw new AppError("Usuário não encontrado.");
+      db().prepare("UPDATE usuarios SET falhas = 0, bloqueado_ate = NULL WHERE id = ?").run(u.id);
+      audit("usuario_desbloqueado", u.email || u.usuario);
       return true;
     },
     { admin: true }
@@ -404,24 +587,11 @@ function registerHandlers() {
   handle(
     "users:toggle",
     ({ id }) => {
-      if (Number(id) === session.id) throw new Error("Você não pode desativar o seu próprio usuário.");
+      if (Number(id) === session.id) throw new AppError("Você não pode desativar o seu próprio usuário.");
       const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(Number(id));
-      if (!u) throw new Error("Usuário não encontrado.");
+      if (!u) throw new AppError("Usuário não encontrado.");
       db().prepare("UPDATE usuarios SET ativo = ? WHERE id = ?").run(u.ativo ? 0 : 1, u.id);
-      audit(u.ativo ? "usuario_desativado" : "usuario_ativado", u.usuario);
-      return true;
-    },
-    { admin: true }
-  );
-
-  handle(
-    "users:resetPassword",
-    ({ id, senha }) => {
-      if (!senha || String(senha).length < 6) throw new Error("A senha precisa ter ao menos 6 caracteres.");
-      const u = db().prepare("SELECT * FROM usuarios WHERE id = ?").get(Number(id));
-      if (!u) throw new Error("Usuário não encontrado.");
-      db().prepare("UPDATE usuarios SET senha_hash = ? WHERE id = ?").run(bcrypt.hashSync(String(senha), 10), u.id);
-      audit("senha_redefinida", u.usuario);
+      audit(u.ativo ? "usuario_desativado" : "usuario_ativado", u.email || u.usuario);
       return true;
     },
     { admin: true }

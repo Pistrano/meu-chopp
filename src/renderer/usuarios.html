@@ -21,18 +21,18 @@
       <h2 class="panel-title">Novo usuário</h2>
       <form id="formUser" class="row g-3 align-items-end" novalidate>
         <div class="col-md-3"><label class="form-label" for="nome">Nome</label><input id="nome" class="form-control" required></div>
-        <div class="col-md-2"><label class="form-label" for="usuario">Usuário</label><input id="usuario" class="form-control" autocomplete="off" required></div>
-        <div class="col-md-2"><label class="form-label" for="senha">Senha inicial</label><input id="senha" class="form-control" type="text" autocomplete="off" placeholder="Mín. 6 caracteres" required></div>
+        <div class="col-md-3"><label class="form-label" for="email">E-mail</label><input id="email" class="form-control" type="text" inputmode="email" autocomplete="off" placeholder="pessoa@empresa.com" required></div>
         <div class="col-md-2"><label class="form-label" for="cargo">Cargo</label>
           <select id="cargo" class="form-select"><option value="operador">Operador</option><option value="admin">Administrador</option></select></div>
-        <div class="col-md-3"><label class="form-label" for="unidade">Unidade</label><select id="unidade" class="form-select"></select></div>
-        <div class="col-12"><button class="btn btn-mc btn-mc-sm" type="submit">Criar usuário</button></div>
+        <div class="col-md-2"><label class="form-label" for="unidade">Unidade</label><select id="unidade" class="form-select"></select></div>
+        <div class="col-md-2"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Criar usuário</button></div>
+        <div class="col-12"><p class="t-muted mb-0">O sistema gera uma senha temporária para você repassar. No primeiro acesso, a pessoa cria a própria senha.</p></div>
       </form>
     </section>
 
     <div class="table-card">
       <table>
-        <thead><tr><th>Nome</th><th>Usuário</th><th>Cargo</th><th>Unidade</th><th>Situação</th><th></th></tr></thead>
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Unidade</th><th>Situação</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>

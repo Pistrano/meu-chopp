@@ -15,6 +15,15 @@
     password: document.getElementById("passwordError"),
   };
 
+  /* Primeira vez usando o sistema: vai para a criação do administrador */
+  MeuChoppAuth.needsSetup().then((needs) => { if (needs) window.location.replace("setup.html"); });
+
+  /* Sessão encerrada por inatividade */
+  if (new URLSearchParams(location.search).has("expirada")) {
+    alertBox.className = "alert alert-error";
+    alertBox.textContent = "Sua sessão foi encerrada. Entre novamente.";
+  }
+
   /* ---------- Mensagens ---------- */
   function showAlert(type, message) {
     alertBox.className = `alert alert-${type}`;
@@ -42,7 +51,11 @@
     clearFieldError(password, "password");
 
     if (identifier.value.trim() === "") {
-      setFieldError(identifier, "identifier", "Informe seu usuário ou e-mail.");
+      setFieldError(identifier, "identifier", "Informe seu e-mail.");
+      firstInvalid = identifier;
+    }
+    else if (identifier.value.includes("@") && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(identifier.value.trim())) {
+      setFieldError(identifier, "identifier", "Digite um e-mail válido, como nome@empresa.com.");
       firstInvalid = identifier;
     }
     if (password.value === "") {
@@ -72,11 +85,10 @@
     if (result.ok) {
       showAlert("success", "Login realizado com sucesso. Redirecionando...");
       password.value = "";
-      setTimeout(() => {
-        window.location.href = "dashboard.html";
-      }, 900);
+      const destino = result.user.trocarSenha ? "primeiro-acesso.html" : "dashboard.html";
+      setTimeout(() => { window.location.href = destino; }, 700);
     } else {
-      showAlert("error", "Usuário ou senha incorretos. Verifique os dados e tente novamente.");
+      showAlert("error", result.error || "E-mail ou senha incorretos.");
       password.focus();
       password.select();
     }

@@ -4,7 +4,6 @@
    ========================================================== */
 const initSqlJs = require("sql.js");
 const { CompatDatabase } = require("./sqlite-compat");
-const bcrypt = require("bcryptjs");
 const path = require("path");
 
 let db = null;
@@ -81,8 +80,27 @@ async function initDatabase(userDataDir) {
     CREATE INDEX IF NOT EXISTS idx_barris_un  ON barris(unidade_id, status);
   `);
 
+  migrate();
   seed();
   return db;
+}
+
+/* Atualiza bancos criados em versões anteriores (adiciona colunas de segurança) */
+function migrate() {
+  const cols = db.prepare("PRAGMA table_info(usuarios)").all().map((c) => c.name);
+  const add = (name, ddl) => {
+    if (cols.includes(name)) return false;
+    db.exec(`ALTER TABLE usuarios ADD COLUMN ${name} ${ddl}`);
+    return true;
+  };
+  const emailAdded = add("email", "TEXT");
+  add("falhas", "INTEGER NOT NULL DEFAULT 0");
+  add("bloqueado_ate", "INTEGER");
+  add("trocar_senha", "INTEGER NOT NULL DEFAULT 0");
+  add("ultimo_login", "TEXT");
+  // Usuários antigos (sem e-mail) precisam completar o cadastro e trocar a senha no próximo login
+  if (emailAdded) db.exec("UPDATE usuarios SET trocar_senha = 1 WHERE email IS NULL");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email COLLATE NOCASE)");
 }
 
 /* Dados iniciais: só roda quando o banco está vazio */
@@ -93,13 +111,7 @@ function seed() {
     ins.run("Louvada Estação Cuiabá", "Estação Cuiabá");
     ins.run("Louvada Pantanal", "Pantanal");
   }
-
-  const hasUsers = db.prepare("SELECT COUNT(*) AS n FROM usuarios").get().n;
-  if (!hasUsers) {
-    db.prepare(
-      "INSERT INTO usuarios (nome, usuario, senha_hash, cargo) VALUES (?, ?, ?, 'admin')"
-    ).run("Eduardo", "admin", bcrypt.hashSync("admin123", 10));
-  }
+  // Nenhum usuário padrão: o primeiro administrador é criado na tela de configuração inicial.
 }
 
 function getDb() {

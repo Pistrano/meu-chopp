@@ -61,12 +61,45 @@ const MCLayout = (() => {
     document.getElementById("btnChangePwd").addEventListener("click", changePassword);
   }
 
-  async function changePassword() {
-    const atual = window.prompt("Digite a sua senha atual:");
-    if (atual === null) return;
-    const nova = window.prompt("Digite a nova senha (mínimo 6 caracteres):");
-    if (nova === null) return;
-    await MC.run(() => MC.call("auth:changePassword", { atual, nova }), "Senha alterada com sucesso.");
+  function changePassword() {
+    return MC.dialog({
+      title: "Alterar minha senha",
+      intro: "Use ao menos 8 caracteres, com letras e números.",
+      fields: [
+        { id: "atual", label: "Senha atual", type: "password", autocomplete: "current-password" },
+        { id: "nova", label: "Nova senha", type: "password", autocomplete: "new-password" },
+        { id: "confirma", label: "Repita a nova senha", type: "password", autocomplete: "new-password" },
+      ],
+      rules: "nova",
+      submitLabel: "Salvar senha",
+      onSubmit: async (v) => {
+        if (v.nova !== v.confirma) throw new Error("As senhas novas não são iguais.");
+        await MC.call("auth:changePassword", { atual: v.atual, nova: v.nova });
+        MC.toast("Senha alterada com sucesso.");
+      },
+    });
+  }
+
+  /* Encerra a sessão após 15 min sem uso; enquanto há atividade, avisa o sistema (ping) */
+  const IDLE_MS = 15 * 60 * 1000;
+  function watchInactivity() {
+    let idleTimer, lastPing = Date.now();
+    const arm = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(async () => {
+        try { await window.api.invoke("auth:logout"); } catch (_) {}
+        window.location.href = "index.html?expirada=1";
+      }, IDLE_MS);
+    };
+    const onActivity = () => {
+      arm();
+      if (Date.now() - lastPing > 60000) {
+        lastPing = Date.now();
+        window.api.invoke("auth:ping");
+      }
+    };
+    ["click", "keydown", "mousemove", "touchstart"].forEach((ev) => document.addEventListener(ev, onActivity, { passive: true }));
+    arm();
   }
 
   function renderUnitMenu() {
@@ -116,6 +149,7 @@ const MCLayout = (() => {
       ctx.user = null;
     }
     if (!ctx.user) { window.location.href = "index.html"; return null; }
+    if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
     if (pageId === "usuarios" && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
     ctx.units = await MC.call("units:list");
@@ -123,6 +157,7 @@ const MCLayout = (() => {
     ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units[0].id;
 
     buildHeader(pageId);
+    watchInactivity();
     renderUnitMenu();
     renderAlerts();
     return ctx;

@@ -32,14 +32,14 @@
     <main class="form-panel col-lg-6">
       <div class="login-card">
         <h1>Entrar</h1>
-        <p class="login-subtitle">Acesse com o seu usuário e senha.</p>
+        <p class="login-subtitle">Acesse com o seu e-mail e senha.</p>
 
         <div id="formAlert" class="alert d-none" role="alert"></div>
 
         <form id="loginForm" novalidate>
           <div class="mb-3">
-            <label for="identifier" class="form-label">Usuário</label>
-            <input id="identifier" class="form-control" type="text" autocomplete="username" placeholder="Seu usuário" autofocus>
+            <label for="identifier" class="form-label">E-mail</label>
+            <input id="identifier" class="form-control" type="text" inputmode="email" autocomplete="username" placeholder="voce@empresa.com" autofocus>
             <div id="identifierError" class="field-error" aria-live="polite"></div>
           </div>
 
@@ -62,8 +62,8 @@
         </form>
 
         <p class="demo-note">
-          <strong>Primeiro acesso:</strong> usuário <strong>admin</strong> e senha <strong>admin123</strong>.
-          Troque a senha depois de entrar (menu do usuário &rsaquo; Alterar minha senha).
+          <strong>Esqueceu a senha?</strong> Peça a um administrador do sistema para gerar uma senha temporária para você.
+          Por segurança, o acesso é bloqueado por 15 minutos após 5 tentativas erradas.
         </p>
       </div>
     </main>

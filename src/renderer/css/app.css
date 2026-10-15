@@ -81,3 +81,30 @@
   .app-header .brand-name { display: none; }
   .unit-select { max-width: 160px; }
 }
+
+/* ---------- Janela de diálogo ---------- */
+.mc-overlay {
+  position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center;
+  padding: 1rem; background: rgba(22, 24, 29, .55);
+}
+.mc-modal {
+  width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto;
+  background: var(--mc-surface); border-radius: var(--mc-radius); padding: 1.5rem;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .35);
+}
+.mc-modal h2 { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.2rem; margin: 0 0 .5rem; }
+.mc-modal-intro { color: var(--mc-muted); font-size: .9rem; margin-bottom: 1rem; }
+.mc-modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.25rem; align-items: center; }
+.secret-box {
+  font-family: Consolas, "Courier New", monospace; font-size: 1.5rem; font-weight: 700; letter-spacing: .08em;
+  text-align: center; padding: 1rem; margin-bottom: 1rem; user-select: all;
+  background: var(--mc-gold-soft); border: 1.5px dashed var(--mc-gold-dark); border-radius: var(--mc-radius);
+}
+
+/* ---------- Regras de senha ---------- */
+.pw-rules { list-style: none; margin: 0 0 1rem; padding: 0; font-size: .85rem; color: var(--mc-muted); display: flex; gap: 1rem; flex-wrap: wrap; }
+.pw-rules li.ok { color: var(--mc-success); font-weight: 600; }
+
+/* ---------- Situação de usuário ---------- */
+.op-badge--bloqueado { background: var(--mc-danger-soft); color: var(--mc-danger); }
+.op-badge--primeiro { background: var(--mc-gold-soft); color: var(--mc-gold-dark); }
