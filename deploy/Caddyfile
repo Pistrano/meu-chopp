@@ -1,0 +1,5 @@
+# HTTPS automático com Caddy. Troque pelo seu domínio (o DNS dele precisa apontar para o IP do servidor).
+chopp.seudominio.com.br {
+    encode gzip
+    reverse_proxy 127.0.0.1:3000
+}

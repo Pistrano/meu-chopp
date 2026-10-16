@@ -1,52 +1,85 @@
-# MeuChopp — aplicativo de desktop
+# MeuChopp — controle de barris de chopp dos quiosques
 
-Sistema de controle de barris de chopp (Electron + SQLite em WebAssembly). Funciona sem internet:
-os dados ficam em um arquivo `meuchopp.db` no computador.
+## Como funciona
 
-## Como rodar
-1. Instale o **Node.js 20 ou superior** (https://nodejs.org).
-2. Coloque a pasta em um lugar simples, como `C:\MeuChopp` (evite Downloads), apague a pasta `node_modules` se ela existir e, na pasta do projeto:
-   ```
-   npm install
-   npm start
-   ```
-3. Na primeira vez, o app abre a tela **Configuração inicial**: crie o administrador com o seu e-mail e uma senha.
-   Não existe usuário nem senha padrão.
-
-## Quiosques e acesso exclusivo
-- Cada quiosque tem **estoque, histórico, transferências e relatórios próprios**.
-- O **administrador** vê e gerencia todos os quiosques e cadastra novos na aba *Quiosques*.
-- O **operador** só enxerga os quiosques que um administrador liberou para ele (um ou vários), em *Usuários > Quiosques*.
-  A permissão é conferida no sistema a cada ação, não só na tela, e vale na hora.
-- Uma transferência só é confirmada por quem tem acesso ao quiosque de destino, e só é cancelada por quem tem acesso ao de origem.
-- Tentativas de acessar um quiosque sem permissão ficam registradas em *Histórico > Auditoria do sistema* (`acesso negado`).
-- Um quiosque só pode ser desativado quando não tem barris em estoque nem transferências a receber.
-
-## Segurança do login
-- Entrada com **e-mail** e senha. Senha com no mínimo 8 caracteres, com letras e números, sem senhas comuns.
-- **5 tentativas erradas bloqueiam o acesso por 15 minutos** (o administrador pode desbloquear).
-- A sessão **expira após 15 minutos sem uso**.
-- O administrador cria usuários e redefine senhas gerando uma **senha temporária aleatória**; a pessoa é obrigada
-  a criar a própria senha no primeiro acesso.
-- Toda entrada, falha, bloqueio e troca de senha fica na aba *Histórico > Auditoria do sistema*.
-- Esqueceu a senha? Peça a um administrador para gerar uma senha temporária (Usuários > Gerar senha temporária).
-
-## Gerar o instalador (.exe)
 ```
-npm run dist
+ Tablet / tela / PC do quiosque A ─┐
+ Tablet / tela / PC do quiosque B ─┼──►  SERVIDOR (1 só, com o banco de dados)
+ Celular / PC do administrador   ─┘
 ```
-O instalador aparece na pasta `dist/`.
+
+Os dados ficam **no servidor**, não nos aparelhos. Por isso as transferências entre quiosques, o histórico e o painel
+do administrador funcionam para todos ao mesmo tempo. Cada aparelho só precisa abrir o endereço do servidor.
+
+Cada quiosque só enxerga o próprio estoque. O administrador libera quais quiosques cada pessoa pode acessar.
+
+## 1) Testar o servidor no seu computador
+
+1. Instale o **Node.js 18 ou superior** (https://nodejs.org).
+2. Na pasta do projeto:
+   ```
+   npm install --omit=dev
+   npm run server
+   ```
+   (no Windows você também pode dar dois cliques em `iniciar-servidor.bat`)
+3. Abra **http://localhost:3000**. Na primeira vez aparece a *Configuração inicial*: crie o administrador.
+
+## 2) Colocar o servidor no ar (para os quiosques usarem)
+
+O servidor precisa ficar **ligado o tempo todo** e acessível pela internet, com **HTTPS** (cadeado). Caminho recomendado:
+um servidor virtual pequeno (VPS, Ubuntu) com um domínio, por exemplo `chopp.suaempresa.com.br`.
+
+```
+sudo apt update && sudo apt install -y curl
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+sudo useradd --system --home /opt/meu-chopp meuchopp
+sudo mkdir -p /opt/meu-chopp /var/lib/meuchopp
+# copie a pasta do projeto para /opt/meu-chopp (scp, git clone, etc.) e então:
+cd /opt/meu-chopp && sudo npm install --omit=dev
+sudo chown -R meuchopp:meuchopp /opt/meu-chopp /var/lib/meuchopp
+sudo cp deploy/meuchopp.service /etc/systemd/system/
+sudo systemctl enable --now meuchopp
+```
+
+HTTPS com **Caddy** (certificado automático): instale conforme https://caddyserver.com/docs/install, coloque o conteúdo de
+`deploy/Caddyfile` em `/etc/caddy/Caddyfile` (com o seu domínio) e rode `sudo systemctl reload caddy`.
+O DNS do domínio precisa apontar para o IP do servidor.
+
+Para atualizar depois: copie os arquivos novos e rode `sudo systemctl restart meuchopp`.
+
+**Importante:** sem HTTPS o sistema funciona, mas as senhas viajam sem proteção e o tablet não permite "instalar" o app.
+Não coloque na internet sem HTTPS.
+
+## 3) Instalar nos aparelhos dos quiosques
+
+- **Tablet Android / celular:** abra o endereço no Chrome > menu ⋮ > *Instalar app* (ou *Adicionar à tela inicial*).
+- **iPad / iPhone:** abra no Safari > Compartilhar > *Adicionar à Tela de Início*.
+- **PC ou tablet Windows:** use o aplicativo `MeuChopp Setup.exe` (gere com `npm run dist`). Na primeira abertura, informe o
+  endereço do servidor. Marque *Abrir em tela cheia* para deixar a tela do quiosque travada no sistema (F11 alterna;
+  tecla Alt abre o menu com *Alterar servidor*). Também funciona só pelo navegador.
+
+Sem internet o sistema não abre dados (aparece o aviso *Sem conexão* e ele tenta de novo sozinho). Nada se perde: o que já foi
+registrado está no servidor.
+
+## 4) Dados, backup e migração
+
+- O banco é o arquivo `meuchopp.db` na pasta `data/` (ou em `DATA_DIR`). **Faça cópia dele periodicamente para outro lugar.**
+- O servidor também guarda uma cópia por dia em `data/backups/` (as 14 mais recentes). Elas ficam na mesma máquina; copie para fora.
+- **Já usava a versão antiga (um banco por aparelho)?** Copie o `meuchopp.db` dela (em `%APPDATA%\meu-chopp\`) para a pasta
+  `data/` do servidor **antes** de ligar o servidor pela primeira vez. Ele é atualizado automaticamente.
+
+## Segurança
+
+- Entrada com e-mail e senha forte (8+ caracteres, letras e números); sem senha padrão.
+- 5 tentativas erradas bloqueiam a conta por 15 minutos; também há limite de tentativas por aparelho.
+- A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido).
+- Cada quiosque é isolado: o servidor confere a permissão a cada ação. Tentativas indevidas ficam na *Auditoria*.
+- Proteções do servidor: cabeçalhos de segurança, bloqueio de pedidos vindos de outros sites e de acesso a arquivos internos.
+- Esqueceu a senha? O administrador gera uma senha temporária em *Usuários*.
 
 ## Estrutura
-- `src/main/db.js` — tabelas do banco e dados iniciais (unidades e admin)
-- `src/main/ipc.js` — regras de negócio, permissões, histórico e auditoria
-- `src/main/main.js` / `preload.js` — janela do aplicativo e ponte segura
-- `src/renderer/` — telas (login, dashboard, barris, transferências, histórico, usuários)
 
-## Onde ficam os dados
-Windows: `%APPDATA%\meu-chopp\meuchopp.db` (faça backup copiando esse arquivo).
-
-## Se a instalação falhar
-- `EPERM` ao apagar/instalar: feche o VS Code e outros programas que usam a pasta e rode `rmdir /s /q node_modules` antes de instalar de novo.
-- Erro de certificado (`self-signed certificate`): sua rede/antivírus intercepta HTTPS. Peça ao TI o certificado e use `set NODE_EXTRA_CA_CERTS=C:\caminho\certificado.pem` antes do `npm install`.
-- O banco não usa módulos nativos (sql.js), então não precisa de Python nem de compilador C++.
+- `src/server/` — servidor, regras, banco (`server.js`, `api.js`, `db.js`)
+- `src/renderer/` — as telas (servidas pelo servidor)
+- `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
+- `deploy/` — arquivos de implantação (Linux + HTTPS)

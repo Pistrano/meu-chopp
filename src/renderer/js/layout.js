@@ -143,17 +143,34 @@ const MCLayout = (() => {
     ctx.onUnitChange(id);
   }
 
+  /* Sem conexão com o servidor: não manda para o login (a sessão continua válida), só pede para tentar de novo */
+  function showOffline() {
+    document.body.innerHTML = `<main class="dashboard-main"><div class="panel text-center">
+      <h2 class="panel-title">Sem conexão com o servidor</h2>
+      <p class="t-muted">Verifique a internet deste aparelho. Os dados ficam guardados no servidor, nada foi perdido.</p>
+      <button class="btn btn-mc btn-mc-sm" id="btnRetry" type="button">Tentar novamente</button></div></main>`;
+    document.getElementById("btnRetry").addEventListener("click", () => window.location.reload());
+    setTimeout(() => window.location.reload(), 15000); // tenta sozinho a cada 15 s
+    return null;
+  }
+
   async function init(pageId) {
     try {
       ctx.user = await MC.call("auth:me");
-    } catch (_) {
+    } catch (err) {
+      if (err.code === "OFFLINE") return showOffline();
       ctx.user = null;
     }
     if (!ctx.user) { window.location.href = "index.html"; return null; }
     if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
     if (["usuarios", "quiosques"].includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
-    ctx.units = await MC.call("units:list");
+    try {
+      ctx.units = await MC.call("units:list");
+    } catch (err) {
+      if (err.code === "OFFLINE") return showOffline();
+      throw err;
+    }
     const saved = Number(localStorage.getItem("mc_unit"));
     ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units.length ? ctx.units[0].id : null;
 

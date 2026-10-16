@@ -35,7 +35,14 @@
 
   document.getElementById("btnExport").addEventListener("click", async () => {
     const r = await MC.run(() => MC.call("history:export", filters()));
-    if (r && !r.cancelled) MC.toast(`Relatório salvo (${r.total} movimentações).`, "ok");
+    if (!r) return;
+    // O servidor devolve o conteúdo; o próprio aparelho salva o arquivo (funciona em PC, tablet e celular)
+    const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = r.filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    MC.toast(`Relatório gerado (${r.total} movimentações).`, "ok");
   });
 
   if (ctx.user.cargo === "admin") {

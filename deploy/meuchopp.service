@@ -1,0 +1,22 @@
+# Serviço do MeuChopp no Linux (Ubuntu/Debian). Copie para /etc/systemd/system/meuchopp.service
+[Unit]
+Description=MeuChopp - servidor
+After=network.target
+
+[Service]
+Type=simple
+User=meuchopp
+WorkingDirectory=/opt/meu-chopp
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=DATA_DIR=/var/lib/meuchopp
+Environment=TRUST_PROXY=1
+ExecStart=/usr/bin/node src/server/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

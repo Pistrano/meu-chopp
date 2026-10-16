@@ -67,7 +67,16 @@
 .toast-mc--ok  { background: var(--mc-success-soft); color: var(--mc-success); border: 1px solid #b9dcc8; }
 .toast-mc--err { background: var(--mc-danger-soft);  color: var(--mc-danger);  border: 1px solid #efc3bf; }
 
-@media (max-width: 991.98px) { .app-nav { display: none; } }
+/* Tablet / celular: o menu vira uma barra fixa embaixo, fácil de tocar */
+@media (max-width: 991.98px) {
+  body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .app-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; margin: 0; gap: .25rem;
+    padding: .4rem .5rem calc(.4rem + env(safe-area-inset-bottom, 0px));
+    background: var(--mc-ink); border-top: 1px solid var(--mc-ink-3);
+  }
+  .app-nav a { flex: 1 1 0; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 48px; padding: .3rem .25rem; font-size: .8rem; }
+}
 
 /* Janelas mais estreitas: cabeçalho compacto para não estourar a largura */
 .app-header { min-width: 0; }
@@ -120,3 +129,12 @@
 .unit-select--single { cursor: default; }
 .unit-select--single::after { display: none; }
 .ms-2 { margin-left: .5rem; }
+
+/* Telas de toque: alvos maiores (mínimo ~44 px) */
+@media (pointer: coarse) {
+  .btn-ghost { min-height: 44px; padding: 0 1rem; }
+  .check-item { min-height: 44px; }
+  .dropdown-item { padding: .7rem 1rem; }
+  .alerts-btn, .unit-select { min-height: 44px; }
+  .table-card td { padding-top: .85rem; padding-bottom: .85rem; }
+}
