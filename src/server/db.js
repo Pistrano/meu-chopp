@@ -5,13 +5,26 @@
 const initSqlJs = require("sql.js");
 const { CompatDatabase } = require("./sqlite-compat");
 const path = require("path");
+const fs = require("fs");
 
 let db = null;
+const SCHEMA_VERSION = 3;
 
 async function initDatabase(userDataDir) {
   const wasmDir = path.dirname(require.resolve("sql.js"));
   const SQL = await initSqlJs({ locateFile: (file) => path.join(wasmDir, file) });
-  db = new CompatDatabase(SQL, path.join(userDataDir, "meuchopp.db"));
+  const dbFile = path.join(userDataDir, "meuchopp.db");
+  const existed = fs.existsSync(dbFile);
+  db = new CompatDatabase(SQL, dbFile);
+
+  // Antes de atualizar a estrutura de um banco antigo, guarda uma cópia intacta dele
+  const versionBefore = db.prepare("PRAGMA user_version").get().user_version;
+  if (existed && versionBefore < SCHEMA_VERSION) {
+    const dir = path.join(userDataDir, "backups");
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+    fs.copyFileSync(dbFile, path.join(dir, `meuchopp-antes-da-v${SCHEMA_VERSION}-${stamp}.db`));
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS unidades (
@@ -119,6 +132,60 @@ function migrate() {
              SELECT id, unidade_id FROM usuarios WHERE cargo = 'operador' AND unidade_id IS NOT NULL`);
     db.exec("PRAGMA user_version = 2");
   }
+
+  // v3: dados cadastrais das unidades, torneiras e engates (barril ↔ torneira).
+  // Só ACRESCENTA colunas e tabelas: nenhum registro existente é apagado ou alterado.
+  // As colunas novas das unidades ficam vazias (NULL) até o administrador preenchê-las.
+  migrateV3();
+}
+
+function migrateV3() {
+  const colsOf = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+
+  const unitCols = colsOf("unidades");
+  if (!unitCols.includes("cnpj")) db.exec("ALTER TABLE unidades ADD COLUMN cnpj TEXT");          // só dígitos
+  if (!unitCols.includes("endereco")) db.exec("ALTER TABLE unidades ADD COLUMN endereco TEXT");
+  // Um mesmo CNPJ não pode estar em duas unidades (unidades ainda sem CNPJ ficam de fora)
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_unidades_cnpj ON unidades(cnpj) WHERE cnpj IS NOT NULL");
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS torneiras (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      unidade_id INTEGER NOT NULL REFERENCES unidades(id),
+      numero     INTEGER NOT NULL CHECK (numero > 0),
+      ativo      INTEGER NOT NULL DEFAULT 1,
+      criado_em  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+    -- Duas torneiras ATIVAS da mesma unidade não podem ter o mesmo número
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_torneiras_numero ON torneiras(unidade_id, numero) WHERE ativo = 1;
+
+    -- Cada período de uso de um barril em uma torneira (engate → retirada).
+    -- A torneira está ocupada enquanto existir um engate dela sem retirado_em.
+    CREATE TABLE IF NOT EXISTS engates (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      barril_id       INTEGER NOT NULL REFERENCES barris(id),
+      torneira_id     INTEGER NOT NULL REFERENCES torneiras(id),
+      unidade_id      INTEGER NOT NULL REFERENCES unidades(id),
+      torneira_numero INTEGER NOT NULL,           -- número da torneira no momento do engate (histórico)
+      engatado_por    INTEGER NOT NULL REFERENCES usuarios(id),
+      engatado_em     TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      retirado_por    INTEGER REFERENCES usuarios(id),
+      retirado_em     TEXT,
+      CHECK ((retirado_em IS NULL) = (retirado_por IS NULL))
+    );
+    -- Garantias no próprio banco: uma torneira com no máximo um barril engatado,
+    -- e um barril com no máximo um engate ativo.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_engate_torneira_ativa ON engates(torneira_id) WHERE retirado_em IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_engate_barril_ativo   ON engates(barril_id)   WHERE retirado_em IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_engates_barril ON engates(barril_id);
+  `);
+
+  // O histórico de movimentações passa a guardar a torneira (referência + número usado na hora)
+  const movCols = colsOf("movimentacoes");
+  if (!movCols.includes("torneira_id")) db.exec("ALTER TABLE movimentacoes ADD COLUMN torneira_id INTEGER REFERENCES torneiras(id)");
+  if (!movCols.includes("torneira_numero")) db.exec("ALTER TABLE movimentacoes ADD COLUMN torneira_numero INTEGER");
+
+  if (db.prepare("PRAGMA user_version").get().user_version < 3) db.exec("PRAGMA user_version = 3");
 }
 
 /* Dados iniciais: só roda quando o banco está vazio */
@@ -137,4 +204,4 @@ function getDb() {
   return db;
 }
 
-module.exports = { initDatabase, getDb };
+module.exports = { initDatabase, getDb, SCHEMA_VERSION };

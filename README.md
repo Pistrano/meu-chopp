@@ -68,6 +68,24 @@ registrado está no servidor.
 - **Já usava a versão antiga (um banco por aparelho)?** Copie o `meuchopp.db` dela (em `%APPDATA%\meu-chopp\`) para a pasta
   `data/` do servidor **antes** de ligar o servidor pela primeira vez. Ele é atualizado automaticamente.
 
+## Unidades e torneiras
+
+- Aba **Unidades** (administrador): cadastro com nome, CNPJ (numérico ou alfanumérico, com validação) e localização,
+  e o cadastro das torneiras de cada loja. As unidades que já existiam ficam marcadas como *A preencher* até alguém
+  informar o CNPJ e o endereço reais em *Editar*.
+- **Engate:** em *Barris > Engatar na torneira*, o funcionário escolhe uma torneira livre da unidade do barril.
+  Sem torneira livre, o engate não é feito.
+- **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
+  Pela regra atual, o barril retirado passa para *Chopp Esgotado*.
+- O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
+- Na primeira vez que a versão nova liga sobre um banco antigo, ele é atualizado automaticamente (sem apagar nada)
+  e uma cópia do banco antigo fica em `data/backups/meuchopp-antes-da-v3-....db`.
+
+## Testes
+
+Com o Node.js instalado, na pasta do projeto: `npm test`. Os testes sobem o servidor numa pasta temporária
+(não mexem no seu `data/`) e conferem cadastro de unidades, torneiras, engate, retirada, histórico, permissões e migração.
+
 ## Segurança
 
 - Entrada com e-mail e senha forte (8+ caracteres, letras e números); sem senha padrão.

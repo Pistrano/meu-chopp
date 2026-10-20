@@ -20,9 +20,9 @@
             <td>${MC.fmtDate(m.criado_em)}</td>
             <td><span class="t-strong">#${MC.esc(m.codigo)}</span><br><span class="t-muted">${MC.esc(m.estilo)}</span></td>
             <td><span class="op-badge op-badge--${m.operacao}">${MC.OP_LABELS[m.operacao]}</span></td>
-            <td>${rota}</td><td>${MC.esc(m.responsavel)}</td><td class="t-muted">${MC.esc(m.observacao || "")}</td></tr>`;
+            <td>${rota}</td><td>${m.torneira_numero ? `Torneira ${m.torneira_numero}` : '<span class="t-muted">—</span>'}</td><td>${MC.esc(m.responsavel)}</td><td class="t-muted">${MC.esc(m.observacao || "")}</td></tr>`;
         }).join("")
-      : `<tr><td colspan="6" class="table-empty">Nenhuma movimentação encontrada com estes filtros.</td></tr>`;
+      : `<tr><td colspan="7" class="table-empty">Nenhuma movimentação encontrada com estes filtros.</td></tr>`;
   }
 
   async function loadAudit() {

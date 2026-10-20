@@ -5,6 +5,7 @@
   "main": "src/main/main.js",
   "scripts": {
     "server": "node src/server/server.js",
+    "test": "node --test",
     "start": "electron .",
     "dist": "electron-builder"
   },

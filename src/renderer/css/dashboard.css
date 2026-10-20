@@ -85,6 +85,7 @@
 .movement-row + .movement-row { border-top: 1px solid var(--mc-line); }
 
 .movement-row .m-barril { font-weight: 700; }
+.movement-row .op-badge { justify-self: start; }
 .movement-row .m-estilo { color: var(--mc-muted); font-size: .82rem; display: block; }
 
 .movement-route {

@@ -4,11 +4,11 @@
    ========================================================== */
 const MCLayout = (() => {
   const NAV = [
-    { id: "dashboard", label: "Dashboard", href: "dashboard.html" },
+    { id: "dashboard", label: "Dashboard", short: "Painel", href: "dashboard.html" },
     { id: "barris", label: "Barris", href: "barris.html" },
-    { id: "transferencias", label: "Transferências", href: "transferencias.html" },
+    { id: "transferencias", label: "Transferências", short: "Transf.", href: "transferencias.html" },
     { id: "historico", label: "Histórico", href: "historico.html" },
-    { id: "quiosques", label: "Quiosques", href: "quiosques.html", admin: true },
+    { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
     { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
   ];
 
@@ -20,7 +20,8 @@ const MCLayout = (() => {
 
   function buildHeader(pageId) {
     const nav = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin")
-      .map((n) => `<a href="${n.href}" class="${n.id === pageId ? "active" : ""}">${n.label}</a>`)
+      .map((n) => `<a href="${n.href}" class="${n.id === pageId ? "active" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
+        (n.short ? `<span class="nav-full">${n.label}</span><span class="nav-short">${n.short}</span>` : n.label) + "</a>")
       .join("");
 
     document.getElementById("appHeader").innerHTML = `
@@ -189,10 +190,10 @@ const MCLayout = (() => {
     // Quem ainda não foi liberado para nenhum quiosque não tem o que ver (exceto as telas de administração)
     if (!ctx.units.length && !["usuarios", "quiosques"].includes(pageId)) {
       const main = document.querySelector("main");
-      main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhum quiosque liberado</h2>
+      main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhuma unidade liberada</h2>
         <p class="t-muted mb-0">${ctx.user.cargo === "admin"
-          ? "Não há quiosques ativos. Cadastre ou reative um na aba Quiosques."
-          : "Você ainda não tem acesso a nenhum quiosque. Peça a um administrador para liberar o seu acesso."}</p></div>`;
+          ? "Não há unidades ativas. Cadastre ou reative uma na aba Unidades."
+          : "Você ainda não tem acesso a nenhuma unidade. Peça a um administrador para liberar o seu acesso."}</p></div>`;
       return null;
     }
 

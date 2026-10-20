@@ -39,9 +39,9 @@
     movementList.innerHTML = list
       .map((m) => {
         const origem = m.origem || "Louvada (fábrica)";
-        const route = m.destino
+        const route = (m.destino
           ? `${MC.esc(origem)} <span class="arrow">→</span> ${MC.esc(m.destino)}`
-          : MC.esc(origem);
+          : MC.esc(origem)) + (m.torneira_numero ? ` <span class="arrow">·</span> Torneira ${m.torneira_numero}` : "");
         return `<div class="movement-row">
           <div><span class="m-barril">#${MC.esc(m.codigo)}</span><span class="m-estilo">${MC.esc(m.estilo)}</span></div>
           <span class="op-badge op-badge--${m.operacao}">${MC.OP_LABELS[m.operacao]}</span>

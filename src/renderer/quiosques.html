@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Quiosques | MeuChopp</title>
+  <title>Unidades | MeuChopp</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
@@ -19,24 +19,56 @@
   <header id="appHeader" class="app-header"></header>
   <main class="dashboard-main">
     <div class="page-head">
-      <div><h1>Quiosques</h1><p>Cada quiosque tem estoque, histórico e equipe próprios. Quem não foi liberado não vê nada dele.</p></div>
+      <div><h1>Unidades</h1><p>Lojas que usam o MeuChopp, seus dados cadastrais e suas torneiras.</p></div>
     </div>
 
+    <div id="pendingNote" class="warn-note d-none" role="status"></div>
+
     <section class="panel">
-      <h2 class="panel-title">Novo quiosque</h2>
+      <h2 class="panel-title">Nova unidade</h2>
       <form id="formUnit" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="nome">Nome completo</label><input id="nome" class="form-control" placeholder="Ex.: Louvada Shopping" required></div>
-        <div class="col-md-4"><label class="form-label" for="curto">Nome curto</label><input id="curto" class="form-control" placeholder="Ex.: Shopping"></div>
-        <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar quiosque</button></div>
+        <div class="col-md-5"><label class="form-label" for="nome">Nome da unidade</label><input id="nome" class="form-control" placeholder="Ex.: Louvada Estação Cuiabá" maxlength="60" required></div>
+        <div class="col-md-3"><label class="form-label" for="curto">Nome curto <span class="t-muted fw-normal">(opcional)</span></label><input id="curto" class="form-control" placeholder="Ex.: Estação Cuiabá" maxlength="30"></div>
+        <div class="col-md-4"><label class="form-label" for="cnpj">CNPJ</label><input id="cnpj" class="form-control" placeholder="00.000.000/0000-00" inputmode="text" autocomplete="off" required></div>
+        <div class="col-md-9"><label class="form-label" for="endereco">Localização</label><input id="endereco" class="form-control" placeholder="Rua, número, bairro, cidade, estado e CEP" maxlength="300" required></div>
+        <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar unidade</button></div>
       </form>
     </section>
 
     <div class="table-card">
       <table>
-        <thead><tr><th>Quiosque</th><th>Barris</th><th>Pessoas com acesso</th><th>Situação</th><th></th></tr></thead>
+        <thead><tr><th>Unidade</th><th>CNPJ</th><th>Localização</th><th>Torneiras</th><th>Barris</th><th>Pessoas com acesso</th><th>Situação</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
+
+    <!-- Detalhes da unidade selecionada + torneiras -->
+    <section id="detail" class="unit-detail d-none" aria-live="polite">
+      <div class="page-head unit-detail-head">
+        <div><h2 id="detailTitle" class="unit-detail-title"></h2><p id="detailSub"></p></div>
+        <div class="row-actions">
+          <button class="btn-ghost" type="button" id="btnEditDetail">Editar dados</button>
+          <button class="btn-ghost" type="button" id="btnCloseDetail">Fechar</button>
+        </div>
+      </div>
+      <dl id="detailFacts" class="unit-facts"></dl>
+
+      <section class="panel">
+        <h3 class="panel-title">Torneiras</h3>
+        <form id="formTaps" class="row g-3 align-items-end mb-1" novalidate>
+          <div class="col-6 col-md-3"><label class="form-label" for="qtd">Quantidade a adicionar</label><input id="qtd" class="form-control" type="number" min="1" max="50" value="1"></div>
+          <div class="col-6 col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Adicionar torneiras</button></div>
+          <div class="col-md-6"><p class="t-muted small-note mb-0" id="tapsHint">As novas torneiras recebem os próximos números livres. A situação (livre ou ocupada) é atualizada pelos engates e retiradas.</p></div>
+        </form>
+      </section>
+
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Torneira</th><th>Situação</th><th>Barril conectado</th><th>Engatado em</th><th>Engates registrados</th><th></th></tr></thead>
+          <tbody id="tbodyTaps"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <script src="js/api.js"></script>
