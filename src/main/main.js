@@ -12,9 +12,27 @@ const CONNECT_PAGE = path.join(__dirname, "connect.html");
 let win = null;
 
 const configFile = () => path.join(app.getPath("userData"), "config.json");
+
+const DEFAULT_SERVER_URL = "https://meu-chopp.onrender.com";
+
 function readConfig() {
-  try { return JSON.parse(fs.readFileSync(configFile(), "utf8")); } catch (_) { return {}; }
+  try {
+    const cfg = JSON.parse(
+      fs.readFileSync(configFile(), "utf8")
+    );
+
+    return {
+      ...cfg,
+      serverUrl: cfg.serverUrl || DEFAULT_SERVER_URL
+    };
+  } catch (_) {
+    return {
+      serverUrl: DEFAULT_SERVER_URL,
+      kiosk: false
+    };
+  }
 }
+
 function writeConfig(cfg) {
   fs.mkdirSync(path.dirname(configFile()), { recursive: true });
   fs.writeFileSync(configFile(), JSON.stringify(cfg, null, 2));
