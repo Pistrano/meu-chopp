@@ -4,13 +4,15 @@
   "description": "MeuChopp - controle de barris de chopp dos quiosques (servidor + aplicativo)",
   "main": "src/main/main.js",
   "scripts": {
-    "server": "node src/server/server.js",
+    "server": "node --use-system-ca src/server/server.js",
     "test": "node --test",
     "start": "electron .",
     "dist": "electron-builder"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
+    "dotenv": "^18.0.8",
     "sql.js": "^1.12.0"
   },
   "devDependencies": {

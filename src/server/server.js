@@ -97,7 +97,7 @@ function createServer({ trustProxy = false } = {}) {
       return sendJson(res, err.status || 400, { ok: false, error: err.status === 413 ? "Pedido grande demais." : "Pedido inválido." });
     }
 
-    const result = dispatch(`${m[1]}:${m[2]}`, payload, parseCookies(req).mc_session, { ip: clientIp(req) });
+    const result = await dispatch(`${m[1]}:${m[2]}`, payload, parseCookies(req).mc_session, { ip: clientIp(req) });
     const flags = `Path=/; HttpOnly; SameSite=Strict${isSecure(req) ? "; Secure" : ""}`;
     if (result.setToken) res.setHeader("Set-Cookie", `mc_session=${result.setToken}; ${flags}`);
     else if (result.clearToken) res.setHeader("Set-Cookie", `mc_session=; ${flags}; Max-Age=0`);
