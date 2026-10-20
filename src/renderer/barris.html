@@ -30,9 +30,8 @@
           <input id="codigo" class="form-control" placeholder="Ex.: 0241" maxlength="12" required>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label" for="estilo">Estilo</label>
-          <input id="estilo" class="form-control" list="estilos" placeholder="Ex.: Pilsen" required>
-          <datalist id="estilos"><option value="Pilsen"><option value="IPA"><option value="Weiss"><option value="Vienna"><option value="Lager"><option value="Stout"></datalist>
+          <label class="form-label" for="chope">Chope</label>
+          <select id="chope" class="form-select" required><option value="">Carregando…</option></select>
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label" for="tamanho">Tamanho</label>
@@ -43,7 +42,7 @@
     </section>
 
     <div class="filters">
-      <input id="q" class="form-control" type="search" placeholder="Buscar por código ou estilo">
+      <input id="q" class="form-control" type="search" placeholder="Buscar por código, chope ou estilo">
       <select id="status" class="form-select">
         <option value="">Todos os status</option><option value="disponivel">Disponível</option>
         <option value="em_uso">Em uso</option><option value="em_transferencia">Em transferência</option><option value="esgotado">Chopp Esgotado</option>
@@ -52,7 +51,7 @@
 
     <div class="table-card">
       <table>
-        <thead><tr><th>Barril</th><th>Estilo</th><th>Tamanho</th><th>Status</th><th>Torneira</th><th></th></tr></thead>
+        <thead><tr><th>Barril</th><th>Chope</th><th>Tamanho</th><th>Status</th><th>Torneira</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>

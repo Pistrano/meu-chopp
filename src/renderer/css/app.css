@@ -6,7 +6,7 @@
 .app-nav { display: flex; gap: .25rem; margin-left: 1.25rem; }
 .app-nav a {
   color: #b8bfca; text-decoration: none; font-weight: 600; font-size: .9rem;
-  padding: .45rem .8rem; border-radius: var(--mc-radius);
+  padding: .45rem .8rem; border-radius: var(--mc-radius); white-space: nowrap;
 }
 .app-nav a:hover { color: #fff; background: var(--mc-ink-2); }
 .app-nav a.active { color: var(--mc-ink); background: var(--mc-gold); }
@@ -78,12 +78,20 @@
   .app-nav a { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 48px; padding: .3rem .2rem; font-size: .8rem; }
 }
 /* Rótulos curtos na barra inferior (só aparecem em telas estreitas) */
-.app-nav .nav-short { display: none; }
+.app-nav .nav-short, .app-nav .nav-mid { display: none; }
+/* Janelas médias: alguns itens usam um rótulo menor para o menu caber numa linha */
+@media (min-width: 992px) and (max-width: 1400px) {
+  .app-nav a.has-mid .nav-full { display: none; }
+  .app-nav a.has-mid .nav-mid { display: inline; }
+}
 @media (max-width: 575.98px) {
   .app-nav { gap: .15rem; padding-left: .3rem; padding-right: .3rem; }
   .app-nav a { font-size: .7rem; padding: .3rem .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .app-nav .nav-full { display: none; }
   .app-nav .nav-short { display: inline; }
+}
+@media (max-width: 419.98px) {
+  .app-nav a { font-size: .64rem; }
 }
 
 /* Celular: cada linha da tabela vira um cartão (rótulos vêm do data-label, ver common.js) */
@@ -118,7 +126,7 @@
   .app-nav a { padding: .45rem .55rem; font-size: .86rem; }
   .unit-select { max-width: 210px; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1140px) {
   .user-info { display: none; }
   .app-header .brand-name { display: none; }
   .unit-select { max-width: 160px; }
@@ -234,4 +242,48 @@
 
 @media (max-width: 767.98px) {
   .cell-address { min-width: 0; max-width: none; }
+}
+
+/* ==========================================================
+   Chopes e estilos (catálogo)
+   ========================================================== */
+.section-title { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.05rem; margin: 0 0 .75rem; }
+.mb-section { margin-bottom: 2rem; }
+
+/* ==========================================================
+   Aba Torneiras: um cartão por torneira (tablet e celular)
+   ========================================================== */
+.tap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+.tap-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: .2rem; width: 100%; min-height: 96px;
+  padding: 1rem 1.1rem; text-align: left; font: inherit; color: var(--mc-text); cursor: pointer;
+  background: var(--mc-surface); border: 1px solid var(--mc-line); border-left: 6px solid var(--mc-line); border-radius: var(--mc-radius);
+}
+.tap-card:hover { border-color: var(--mc-gold-dark); }
+.tap-card:focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+.tap-card--busy { border-left-color: var(--mc-gold); }
+.tap-card--free { border-left-color: var(--mc-success); }
+.tap-head { display: flex; align-items: baseline; gap: .35rem; }
+.tap-num { font-family: var(--mc-font-display); font-weight: 700; font-size: 1rem; }
+.tap-free { color: var(--mc-success); font-weight: 700; }
+.tap-hint { color: var(--mc-muted); font-size: .82rem; margin-top: auto; }
+.tap-chope { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.3rem; line-height: 1.2; margin-top: .4rem; overflow-wrap: anywhere; }
+.tap-estilo { color: var(--mc-muted); font-weight: 600; }
+.tap-meta { font-weight: 700; margin-top: .4rem; }
+.tap-since { color: var(--mc-muted); font-size: .85rem; }
+.tap-age { color: #7a5a16; font-size: .85rem; font-weight: 700; }
+.tap-empty { grid-column: 1 / -1; text-align: center; }
+
+/* Histórico da torneira (dentro do diálogo) */
+.tap-history { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+.tap-history li { border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: .65rem .8rem; font-size: .88rem; }
+.tap-history li.is-current { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
+.tap-history .th-title { font-weight: 700; }
+.tap-history .th-chope { font-weight: 600; color: var(--mc-muted); }
+.tap-history .th-line { color: var(--mc-muted); }
+.tap-history li.is-current .th-line { color: #5c4511; }
+.tap-history-note { margin: .75rem 0 0; }
+
+@media (max-width: 575.98px) {
+  .tap-grid { grid-template-columns: 1fr; gap: .75rem; }
 }

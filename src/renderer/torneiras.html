@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Torneiras | MeuChopp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Torneiras</h1><p id="subtitle">O que está engatado em cada torneira da unidade.</p></div>
+      <p class="t-muted small-note mb-0" id="updated" aria-live="polite"></p>
+    </div>
+
+    <div id="board" class="tap-grid"></div>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/torneiras.js"></script>
+</body>
+</html>

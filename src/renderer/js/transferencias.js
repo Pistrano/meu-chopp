@@ -14,7 +14,7 @@
   async function loadForm() {
     const barris = (await MC.call("barris:list", { unitId: ctx.unitId, status: "disponivel" })) || [];
     selBarril.innerHTML = barris.length
-      ? barris.map((b) => `<option value="${b.id}" ${b.id === preselect ? "selected" : ""}>#${MC.esc(b.codigo)} · ${MC.esc(b.estilo)} · ${b.tamanho_l} L</option>`).join("")
+      ? barris.map((b) => `<option value="${b.id}" ${b.id === preselect ? "selected" : ""}>#${MC.esc(b.codigo)} · ${MC.esc(MC.chopeLabel(b))} · ${b.tamanho_l} L</option>`).join("")
       : `<option value="">Nenhum barril disponível</option>`;
     selDestino.innerHTML = allUnits
       .filter((u) => u.id !== ctx.unitId)
@@ -33,7 +33,7 @@
             if (t.origem_id === ctx.unitId && canAct(t.origem_id)) act += `<button class="btn-ghost btn-ghost--danger" data-act="cancel" data-id="${t.id}">Cancelar</button>`;
           } else if (t.recebedor) act = `<span class="t-muted">Recebido por ${MC.esc(t.recebedor)}</span>`;
           return `<tr>
-            <td><span class="t-strong">#${MC.esc(t.codigo)}</span><br><span class="t-muted">${MC.esc(t.estilo)}</span></td>
+            <td><span class="t-strong">#${MC.esc(t.codigo)}</span><br><span class="t-muted">${MC.esc(MC.chopeLabel(t))}</span></td>
             <td>${MC.esc(t.origem)} → ${MC.esc(t.destino)}</td>
             <td>${MC.esc(t.solicitante)}</td><td>${MC.fmtDate(t.criado_em)}</td>
             <td><span class="op-badge op-badge--${t.status}">${MC.TRANSFER_LABELS[t.status]}</span></td>

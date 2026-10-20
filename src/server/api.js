@@ -235,7 +235,7 @@ async function getUserById(id) {
    A situação (livre/ocupada) nunca é gravada na torneira: ela é derivada do engate ativo
    (engates.retirado_em IS NULL). */
 const TAPS_SELECT =
-  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo), usuarios!engatado_por(nome))";
+  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l), usuarios!engatado_por(nome))";
 
 function tapRow(t) {
   const e = (t.engates || []).find((x) => x.retirado_em === null) || null;
@@ -246,10 +246,13 @@ function tapRow(t) {
     ativo: b2i(t.ativo),
     engate_id: e ? e.id : null,
     engatado_em: e ? fmtTs(e.engatado_em) : null,
+    engatado_em_iso: e ? e.engatado_em : null,
     engatado_por: e && e.usuarios ? e.usuarios.nome : null,
     barril_id: e ? e.barril_id : null,
     codigo: e && e.barris ? e.barris.codigo : null,
     estilo: e && e.barris ? e.barris.estilo : null,
+    chope_nome: e && e.barris ? e.barris.chope_nome : null,
+    tamanho_l: e && e.barris ? e.barris.tamanho_l : null,
     usos: (t.engates || []).length,
     ocupada: !!e,
   };
@@ -328,7 +331,7 @@ async function queryMovements({ unitId, q, operacao, limit }) {
   let query = supabase
     .from("movimentacoes")
     .select(
-      "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo), usuarios(nome)," +
+      "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome)," +
       " origem:unidades!origem_unidade_id(nome), destino:unidades!destino_unidade_id(nome)"
     )
     .or(`origem_unidade_id.eq.${unit},destino_unidade_id.eq.${unit}`)
@@ -346,6 +349,7 @@ async function queryMovements({ unitId, q, operacao, limit }) {
     torneira_numero: m.torneira_numero,
     codigo: m.barris ? m.barris.codigo : null,
     estilo: m.barris ? m.barris.estilo : null,
+    chope_nome: m.barris ? m.barris.chope_nome : null,
     responsavel: m.usuarios ? m.usuarios.nome : null,
     origem: m.origem ? m.origem.nome : null,
     destino: m.destino ? m.destino.nome : null,
@@ -641,9 +645,174 @@ function registerHandlers() {
     dbError(r.error);
     const torneiras = (await tapsOfUnit(b.unidade_id))
       .filter((t) => t.ativo)
-      .map((t) => ({ id: t.id, numero: t.numero, ocupada: t.ocupada, barril: t.codigo || null, estilo: t.estilo || null }));
-    return { barril: { id: b.id, codigo: b.codigo, estilo: b.estilo, status: b.status }, unidade: r.data, torneiras };
+      .map((t) => ({
+        id: t.id, numero: t.numero, ocupada: t.ocupada, barril: t.codigo || null, estilo: t.estilo || null, chope_nome: t.chope_nome || null,
+      }));
+    return {
+      barril: { id: b.id, codigo: b.codigo, estilo: b.estilo, chope_nome: b.chope_nome || null, status: b.status },
+      unidade: r.data,
+      torneiras,
+    };
   });
+
+  // Aba Torneiras: situação de cada torneira ativa da unidade (qualquer usuário com acesso à unidade)
+  handle("taps:board", async ({ unitId }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    await assertUnit(ctx, unit);
+    const torneiras = (await tapsOfUnit(unit))
+      .filter((t) => t.ativo)
+      .sort((a, b) => a.numero - b.numero)
+      .map((t) => ({
+        id: t.id,
+        numero: t.numero,
+        ocupada: t.ocupada,
+        codigo: t.ocupada ? t.codigo : null,
+        chope_nome: t.ocupada ? t.chope_nome : null,
+        estilo: t.ocupada ? t.estilo : null,
+        tamanho_l: t.ocupada ? t.tamanho_l : null,
+        engatado_em: t.engatado_em,
+        engatado_em_iso: t.engatado_em_iso,
+        engatado_por: t.engatado_por,
+      }));
+    return { agora: new Date().toISOString(), torneiras }; // "agora" = relógio do servidor, para o "há quanto tempo"
+  });
+
+  // Últimos 50 engates de uma torneira, do mais recente para o mais antigo
+  handle("taps:history", async ({ torneiraId }, ctx) => {
+    const t = await loadTap(torneiraId);
+    await assertUnit(ctx, t.unidade_id);
+    const rows = ok(
+      await supabase.from("engates")
+        .select("id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome), usuarios!engatado_por(nome)")
+        .eq("torneira_id", t.id)
+        .order("engatado_em", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(50)
+    );
+    return {
+      torneira: { id: t.id, numero: t.numero },
+      agora: new Date().toISOString(),
+      engates: rows.map((e) => ({
+        codigo: e.barris ? e.barris.codigo : null,
+        chope_nome: e.barris ? e.barris.chope_nome : null,
+        estilo: e.barris ? e.barris.estilo : null,
+        engatado_em: fmtTs(e.engatado_em),
+        engatado_em_iso: e.engatado_em,
+        retirado_em: fmtTs(e.retirado_em),
+        retirado_em_iso: e.retirado_em || null,
+        engatado_por: e.usuarios ? e.usuarios.nome : null,
+      })),
+    };
+  });
+
+  /* ======== Catálogo de chopes e estilos ========
+     Cadastrar: qualquer usuário logado (direto do cadastro de barril).
+     Editar e desativar: só administrador. Nada é apagado: barris antigos continuam apontando para o chope. */
+  const cleanCatalogName = (value, tipo) => {
+    const nome = String(value || "").trim().replace(/\s+/g, " ");
+    if (nome.length < 2 || nome.length > 60) throw new AppError(`O nome do ${tipo} deve ter de 2 a 60 caracteres.`);
+    return nome;
+  };
+  // Nome repetido, sem diferenciar maiúsculas (o índice único em lower(nome) garante no banco)
+  const catalogNameTaken = async (tabela, tipo, nome, exceptId = 0) => {
+    const rows = ok(await supabase.from(tabela).select("nome, ativo").ilike("nome", likeEscape(nome)).neq("id", exceptId).limit(10));
+    const igual = rows.find((r) => r.nome.toLowerCase() === nome.toLowerCase());
+    if (!igual) return;
+    const extra = igual.ativo ? "" : " (desativado). Peça a um administrador para reativá-lo";
+    throw new AppError(`Já existe um ${tipo} chamado "${igual.nome}"${extra}.`);
+  };
+  const loadEstilo = async (id) => {
+    const r = await supabase.from("estilos").select("*").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Estilo não encontrado.");
+    return r.data;
+  };
+  const loadChope = async (id) => {
+    const r = await supabase.from("chopes").select("*, estilos(nome)").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Chope não encontrado.");
+    return r.data;
+  };
+  const wantsAll = (p, ctx) => !!p.todos && ctx.session.cargo === "admin";
+
+  handle("estilos:list", async (p, ctx) => {
+    let query = supabase.from("estilos").select("id, nome, ativo").order("nome");
+    if (!wantsAll(p, ctx)) query = query.eq("ativo", true);
+    return ok(await query).map((e) => ({ ...e, ativo: b2i(e.ativo) }));
+  });
+
+  handle("estilos:create", async ({ nome }, ctx) => {
+    const n = cleanCatalogName(nome, "estilo");
+    await catalogNameTaken("estilos", "estilo", n);
+    const row = ok(await supabase.from("estilos").insert({ nome: n }).select("id, nome").single(), `Já existe um estilo chamado "${n}".`);
+    await audit(ctx, "estilo_criado", n);
+    return row;
+  });
+
+  // Renomear o estilo também atualiza barris.estilo dos barris dos chopes desse estilo
+  handle("estilos:update", async ({ id, nome }, ctx) => {
+    const e = await loadEstilo(id);
+    const n = cleanCatalogName(nome, "estilo");
+    if (n === e.nome) return true;
+    await catalogNameTaken("estilos", "estilo", n, e.id);
+    dbError((await supabase.from("estilos").update({ nome: n }).eq("id", e.id)).error, `Já existe um estilo chamado "${n}".`);
+    const chopeIds = ok(await supabase.from("chopes").select("id").eq("estilo_id", e.id)).map((c) => c.id);
+    if (chopeIds.length) dbError((await supabase.from("barris").update({ estilo: n }).in("chope_id", chopeIds)).error);
+    await audit(ctx, "estilo_editado", `${e.nome} → ${n}`);
+    return true;
+  }, { admin: true });
+
+  handle("estilos:toggle", async ({ id }, ctx) => {
+    const e = await loadEstilo(id);
+    dbError((await supabase.from("estilos").update({ ativo: !e.ativo }).eq("id", e.id)).error);
+    await audit(ctx, e.ativo ? "estilo_desativado" : "estilo_reativado", e.nome);
+    return true;
+  }, { admin: true });
+
+  handle("chopes:list", async (p, ctx) => {
+    let query = supabase.from("chopes").select("id, nome, estilo_id, ativo, estilos(nome)").order("nome");
+    if (!wantsAll(p, ctx)) query = query.eq("ativo", true);
+    return ok(await query).map(({ estilos, ...c }) => ({ ...c, ativo: b2i(c.ativo), estilo: estilos ? estilos.nome : null }));
+  });
+
+  handle("chopes:create", async ({ nome, estiloId }, ctx) => {
+    const n = cleanCatalogName(nome, "chope");
+    if (!Number(estiloId)) throw new AppError("Escolha o estilo do chope.");
+    const e = await loadEstilo(estiloId);
+    if (!e.ativo) throw new AppError(`O estilo "${e.nome}" está desativado. Escolha outro.`);
+    await catalogNameTaken("chopes", "chope", n);
+    const row = ok(
+      await supabase.from("chopes").insert({ nome: n, estilo_id: e.id }).select("id, nome, estilo_id").single(),
+      `Já existe um chope chamado "${n}".`
+    );
+    await audit(ctx, "chope_criado", `${n} (${e.nome})`);
+    return { ...row, estilo: e.nome };
+  });
+
+  // Editar o chope atualiza chope_nome e estilo de todos os barris desse chope
+  handle("chopes:update", async ({ id, nome, estiloId }, ctx) => {
+    const c = await loadChope(id);
+    const n = cleanCatalogName(nome, "chope");
+    if (!Number(estiloId)) throw new AppError("Escolha o estilo do chope.");
+    const e = await loadEstilo(estiloId);
+    if (!e.ativo && e.id !== c.estilo_id) throw new AppError(`O estilo "${e.nome}" está desativado. Escolha outro.`);
+    await catalogNameTaken("chopes", "chope", n, c.id);
+    dbError(
+      (await supabase.from("chopes").update({ nome: n, estilo_id: e.id }).eq("id", c.id)).error,
+      `Já existe um chope chamado "${n}".`
+    );
+    dbError((await supabase.from("barris").update({ chope_nome: n, estilo: e.nome }).eq("chope_id", c.id)).error);
+    const antes = `${c.nome} (${c.estilos ? c.estilos.nome : "?"})`;
+    await audit(ctx, "chope_editado", `${antes} → ${n} (${e.nome})`);
+    return true;
+  }, { admin: true });
+
+  handle("chopes:toggle", async ({ id }, ctx) => {
+    const c = await loadChope(id);
+    dbError((await supabase.from("chopes").update({ ativo: !c.ativo }).eq("id", c.id)).error);
+    await audit(ctx, c.ativo ? "chope_desativado" : "chope_reativado", c.nome);
+    return true;
+  }, { admin: true });
 
   /* ======== Dashboard ======== */
   handle("dashboard:get", async ({ unitId }, ctx) => {
@@ -689,7 +858,7 @@ function registerHandlers() {
       .limit(1000);
     if (status) query = query.eq("status", String(status));
     const termo = cleanTerm(q);
-    if (termo) query = query.or(`codigo.ilike.*${termo}*,estilo.ilike.*${termo}*`);
+    if (termo) query = query.or(`codigo.ilike.*${termo}*,estilo.ilike.*${termo}*,chope_nome.ilike.*${termo}*`);
 
     const data = ok(await query);
     return data.map(({ unidades, engates, ...b }) => {
@@ -703,16 +872,33 @@ function registerHandlers() {
     });
   });
 
-  handle("barris:create", async ({ codigo, estilo, tamanho, unitId }, ctx) => {
+  /* O barril é cadastrado com um chope do catálogo. barris.estilo continua sendo gravada
+     (com o estilo do chope) porque o histórico, as transferências e as funções fn_* usam essa coluna. */
+  handle("barris:create", async ({ codigo, chopeId, tamanho, unitId }, ctx) => {
     const cod = String(codigo || "").replace("#", "").trim().toUpperCase();
-    const est = String(estilo || "").trim();
     const tam = Number(tamanho);
-    if (!cod || !est || !(tam > 0)) throw new AppError("Preencha código, estilo e tamanho do barril.");
+    if (!cod || !Number(chopeId) || !(tam > 0)) throw new AppError("Preencha código, chope e tamanho do barril.");
     const unit = await resolveUnit(ctx, unitId);
     await assertUnit(ctx, unit);
-    const id = await rpc("fn_barril_criar", {
-      p_codigo: cod, p_estilo: est, p_tamanho: tam, p_unidade: unit, p_usuario: ctx.session.id,
+    const r = await supabase.from("chopes").select("id, nome, ativo, estilos(nome)").eq("id", Number(chopeId)).maybeSingle();
+    dbError(r.error);
+    const chope = r.data;
+    if (!chope) throw new AppError("Chope não encontrado. Recarregue a página e escolha de novo.");
+    if (!chope.ativo) throw new AppError(`O chope "${chope.nome}" está desativado. Escolha outro.`);
+    if (!chope.estilos) throw new AppError(`O chope "${chope.nome}" está sem estilo. Peça a um administrador para corrigir.`);
+
+    const ret = await rpc("fn_barril_criar", {
+      p_codigo: cod, p_estilo: chope.estilos.nome, p_tamanho: tam, p_unidade: unit, p_usuario: ctx.session.id,
     });
+    const id = Number(ret && typeof ret === "object" ? ret.id : ret);
+    const upd = id ? await supabase.from("barris").update({ chope_id: chope.id, chope_nome: chope.nome }).eq("id", id).select("id") : {};
+    if (!id || upd.error || !upd.data || !upd.data.length) {
+      console.error("[barris:create] barril criado sem chope", { id, chope: chope.id, error: upd.error });
+      throw new AppError(
+        `O barril #${cod} foi cadastrado, mas não foi possível ligá-lo ao chope "${chope.nome}". ` +
+        "Ele aparece na lista só com o estilo. Avise o administrador."
+      );
+    }
     return { id };
   });
 
@@ -750,7 +936,7 @@ function registerHandlers() {
     const rows = ok(
       await supabase.from("transferencias")
         .select(
-          "*, barris(codigo, estilo), origem:unidades!origem_id(nome_curto), destino:unidades!destino_id(nome_curto)," +
+          "*, barris(codigo, estilo, chope_nome), origem:unidades!origem_id(nome_curto), destino:unidades!destino_id(nome_curto)," +
           " solicitante:usuarios!solicitante_id(nome), recebedor:usuarios!recebedor_id(nome)"
         )
         .or(`origem_id.eq.${unit},destino_id.eq.${unit}`)
@@ -763,6 +949,7 @@ function registerHandlers() {
       resolvido_em: fmtTs(t.resolvido_em),
       codigo: barris ? barris.codigo : null,
       estilo: barris ? barris.estilo : null,
+      chope_nome: barris ? barris.chope_nome : null,
       origem: origem ? origem.nome_curto : null,
       destino: destino ? destino.nome_curto : null,
       solicitante: solicitante ? solicitante.nome : null,
@@ -808,9 +995,9 @@ function registerHandlers() {
       if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
       return `"${t.replace(/"/g, '""')}"`;
     };
-    const header = ["Data/Hora", "Barril", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Observação"];
+    const header = ["Data/Hora", "Barril", "Chope", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Observação"];
     const lines = rows.map((r) =>
-      [r.criado_em, "#" + r.codigo, r.estilo, labels[r.operacao], r.origem || "Fábrica", r.destino || "",
+      [r.criado_em, "#" + r.codigo, r.chope_nome || "", r.estilo, labels[r.operacao], r.origem || "Fábrica", r.destino || "",
        r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.responsavel, r.observacao]
         .map(esc)
         .join(";")

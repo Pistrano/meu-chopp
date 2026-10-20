@@ -43,7 +43,7 @@
           ? `${MC.esc(origem)} <span class="arrow">→</span> ${MC.esc(m.destino)}`
           : MC.esc(origem)) + (m.torneira_numero ? ` <span class="arrow">·</span> Torneira ${m.torneira_numero}` : "");
         return `<div class="movement-row">
-          <div><span class="m-barril">#${MC.esc(m.codigo)}</span><span class="m-estilo">${MC.esc(m.estilo)}</span></div>
+          <div><span class="m-barril">#${MC.esc(m.codigo)}</span><span class="m-estilo">${MC.esc(MC.chopeLabel(m))}</span></div>
           <span class="op-badge op-badge--${m.operacao}">${MC.OP_LABELS[m.operacao]}</span>
           <span class="movement-route">${route}</span>
           <span class="movement-responsavel">${MC.esc(m.responsavel)}</span>

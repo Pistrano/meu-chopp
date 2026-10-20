@@ -18,7 +18,7 @@
           const rota = m.destino ? `${MC.esc(origem)} → ${MC.esc(m.destino)}` : MC.esc(origem);
           return `<tr>
             <td>${MC.fmtDate(m.criado_em)}</td>
-            <td><span class="t-strong">#${MC.esc(m.codigo)}</span><br><span class="t-muted">${MC.esc(m.estilo)}</span></td>
+            <td><span class="t-strong">#${MC.esc(m.codigo)}</span><br><span class="t-muted">${MC.esc(MC.chopeLabel(m))}</span></td>
             <td><span class="op-badge op-badge--${m.operacao}">${MC.OP_LABELS[m.operacao]}</span></td>
             <td>${rota}</td><td>${m.torneira_numero ? `Torneira ${m.torneira_numero}` : '<span class="t-muted">—</span>'}</td><td>${MC.esc(m.responsavel)}</td><td class="t-muted">${MC.esc(m.observacao || "")}</td></tr>`;
         }).join("")
