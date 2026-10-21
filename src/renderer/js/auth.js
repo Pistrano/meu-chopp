@@ -1,5 +1,5 @@
-/* MeuChopp — autenticação (chama o sistema; nenhuma senha fica guardada na tela) */
-const MeuChoppAuth = {
+/* BarrilFacil — autenticação (chama o sistema; nenhuma senha fica guardada na tela) */
+const BarrilFacilAuth = {
   async needsSetup() {
     const res = await window.api.invoke("auth:needsSetup");
     return res.ok && res.data === true;

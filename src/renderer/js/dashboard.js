@@ -1,4 +1,4 @@
-/* MeuChopp — Dashboard com dados reais do banco */
+/* BarrilFacil — Dashboard com dados reais do banco */
 (async () => {
   const ctx = await MCLayout.init("dashboard");
   if (!ctx) return;
@@ -38,7 +38,7 @@
     }
     movementList.innerHTML = list
       .map((m) => {
-        const origem = m.origem || "Louvada (fábrica)";
+        const origem = m.origem || ctx.config.fornecedor;
         const route = (m.destino
           ? `${MC.esc(origem)} <span class="arrow">→</span> ${MC.esc(m.destino)}`
           : MC.esc(origem)) + (m.torneira_numero ? ` <span class="arrow">·</span> Torneira ${m.torneira_numero}` : "");

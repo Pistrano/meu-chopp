@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — testes: unidades (CNPJ/localização), torneiras, engate e retirada
+   BarrilFacil — testes: unidades (CNPJ/localização), torneiras, engate e retirada
    Rodar:  npm test   (ou: node --test)
    ========================================================== */
 const { test, before, after } = require("node:test");

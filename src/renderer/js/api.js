@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — conexão com o servidor
+   BarrilFacil — conexão com o servidor
    Todas as telas chamam window.api.invoke(canal, dados). Aqui isso vira
    um pedido HTTP ao servidor central; a sessão fica em um cookie seguro.
    ========================================================== */

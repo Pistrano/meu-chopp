@@ -1,38 +1,55 @@
 /* ==========================================================
-   MeuChopp — cabeçalho compartilhado (menu, unidade, alertas, usuário)
+   BarrilFacil — cabeçalho compartilhado (menu, unidade, alertas, usuário)
    Uso em cada página: const ctx = await MCLayout.init("barris");
    ========================================================== */
 const MCLayout = (() => {
+  /* principal: true = aba fixa no topo. O resto fica no botão "Mais" (toda tela nova entra lá por padrão).
+     short: rótulo da barra inferior no celular. admin: só o administrador vê. */
   const NAV = [
-    { id: "dashboard", label: "Dashboard", short: "Painel", mid: "Painel", href: "dashboard.html" },
-    { id: "barris", label: "Barris", href: "barris.html" },
-    { id: "torneiras", label: "Torneiras", short: "Torn.", href: "torneiras.html" },
-    { id: "transferencias", label: "Transferências", short: "Transf.", mid: "Transf.", href: "transferencias.html" },
-    { id: "historico", label: "Histórico", short: "Hist.", href: "historico.html" },
-    { id: "quiosques", label: "Unidades", short: "Unid.", href: "quiosques.html", admin: true },
-    { id: "usuarios", label: "Usuários", short: "Usuár.", href: "usuarios.html", admin: true },
-    { id: "catalogo", label: "Chopes e estilos", short: "Chopes", mid: "Chopes", href: "catalogo.html", admin: true },
+    { id: "barris", label: "Barris", href: "barris.html", principal: true },
+    { id: "torneiras", label: "Torneiras", short: "Torn.", href: "torneiras.html", principal: true },
+    { id: "catalogo", label: "Chopes", href: "catalogo.html", principal: true },
+    { id: "historico", label: "Histórico", short: "Hist.", href: "historico.html", principal: true },
+    { id: "dashboard", label: "Painel", href: "dashboard.html" },
+    { id: "transferencias", label: "Transferências", href: "transferencias.html" },
+    { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
+    { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
   ];
-  // short: rótulo da barra inferior no celular; mid: rótulo em janelas médias (o menu do administrador tem 8 itens)
-  const ADMIN_PAGES = ["usuarios", "quiosques", "catalogo"]; // telas que só o administrador abre
+  const ADMIN_PAGES = ["usuarios", "quiosques"]; // telas que só o administrador abre
+  const SEM_UNIDADE = ["usuarios", "quiosques", "catalogo"]; // telas que funcionam sem unidade liberada
 
   const ICON_PIN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.58 7-12A7 7 0 0 0 5 10c0 4.42 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
   const ICON_BELL = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
   const ICON_WARN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
 
-  const ctx = { user: null, units: [], unitId: null, onUnitChange: () => {} };
+  // config: dados do servidor para as telas (ex.: config.fornecedor, nome de quem entrega os barris)
+  const ctx = { user: null, units: [], unitId: null, config: { fornecedor: "Fornecedor" }, onUnitChange: () => {} };
+
+  function buildNav(pageId) {
+    const itens = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin");
+    const aba = (n) => `<a href="${n.href}" class="nav-tab${n.id === pageId ? " active" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
+      (n.short ? `<span class="nav-full">${n.label}</span><span class="nav-short">${n.short}</span>` : n.label) + "</a>";
+    const mais = itens.filter((n) => !n.principal);
+    const atual = mais.find((n) => n.id === pageId);
+    const menu = mais.map((n) => `<li><a class="dropdown-item${n.id === pageId ? " active" : ""}" href="${n.href}"${n.id === pageId ? ' aria-current="page"' : ""}>${n.label}</a></li>`).join("");
+    // Se a tela atual está dentro do "Mais", o botão fica destacado e mostra o nome dela
+    return itens.filter((n) => n.principal).map(aba).join("") + (mais.length ? `
+      <div class="dropdown nav-more">
+        <button class="nav-tab nav-more-btn dropdown-toggle${atual ? " active" : ""}" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="${atual ? `${atual.label}: mais telas` : "Mais telas"}">
+          <span class="nav-full">${atual ? atual.label : "Mais"}</span><span class="nav-short" aria-hidden="true">☰</span>
+        </button>
+        <ul class="dropdown-menu nav-more-menu">${menu}</ul>
+      </div>` : "");
+  }
 
   function buildHeader(pageId) {
-    const nav = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin")
-      .map((n) => `<a href="${n.href}" class="${n.id === pageId ? "active" : ""}${n.mid ? " has-mid" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
-        (n.short ? `<span class="nav-full">${n.label}</span>${n.mid ? `<span class="nav-mid">${n.mid}</span>` : ""}<span class="nav-short">${n.short}</span>` : n.label) + "</a>")
-      .join("");
+    const nav = buildNav(pageId);
 
     document.getElementById("appHeader").innerHTML = `
-      <div class="brand-logo">
+      <a class="brand-logo" href="dashboard.html" title="Ir para o Painel">
         <img src="assets/icon-64.png" width="32" height="32" alt="">
-        <span class="brand-name">MeuChopp</span>
-      </div>
+        <span class="brand-name">BarrilFacil</span>
+      </a>
       <nav class="app-nav" aria-label="Navegação principal">${nav}</nav>
       <div class="app-header-spacer"></div>
       <div class="app-header-actions">
@@ -63,7 +80,7 @@ const MCLayout = (() => {
         </div>
       </div>`;
 
-    document.getElementById("btnLogout").addEventListener("click", () => MeuChoppAuth.logout());
+    document.getElementById("btnLogout").addEventListener("click", () => BarrilFacilAuth.logout());
     document.getElementById("btnChangePwd").addEventListener("click", changePassword);
   }
 
@@ -171,7 +188,7 @@ const MCLayout = (() => {
     if (ADMIN_PAGES.includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
     try {
-      ctx.units = await MC.call("units:list");
+      [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), MC.call("config:get")]);
     } catch (err) {
       if (err.code === "OFFLINE") return showOffline();
       throw err;
@@ -191,8 +208,8 @@ const MCLayout = (() => {
       btn.classList.add("unit-select--single");
     }
 
-    // Quem ainda não foi liberado para nenhum quiosque não tem o que ver (exceto as telas de administração)
-    if (!ctx.units.length && !ADMIN_PAGES.includes(pageId)) {
+    // Quem ainda não foi liberado para nenhuma unidade não tem o que ver (exceto as telas que não dependem de unidade)
+    if (!ctx.units.length && !SEM_UNIDADE.includes(pageId)) {
       const main = document.querySelector("main");
       main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhuma unidade liberada</h2>
         <p class="t-muted mb-0">${ctx.user.cargo === "admin"

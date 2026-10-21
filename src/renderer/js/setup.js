@@ -1,11 +1,11 @@
-/* MeuChopp — configuração inicial (cria o primeiro administrador) */
+/* BarrilFacil — configuração inicial (cria o primeiro administrador) */
 (async () => {
   const form = document.getElementById("authForm");
   const alertBox = document.getElementById("formAlert");
   const btn = document.getElementById("submitBtn");
   const $ = (id) => document.getElementById(id);
   MC.bindPasswordRules($("senha"), $("rules"));
-  if (!(await MeuChoppAuth.needsSetup())) { window.location.replace("index.html"); return; }
+  if (!(await BarrilFacilAuth.needsSetup())) { window.location.replace("index.html"); return; }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

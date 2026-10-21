@@ -1,4 +1,4 @@
-/* MeuChopp — gestão de usuários e do acesso de cada um aos quiosques (somente administrador) */
+/* BarrilFacil — gestão de usuários e do acesso de cada um aos quiosques (somente administrador) */
 (async () => {
   const ctx = await MCLayout.init("usuarios");
   if (!ctx) return;

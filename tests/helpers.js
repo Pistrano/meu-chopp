@@ -1,6 +1,6 @@
 /* ==========================================================
-   MeuChopp — utilitários dos testes automatizados
-   Sobe o servidor de verdade (porta aleatória, pasta de dados temporária)
+   BarrilFacil — utilitários dos testes automatizados
+   Sobe o servidor de verdade (porta aleatória)
    e conversa com ele por HTTP, como as telas fazem.
    ========================================================== */
 const fs = require("fs");
@@ -9,12 +9,12 @@ const path = require("path");
 const assert = require("node:assert/strict");
 const { start } = require("../src/server/server");
 
-function tempDir(prefix = "meuchopp-teste-") {
+function tempDir(prefix = "barrilfacil-teste-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
-async function startServer(dataDir) {
-  const { server, port } = await start({ port: 0, host: "127.0.0.1", dataDir });
+async function startServer() {
+  const { server, port } = await start({ port: 0, host: "127.0.0.1" });
   const base = `http://127.0.0.1:${port}`;
   return {
     base,

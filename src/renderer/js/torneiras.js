@@ -1,4 +1,4 @@
-/* MeuChopp — aba Torneiras: o que está engatado em cada torneira da unidade e o histórico de cada uma */
+/* BarrilFacil — aba Torneiras: o que está engatado em cada torneira da unidade e o histórico de cada uma */
 (async () => {
   const ctx = await MCLayout.init("torneiras");
   if (!ctx) return;

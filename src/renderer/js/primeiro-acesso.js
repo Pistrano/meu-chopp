@@ -1,4 +1,4 @@
-/* MeuChopp — primeiro acesso / troca da senha temporária */
+/* BarrilFacil — primeiro acesso / troca da senha temporária */
 (async () => {
   const form = document.getElementById("authForm");
   const alertBox = document.getElementById("formAlert");

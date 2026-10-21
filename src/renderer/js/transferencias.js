@@ -1,4 +1,4 @@
-/* MeuChopp — transferências entre quiosques (envio + confirmação de recebimento) */
+/* BarrilFacil — transferências entre quiosques (envio + confirmação de recebimento) */
 (async () => {
   const ctx = await MCLayout.init("transferencias");
   if (!ctx) return;

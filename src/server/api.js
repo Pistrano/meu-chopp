@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — regras de negócio (API do servidor) — versão Supabase
+   BarrilFacil — regras de negócio (API do servidor) — versão Supabase
    Toda operação passa por aqui: valida permissão, grava no
    banco e registra quem fez (movimentação + auditoria).
    Cada aparelho tem a própria sessão (cookie).
@@ -26,13 +26,15 @@ const MAX_FALHAS = 5;                     // tentativas erradas antes de bloquea
 const BLOQUEIO_MS = 15 * 60 * 1000;       // duração do bloqueio
 const PERMITIDOS_TROCA = new Set(["auth:me", "auth:logout", "auth:ping", "auth:completeProfile"]);
 
-// Fuso usado para mostrar datas (troque com APP_TIMEZONE no .env se precisar)
-const TZ = process.env.APP_TIMEZONE || "America/Cuiaba";
+// Fuso da operação, usado para mostrar datas (APP_TZ no .env; APP_TIMEZONE é o nome antigo e continua aceito)
+const TZ = process.env.APP_TZ || process.env.APP_TIMEZONE || "America/Cuiaba";
 const tsFmt = new Intl.DateTimeFormat("sv-SE", {
   timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
   hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
 });
 const fmtTs = (v) => (v ? tsFmt.format(new Date(v)) : null); // "AAAA-MM-DD HH:MM:SS"
+// Quem entrega os barris: aparece como origem das entradas no histórico (NOME_FORNECEDOR no .env)
+const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
 const b2i = (v) => (v ? 1 : 0);
 
 class AppError extends Error {
@@ -156,6 +158,7 @@ const hashPassword = (pw) => bcrypt.hash(String(pw), 12);
 const SENHAS_COMUNS = new Set([
   "12345678", "123456789", "1234567890", "11111111", "password", "password1", "senha123", "senha1234",
   "admin123", "admin1234", "qwerty123", "abc12345", "chopp123", "meuchopp1", "meuchopp123",
+  "barrilfacil1", "barrilfacil123",
 ]);
 
 function normalizeEmail(value) {
@@ -378,7 +381,7 @@ function registerHandlers() {
     const { count, error } = await supabase.from("usuarios").select("id", { count: "exact", head: true });
     if (error) {
       console.error("[needsSetup]", error);
-      throw new AppError("Não foi possível acessar o banco de dados. Verifique a configuração do Supabase (.env e schema.sql).");
+      throw new AppError("Não foi possível acessar o banco de dados. Verifique a configuração do Supabase (arquivo .env e as migrations de supabase/migrations).");
     }
     return count === 0;
   }, { auth: false });
@@ -420,7 +423,7 @@ function registerHandlers() {
       throw new AppError(lockMessage(lockedUntil));
     }
 
-    if (!dummyHash) dummyHash = await hashPassword("senha-ficticia-meuchopp");
+    if (!dummyHash) dummyHash = await hashPassword("senha-ficticia-barrilfacil");
     const match = await bcrypt.compare(pass, user && user.ativo ? user.senha_hash : dummyHash);
 
     if (!(user && user.ativo && match)) {
@@ -462,6 +465,9 @@ function registerHandlers() {
   });
 
   handle("auth:me", (_p, ctx) => ctx.session);
+
+  // Dados do servidor que as telas usam (carregados junto com o cabeçalho)
+  handle("config:get", () => ({ fornecedor: FORNECEDOR }));
   handle("auth:ping", () => true); // mantém a sessão viva enquanto o usuário está ativo
 
   /* Primeiro acesso / senha temporária: define e-mail (se faltar) e uma senha nova */
@@ -997,7 +1003,7 @@ function registerHandlers() {
     };
     const header = ["Data/Hora", "Barril", "Chope", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Observação"];
     const lines = rows.map((r) =>
-      [r.criado_em, "#" + r.codigo, r.chope_nome || "", r.estilo, labels[r.operacao], r.origem || "Fábrica", r.destino || "",
+      [r.criado_em, "#" + r.codigo, r.chope_nome || "", r.estilo, labels[r.operacao], r.origem || FORNECEDOR, r.destino || "",
        r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.responsavel, r.observacao]
         .map(esc)
         .join(";")

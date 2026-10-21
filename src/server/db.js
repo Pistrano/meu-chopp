@@ -1,25 +1,16 @@
 /* ==========================================================
-   MeuChopp — Ligação à Nuvem (Supabase)
-   Substitui a antiga base de dados local SQLite (v3).
+   BarrilFacil — ligação ao banco (Supabase)
+   Os dados ficam no Supabase; nada é guardado na máquina do servidor.
    ========================================================== */
-const { supabase } = require('./supabase'); 
+const { supabase } = require("./supabase");
 
-// A variável db agora aponta para a ligação à nuvem em vez do ficheiro local
-let db = supabase; 
-
-// Mantemos as variáveis de inicialização para não quebrar a lógica do servidor antigo
-const SCHEMA_VERSION = "nuvem";
-
-async function initDatabase(userDataDir) {
-  console.log("Sistema MeuChopp agora conectado à nuvem Supabase.");
-  // Já não precisamos de inicializar ficheiros locais, criar pastas de backups 
-  // nem correr PRAGMA, porque a nuvem gere as tabelas.
-  return db; 
+async function initDatabase() {
+  console.log("BarrilFacil conectado ao Supabase.");
+  return supabase;
 }
 
 function getDb() {
-  if (!db) throw new Error("Ligação ao Supabase não estabelecida.");
-  return db;
+  return supabase;
 }
 
-module.exports = { initDatabase, getDb, SCHEMA_VERSION };
+module.exports = { initDatabase, getDb };

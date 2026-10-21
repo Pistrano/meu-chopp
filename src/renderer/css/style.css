@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — estilos globais e da tela de login
+   BarrilFacil — estilos globais e da tela de login
    Os tokens em :root serão reaproveitados nas próximas telas.
    ========================================================== */
 
@@ -55,6 +55,7 @@ body {
 }
 
 .brand-logo { display: flex; align-items: center; gap: .75rem; }
+.brand-logo-full { display: block; height: 48px; width: auto; max-width: 100%; }
 
 .brand-name {
   font-family: var(--mc-font-display);
@@ -193,6 +194,7 @@ body {
   .login-layout { min-height: 100dvh; display: flex; flex-direction: column; }
   .brand-panel { flex: 0 0 auto; }
   .brand-inner { max-width: none; padding: 1.25rem; gap: 0; }
+  .brand-logo-full { height: 40px; }
   .brand-message, .trace { display: none; }
   .form-panel { flex: 1 0 auto; align-items: flex-start; padding-top: 2rem; }
 }

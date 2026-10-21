@@ -1,4 +1,4 @@
-/* MeuChopp — utilitários compartilhados pelas telas */
+/* BarrilFacil — utilitários compartilhados pelas telas */
 const MC = (() => {
   const OP_LABELS = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Chopp Esgotado" };
   const STATUS_LABELS = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Chopp Esgotado" };

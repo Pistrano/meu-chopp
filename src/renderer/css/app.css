@@ -1,15 +1,20 @@
 /* ==========================================================
-   MeuChopp — componentes das telas internas (desktop)
+   BarrilFacil — componentes das telas internas (desktop)
    ========================================================== */
 
-/* Navegação no cabeçalho */
-.app-nav { display: flex; gap: .25rem; margin-left: 1.25rem; }
-.app-nav a {
-  color: #b8bfca; text-decoration: none; font-weight: 600; font-size: .9rem;
-  padding: .45rem .8rem; border-radius: var(--mc-radius); white-space: nowrap;
+/* Navegação no cabeçalho: abas principais + botão "Mais" (lista suspensa com as outras telas) */
+.app-header .brand-logo { color: #fff; text-decoration: none; border-radius: var(--mc-radius); }
+.app-nav { display: flex; align-items: center; gap: .25rem; margin-left: 1.25rem; }
+.app-nav .nav-tab {
+  display: inline-flex; align-items: center; gap: .1rem;
+  color: #b8bfca; text-decoration: none; font-weight: 600; font-size: .9rem; font-family: inherit; line-height: 1.5;
+  padding: .45rem .8rem; border: 0; border-radius: var(--mc-radius); background: transparent; white-space: nowrap;
 }
-.app-nav a:hover { color: #fff; background: var(--mc-ink-2); }
-.app-nav a.active { color: var(--mc-ink); background: var(--mc-gold); }
+.app-nav .nav-tab:hover, .app-nav .nav-tab[aria-expanded="true"] { color: #fff; background: var(--mc-ink-2); }
+.app-nav .nav-tab.active { color: var(--mc-ink); background: var(--mc-gold); }
+.nav-more-menu { min-width: 12rem; }
+.nav-more-menu .dropdown-item { padding: .55rem 1rem; font-weight: 600; }
+.nav-more-menu .dropdown-item.active { background: var(--mc-gold-soft); color: var(--mc-ink); box-shadow: inset 3px 0 0 var(--mc-gold-dark); }
 
 /* Cabeçalho de página */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
@@ -75,23 +80,20 @@
     padding: .4rem .5rem calc(.4rem + env(safe-area-inset-bottom, 0px));
     background: var(--mc-ink); border-top: 1px solid var(--mc-ink-3);
   }
-  .app-nav a { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center; min-height: 48px; padding: .3rem .2rem; font-size: .8rem; }
+  .app-nav .nav-tab, .app-nav .nav-more { flex: 1 1 0; min-width: 0; }
+  .app-nav .nav-tab { display: flex; justify-content: center; text-align: center; min-height: 48px; padding: .3rem .2rem; font-size: .8rem; }
+  .app-nav .nav-more-btn { width: 100%; }
+  /* Na barra inferior o "Mais" vira só ☰ */
+  .app-nav .nav-more-btn .nav-full, .app-nav .nav-more-btn::after { display: none; }
+  .app-nav .nav-more-btn .nav-short { display: inline; font-size: 1.35rem; line-height: 1; }
 }
 /* Rótulos curtos na barra inferior (só aparecem em telas estreitas) */
-.app-nav .nav-short, .app-nav .nav-mid { display: none; }
-/* Janelas médias: alguns itens usam um rótulo menor para o menu caber numa linha */
-@media (min-width: 992px) and (max-width: 1400px) {
-  .app-nav a.has-mid .nav-full { display: none; }
-  .app-nav a.has-mid .nav-mid { display: inline; }
-}
+.app-nav .nav-short { display: none; }
 @media (max-width: 575.98px) {
   .app-nav { gap: .15rem; padding-left: .3rem; padding-right: .3rem; }
-  .app-nav a { font-size: .7rem; padding: .3rem .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app-nav .nav-tab { font-size: .74rem; padding: .3rem .1rem; overflow: hidden; text-overflow: ellipsis; }
   .app-nav .nav-full { display: none; }
   .app-nav .nav-short { display: inline; }
-}
-@media (max-width: 419.98px) {
-  .app-nav a { font-size: .64rem; }
 }
 
 /* Celular: cada linha da tabela vira um cartão (rótulos vêm do data-label, ver common.js) */
@@ -123,7 +125,7 @@
 .app-header { min-width: 0; }
 @media (max-width: 1280px) {
   .app-nav { margin-left: .5rem; }
-  .app-nav a { padding: .45rem .55rem; font-size: .86rem; }
+  .app-nav .nav-tab { padding: .45rem .55rem; font-size: .86rem; }
   .unit-select { max-width: 210px; }
 }
 @media (max-width: 1140px) {

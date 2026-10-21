@@ -1,0 +1,23 @@
+# Serviço do BarrilFacil no Linux (Ubuntu/Debian). Copie para /etc/systemd/system/barrilfacil.service
+[Unit]
+Description=BarrilFacil - servidor
+After=network.target
+
+[Service]
+Type=simple
+User=barrilfacil
+WorkingDirectory=/opt/barrilfacil
+EnvironmentFile=/opt/barrilfacil/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=127.0.0.1
+Environment=TRUST_PROXY=1
+Environment=APP_TZ=America/Cuiaba
+ExecStart=/usr/bin/node /opt/barrilfacil/src/server/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

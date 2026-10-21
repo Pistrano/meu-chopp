@@ -1,13 +1,12 @@
 /* ==========================================================
-   MeuChopp — servidor central
+   BarrilFacil — servidor central
    Entrega as telas (src/renderer) e a API (/api/...).
-   Um único servidor e um único banco para todos os quiosques;
-   tablets, telas e PCs apenas se conectam a ele.
+   Um único servidor para todas as unidades; os dados ficam no Supabase
+   e tablets, telas e PCs apenas se conectam a este servidor.
 
-   Variáveis de ambiente (todas opcionais):
+   Variáveis de ambiente (as do Supabase ficam no .env, veja .env.example):
      PORT=3000          porta
      HOST=0.0.0.0       endereço de escuta
-     DATA_DIR=./data    onde ficam o banco e os backups
      TRUST_PROXY=1      use quando estiver atrás de Caddy/Nginx (HTTPS)
    ========================================================== */
 const http = require("http");
@@ -28,6 +27,10 @@ const CSP = [
   "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
 ].join("; ");
 const MAX_BODY = 64 * 1024;
+/* Resposta do /healthz. O aplicativo Windows confere esse texto antes de salvar o endereço do servidor.
+   A segunda linha deixa os aplicativos instalados antes da troca de nome (que procuram o nome antigo)
+   continuarem conseguindo se conectar; pode sair quando todos estiverem com o instalador novo. */
+const HEALTH_TEXT = "BarrilFacil ok\nMeuChopp ok";
 
 function createServer({ trustProxy = false } = {}) {
   const isSecure = (req) => !!req.socket.encrypted || (trustProxy && req.headers["x-forwarded-proto"] === "https");
@@ -125,7 +128,7 @@ function createServer({ trustProxy = false } = {}) {
   return http.createServer((req, res) => {
     baseHeaders(req, res);
     const pathname = (req.url || "/").split("?")[0];
-    if (pathname === "/healthz") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return res.end("MeuChopp ok"); }
+    if (pathname === "/healthz") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return res.end(HEALTH_TEXT); }
     if (pathname.startsWith("/api/")) {
       return handleApi(req, res, pathname).catch((err) => {
         console.error("[erro]", err);
@@ -136,47 +139,25 @@ function createServer({ trustProxy = false } = {}) {
   });
 }
 
-/* Cópia diária do banco (guarda as 14 mais recentes) */
-function setupBackups(dataDir) {
-  const dbFile = path.join(dataDir, "meuchopp.db");
-  const dir = path.join(dataDir, "backups");
-  const run = () => {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const hoje = path.join(dir, `meuchopp-${new Date().toISOString().slice(0, 10)}.db`);
-      if (fs.existsSync(dbFile) && !fs.existsSync(hoje)) fs.copyFileSync(dbFile, hoje);
-      const antigos = fs.readdirSync(dir).filter((f) => /^meuchopp-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().slice(0, -14);
-      antigos.forEach((f) => fs.unlinkSync(path.join(dir, f)));
-    } catch (err) {
-      console.error("[backup] falhou:", err.message);
-    }
-  };
-  run();
-  return setInterval(run, 6 * 60 * 60 * 1000).unref();
-}
-
 async function start(opts = {}) {
   const port = opts.port !== undefined ? opts.port : Number(process.env.PORT) || 3000;
   const host = opts.host || process.env.HOST || "0.0.0.0";
-  const dataDir = path.resolve(opts.dataDir || process.env.DATA_DIR || path.join(process.cwd(), "data"));
   const trustProxy = opts.trustProxy !== undefined ? opts.trustProxy : process.env.TRUST_PROXY === "1";
 
-  fs.mkdirSync(dataDir, { recursive: true });
-  await initDatabase(dataDir);
+  await initDatabase();
   registerHandlers();
-  setupBackups(dataDir);
 
   const server = createServer({ trustProxy });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(port, host, resolve); });
-  return { server, port: server.address().port, dataDir };
+  return { server, port: server.address().port };
 }
 
 module.exports = { start };
 
 if (require.main === module) {
   start()
-    .then(({ port, dataDir }) => {
-      console.log(`MeuChopp no ar: http://localhost:${port}  (dados em ${dataDir})`);
+    .then(({ port }) => {
+      console.log(`BarrilFacil no ar: http://localhost:${port}`);
       const stop = () => { console.log("Encerrando..."); process.exit(0); };
       process.on("SIGINT", stop);
       process.on("SIGTERM", stop);

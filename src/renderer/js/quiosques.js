@@ -1,4 +1,4 @@
-/* MeuChopp — cadastro das unidades (lojas) e de suas torneiras (somente administrador) */
+/* BarrilFacil — cadastro das unidades (lojas) e de suas torneiras (somente administrador) */
 (async () => {
   const ctx = await MCLayout.init("quiosques");
   if (!ctx) return;
