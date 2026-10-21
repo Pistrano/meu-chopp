@@ -4,9 +4,12 @@
    NUNCA coloque essa chave no front-end nem no código-fonte:
    ela fica só no arquivo .env da máquina que roda o servidor.
 
-   .env (na pasta do projeto, ao lado do .exe):
-     SUPABASE_URL=https://sclkdshwmzkkofkfglae.supabase.co
+   .env (na pasta do projeto; modelo em .env.example):
+     SUPABASE_URL=https://SEU-PROJETO.supabase.co
      SUPABASE_SECRET_KEY=sb_secret_xxxxxxxxxxxx
+
+   BARRILFACIL_ENV (opcional) aponta para um .env em outro lugar.
+   O nome antigo dessa variável continua aceito.
    ========================================================== */
 const path = require("path");
 
@@ -14,7 +17,8 @@ const path = require("path");
 try {
   const dotenv = require("dotenv");
   const candidatos = [
-    process.env.MEUCHOPP_ENV,
+    process.env.BARRILFACIL_ENV,
+    process.env.MEUCHOPP_ENV,                   // nome antigo, continua aceito
     path.join(process.cwd(), ".env"),
     path.join(path.dirname(process.execPath), ".env"),
     path.join(__dirname, "..", "..", ".env"),   // raiz do projeto (src/server -> raiz)

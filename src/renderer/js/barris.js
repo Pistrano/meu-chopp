@@ -1,4 +1,4 @@
-/* MeuChopp — cadastro e controle de estoque de barris (engate em torneira e retirada) */
+/* BarrilFacil — cadastro e controle de estoque de barris (engate em torneira e retirada) */
 (async () => {
   const ctx = await MCLayout.init("barris");
   if (!ctx) return;

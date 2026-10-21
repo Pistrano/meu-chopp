@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — aplicativo para Windows (PC / tablet / tela do quiosque)
+   BarrilFacil — aplicativo para Windows (PC / tablet / tela do quiosque)
    É só uma janela que se conecta ao servidor central; nenhum dado
    fica guardado neste aparelho. O endereço do servidor é informado
    uma vez e fica salvo em config.json.
@@ -13,7 +13,8 @@ let win = null;
 
 const configFile = () => path.join(app.getPath("userData"), "config.json");
 
-const DEFAULT_SERVER_URL = "https://meu-chopp.onrender.com";
+// Sem endereço padrão: na primeira abertura o app sempre pede o endereço do servidor (connect.html)
+const DEFAULT_SERVER_URL = "";
 
 function readConfig() {
   try {
@@ -64,14 +65,14 @@ function createWindow() {
     minWidth: 800,
     minHeight: 560,
     backgroundColor: "#f4f5f7",
-    title: "MeuChopp",
+    title: "BarrilFacil",
     icon: path.join(__dirname, "..", "..", "build", "icon.ico"),
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: "MeuChopp", submenu: [
+    { label: "BarrilFacil", submenu: [
       { label: "Alterar servidor…", click: () => showConnect() },
       { label: "Recarregar", accelerator: "CmdOrCtrl+R", click: () => win.webContents.reload() },
       { label: "Tela cheia", accelerator: "F11", click: () => win.setFullScreen(!win.isFullScreen()) },
@@ -107,7 +108,8 @@ ipcMain.handle("shell:connect", async (event, { url, kiosk }) => {
   try {
     const serverUrl = normalizeUrl(url);
     const res = await net.fetch(serverUrl + "/healthz", { signal: AbortSignal.timeout(8000) });
-    if (!res.ok || !(await res.text()).includes("MeuChopp")) throw new Error("Esse endereço não é um servidor MeuChopp.");
+    // Servidores de antes da troca de nome respondem com o nome antigo: também são aceitos
+    if (!res.ok || !/BarrilFacil|MeuChopp/.test(await res.text())) throw new Error("Esse endereço não é um servidor BarrilFacil.");
     writeConfig({ serverUrl, kiosk: !!kiosk });
     setImmediate(openApp);
     return { ok: true };

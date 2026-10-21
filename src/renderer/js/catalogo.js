@@ -1,9 +1,16 @@
-/* MeuChopp — catálogo de chopes e estilos (somente administrador) */
+/* BarrilFacil — catálogo de chopes e estilos
+   Todos veem a lista e cadastram chope e estilo novos. Editar, desativar e reativar: só administrador
+   (os botões nem aparecem para os outros, e o servidor também bloqueia). */
 (async () => {
   const ctx = await MCLayout.init("catalogo");
   if (!ctx) return;
 
   const $ = (id) => document.getElementById(id);
+  const admin = ctx.user.cargo === "admin";
+  if (!admin) {
+    document.querySelectorAll(".admin-only").forEach((el) => el.remove()); // só ativos aparecem: a coluna Situação não diz nada
+    $("subtitle").textContent = "Catálogo usado no cadastro de barris. Para editar ou desativar um chope ou estilo, fale com um administrador.";
+  }
   const byName = (a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" });
   let chopes = [];
   let estilos = [];
@@ -16,7 +23,7 @@
     </div>`;
 
   async function load() {
-    const data = await MC.run(() => Promise.all([MC.call("chopes:list", { todos: true }), MC.call("estilos:list", { todos: true })]));
+    const data = await MC.run(() => Promise.all([MC.call("chopes:list", { todos: admin }), MC.call("estilos:list", { todos: admin })]));
     if (!data) return;
     [chopes, estilos] = data;
     chopes.sort(byName);
@@ -25,14 +32,14 @@
     $("tbodyChopes").innerHTML = chopes.length
       ? chopes.map((c) => `<tr>
           <td class="t-strong">${MC.esc(c.nome)}</td><td>${MC.esc(c.estilo)}</td>
-          <td>${badge(c.ativo)}</td><td>${actions("chope", c)}</td></tr>`).join("")
-      : `<tr><td colspan="4" class="table-empty">Nenhum chope cadastrado ainda.</td></tr>`;
+          ${admin ? `<td>${badge(c.ativo)}</td><td>${actions("chope", c)}</td>` : ""}</tr>`).join("")
+      : `<tr><td colspan="${admin ? 4 : 2}" class="table-empty">Nenhum chope cadastrado ainda.</td></tr>`;
 
     $("tbodyEstilos").innerHTML = estilos.length
       ? estilos.map((e) => `<tr>
           <td class="t-strong">${MC.esc(e.nome)}</td>
-          <td>${badge(e.ativo)}</td><td>${actions("estilo", e)}</td></tr>`).join("")
-      : `<tr><td colspan="3" class="table-empty">Nenhum estilo cadastrado ainda.</td></tr>`;
+          ${admin ? `<td>${badge(e.ativo)}</td><td>${actions("estilo", e)}</td>` : ""}</tr>`).join("")
+      : `<tr><td colspan="${admin ? 3 : 1}" class="table-empty">Nenhum estilo cadastrado ainda.</td></tr>`;
 
     const ativos = estilos.filter((e) => e.ativo);
     const sel = $("chopeEstilo");
@@ -94,7 +101,7 @@
   /* ---------- Ações das tabelas ---------- */
   document.querySelector("main").addEventListener("click", async (ev) => {
     const btn = ev.target.closest("[data-tipo]");
-    if (!btn) return;
+    if (!btn || !admin) return;
     const id = Number(btn.dataset.id);
     const chope = btn.dataset.tipo === "chope";
     const item = (chope ? chopes : estilos).find((x) => x.id === id);

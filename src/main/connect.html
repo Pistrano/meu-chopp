@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Conectar | MeuChopp</title>
+  <title>Conectar | BarrilFacil</title>
+  <link rel="icon" href="../renderer/assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="../renderer/assets/icone.svg" type="image/svg+xml">
   <link href="../renderer/vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="../renderer/css/style.css" rel="stylesheet">
   <link href="../renderer/css/app.css" rel="stylesheet">
@@ -13,15 +15,15 @@
     <div class="login-card">
       <div class="brand-logo" style="margin-bottom:1.5rem;color:var(--mc-text)">
         <img src="../renderer/assets/icon-64.png" width="40" height="40" alt="">
-        <span class="brand-name">MeuChopp</span>
+        <span class="brand-name">BarrilFacil</span>
       </div>
       <h1>Conectar ao servidor</h1>
-      <p class="login-subtitle">Informe o endereço do servidor do MeuChopp. Peça ao administrador se não souber.</p>
+      <p class="login-subtitle">Informe o endereço do servidor do BarrilFacil. Peça ao administrador se não souber.</p>
       <div id="formAlert" class="alert d-none" role="alert"></div>
       <form id="connectForm" novalidate>
         <div class="mb-3">
           <label for="url" class="form-label">Endereço do servidor</label>
-          <input id="url" class="form-control" type="text" placeholder="https://chopp.suaempresa.com.br" autocomplete="off" autofocus>
+          <input id="url" class="form-control" type="text" placeholder="https://seu-servidor.com.br" autocomplete="off" autofocus>
         </div>
         <label class="check-item mb-4" for="kiosk"><input id="kiosk" type="checkbox"><span>Abrir em tela cheia (modo quiosque)</span></label>
         <button id="submitBtn" type="submit" class="btn btn-mc w-100">Conectar</button>

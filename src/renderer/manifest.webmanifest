@@ -1,7 +1,7 @@
 {
-  "name": "MeuChopp",
-  "short_name": "MeuChopp",
-  "description": "Controle de barris de chopp dos quiosques",
+  "name": "BarrilFacil",
+  "short_name": "BarrilFacil",
+  "description": "Controle de barris de chopp",
   "lang": "pt-BR",
   "start_url": "./index.html",
   "scope": "./",

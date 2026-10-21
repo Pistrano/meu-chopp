@@ -6,9 +6,11 @@
   <meta name="theme-color" content="#16181d">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="icon" href="assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Unidades | MeuChopp</title>
+  <title>Unidades | BarrilFacil</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
@@ -19,7 +21,7 @@
   <header id="appHeader" class="app-header"></header>
   <main class="dashboard-main">
     <div class="page-head">
-      <div><h1>Unidades</h1><p>Lojas que usam o MeuChopp, seus dados cadastrais e suas torneiras.</p></div>
+      <div><h1>Unidades</h1><p>Lojas que usam o BarrilFacil, seus dados cadastrais e suas torneiras.</p></div>
     </div>
 
     <div id="pendingNote" class="warn-note d-none" role="status"></div>
@@ -27,7 +29,7 @@
     <section class="panel">
       <h2 class="panel-title">Nova unidade</h2>
       <form id="formUnit" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="nome">Nome da unidade</label><input id="nome" class="form-control" placeholder="Ex.: Louvada Estação Cuiabá" maxlength="60" required></div>
+        <div class="col-md-5"><label class="form-label" for="nome">Nome da unidade</label><input id="nome" class="form-control" placeholder="Ex.: Bar do Centro" maxlength="60" required></div>
         <div class="col-md-3"><label class="form-label" for="curto">Nome curto <span class="t-muted fw-normal">(opcional)</span></label><input id="curto" class="form-control" placeholder="Ex.: Estação Cuiabá" maxlength="30"></div>
         <div class="col-md-4"><label class="form-label" for="cnpj">CNPJ</label><input id="cnpj" class="form-control" placeholder="00.000.000/0000-00" inputmode="text" autocomplete="off" required></div>
         <div class="col-md-9"><label class="form-label" for="endereco">Localização</label><input id="endereco" class="form-control" placeholder="Rua, número, bairro, cidade, estado e CEP" maxlength="300" required></div>

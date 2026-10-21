@@ -1,4 +1,4 @@
-/* MeuChopp — histórico completo, auditoria e relatório CSV */
+/* BarrilFacil — histórico completo, auditoria e relatório CSV */
 (async () => {
   const ctx = await MCLayout.init("historico");
   if (!ctx) return;
@@ -14,7 +14,7 @@
     if (!list) return;
     tbody.innerHTML = list.length
       ? list.map((m) => {
-          const origem = m.origem || "Louvada (fábrica)";
+          const origem = m.origem || ctx.config.fornecedor;
           const rota = m.destino ? `${MC.esc(origem)} → ${MC.esc(m.destino)}` : MC.esc(origem);
           return `<tr>
             <td>${MC.fmtDate(m.criado_em)}</td>

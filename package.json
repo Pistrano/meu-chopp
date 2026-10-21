@@ -1,7 +1,7 @@
 {
-  "name": "meu-chopp",
+  "name": "barrilfacil",
   "version": "2.0.0",
-  "description": "MeuChopp - controle de barris de chopp dos quiosques (servidor + aplicativo)",
+  "description": "BarrilFacil - controle de barris de chopp (servidor + aplicativo)",
   "main": "src/main/main.js",
   "scripts": {
     "server": "node --use-system-ca src/server/server.js",
@@ -12,16 +12,15 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^18.0.8",
-    "sql.js": "^1.12.0"
+    "dotenv": "^18.0.8"
   },
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "br.com.meuchopp.app",
-    "productName": "MeuChopp",
+    "appId": "br.com.barrilfacil.app",
+    "productName": "BarrilFacil",
     "files": [
       "src/main/**/*",
       "src/renderer/css/**/*",
@@ -33,6 +32,9 @@
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "${productName} Setup.${ext}"
     }
   },
   "engines": {

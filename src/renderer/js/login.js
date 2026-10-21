@@ -1,5 +1,5 @@
 /* ==========================================================
-   MeuChopp — interações da tela de login (Etapa 1)
+   BarrilFacil — interações da tela de login (Etapa 1)
    ========================================================== */
 
 (() => {
@@ -16,7 +16,7 @@
   };
 
   /* Primeira vez usando o sistema: vai para a criação do administrador */
-  MeuChoppAuth.needsSetup().then((needs) => { if (needs) window.location.replace("setup.html"); });
+  BarrilFacilAuth.needsSetup().then((needs) => { if (needs) window.location.replace("setup.html"); });
 
   /* Sessão encerrada por inatividade */
   if (new URLSearchParams(location.search).has("expirada")) {
@@ -79,7 +79,7 @@
     if (!validate()) return;
 
     setLoading(true);
-    const result = await MeuChoppAuth.login(identifier.value, password.value);
+    const result = await BarrilFacilAuth.login(identifier.value, password.value);
     setLoading(false);
 
     if (result.ok) {
