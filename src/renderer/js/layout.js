@@ -4,13 +4,17 @@
    ========================================================== */
 const MCLayout = (() => {
   const NAV = [
-    { id: "dashboard", label: "Dashboard", short: "Painel", href: "dashboard.html" },
+    { id: "dashboard", label: "Dashboard", short: "Painel", mid: "Painel", href: "dashboard.html" },
     { id: "barris", label: "Barris", href: "barris.html" },
-    { id: "transferencias", label: "Transferências", short: "Transf.", href: "transferencias.html" },
-    { id: "historico", label: "Histórico", href: "historico.html" },
-    { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
-    { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
+    { id: "torneiras", label: "Torneiras", short: "Torn.", href: "torneiras.html" },
+    { id: "transferencias", label: "Transferências", short: "Transf.", mid: "Transf.", href: "transferencias.html" },
+    { id: "historico", label: "Histórico", short: "Hist.", href: "historico.html" },
+    { id: "quiosques", label: "Unidades", short: "Unid.", href: "quiosques.html", admin: true },
+    { id: "usuarios", label: "Usuários", short: "Usuár.", href: "usuarios.html", admin: true },
+    { id: "catalogo", label: "Chopes e estilos", short: "Chopes", mid: "Chopes", href: "catalogo.html", admin: true },
   ];
+  // short: rótulo da barra inferior no celular; mid: rótulo em janelas médias (o menu do administrador tem 8 itens)
+  const ADMIN_PAGES = ["usuarios", "quiosques", "catalogo"]; // telas que só o administrador abre
 
   const ICON_PIN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.58 7-12A7 7 0 0 0 5 10c0 4.42 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
   const ICON_BELL = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
@@ -20,8 +24,8 @@ const MCLayout = (() => {
 
   function buildHeader(pageId) {
     const nav = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin")
-      .map((n) => `<a href="${n.href}" class="${n.id === pageId ? "active" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
-        (n.short ? `<span class="nav-full">${n.label}</span><span class="nav-short">${n.short}</span>` : n.label) + "</a>")
+      .map((n) => `<a href="${n.href}" class="${n.id === pageId ? "active" : ""}${n.mid ? " has-mid" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
+        (n.short ? `<span class="nav-full">${n.label}</span>${n.mid ? `<span class="nav-mid">${n.mid}</span>` : ""}<span class="nav-short">${n.short}</span>` : n.label) + "</a>")
       .join("");
 
     document.getElementById("appHeader").innerHTML = `
@@ -164,7 +168,7 @@ const MCLayout = (() => {
     }
     if (!ctx.user) { window.location.href = "index.html"; return null; }
     if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
-    if (["usuarios", "quiosques"].includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
+    if (ADMIN_PAGES.includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
     try {
       ctx.units = await MC.call("units:list");
@@ -188,7 +192,7 @@ const MCLayout = (() => {
     }
 
     // Quem ainda não foi liberado para nenhum quiosque não tem o que ver (exceto as telas de administração)
-    if (!ctx.units.length && !["usuarios", "quiosques"].includes(pageId)) {
+    if (!ctx.units.length && !ADMIN_PAGES.includes(pageId)) {
       const main = document.querySelector("main");
       main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhuma unidade liberada</h2>
         <p class="t-muted mb-0">${ctx.user.cargo === "admin"

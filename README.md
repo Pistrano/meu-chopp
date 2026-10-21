@@ -78,8 +78,18 @@ registrado está no servidor.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
   Pela regra atual, o barril retirado passa para *Chopp Esgotado*.
 - O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
+- Aba **Torneiras** (todos os usuários): um cartão por torneira ativa da unidade, com o chope engatado, desde quando e por
+  quem. Tocar no cartão mostra o histórico de engates daquela torneira. A tela se atualiza sozinha a cada minuto.
 - Na primeira vez que a versão nova liga sobre um banco antigo, ele é atualizado automaticamente (sem apagar nada)
   e uma cópia do banco antigo fica em `data/backups/meuchopp-antes-da-v3-....db`.
+
+## Chopes e estilos
+
+- O barril é cadastrado escolhendo um **chope** do catálogo (ex.: *German Pilsen · Pilsen*). Se o chope ainda não existe,
+  a opção *+ Cadastrar novo chope…* cria o chope (e, se precisar, o estilo) sem sair da tela.
+- Aba **Chopes e estilos** (administrador): editar, desativar e reativar. Renomear atualiza os barris daquele chope/estilo;
+  desativar só tira o chope do cadastro de barris novos (os barris antigos continuam com ele).
+- Mudanças de banco ficam em `supabase/migrations/` e são rodadas à mão no SQL Editor do Supabase antes de publicar.
 
 ## Testes
 

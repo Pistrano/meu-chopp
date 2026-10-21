@@ -24,6 +24,12 @@ const MC = (() => {
     return div.innerHTML;
   }
 
+  /* Chope do barril com o estilo: "German Pilsen · Pilsen". Barris antigos (sem chope) mostram só o estilo. */
+  function chopeLabel(b) {
+    if (!b) return "";
+    return b.chope_nome ? `${b.chope_nome} · ${b.estilo || ""}` : b.estilo || "";
+  }
+
   /* "2026-10-06 14:32:10" -> "06/10 14:32" */
   function fmtDate(s) {
     if (!s) return "";
@@ -86,8 +92,10 @@ const MC = (() => {
     return overlay;
   }
 
-  /* fields: [{id,label,type,autocomplete}]. onSubmit(values) pode lançar erro: ele aparece no diálogo.
+  /* fields: [{id,label,type,autocomplete,hidden}]. onSubmit(values) pode lançar erro: ele aparece no diálogo.
      type "radios": options [{value,label,hint,disabled,checked}] — escolha única (ex.: torneira).
+     type "select": options [{value,label}] + value (opção já escolhida).
+     hidden: o campo começa escondido (o onOpen mostra quando precisar, pelo [data-field="id"]).
      onOpen(overlay): chamado depois que o diálogo aparece (ex.: aplicar máscara de CNPJ). */
   function dialog({ title, intro, fields = [], submitLabel = "Confirmar", rules = false, onSubmit, onOpen }) {
     return new Promise((resolve) => {
@@ -103,7 +111,12 @@ const MC = (() => {
             ? `<div class="mb-3"><div class="form-label">${esc(f.label)}</div><div class="check-list" id="mcf_${f.id}">${f.options
                 .map((o) => `<label class="check-item"><input type="checkbox" value="${esc(o.value)}" ${o.checked ? "checked" : ""}><span>${esc(o.label)}</span></label>`)
                 .join("")}</div></div>`
-            : `<div class="mb-3"><label class="form-label" for="mcf_${f.id}">${esc(f.label)}</label>
+            : f.type === "select"
+            ? `<div class="mb-3${f.hidden ? " d-none" : ""}" data-field="${f.id}"><label class="form-label" for="mcf_${f.id}">${esc(f.label)}</label>
+          <select class="form-select" id="mcf_${f.id}">${f.options
+            .map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(f.value ?? "") ? "selected" : ""}>${esc(o.label)}</option>`)
+            .join("")}</select></div>`
+            : `<div class="mb-3${f.hidden ? " d-none" : ""}" data-field="${f.id}"><label class="form-label" for="mcf_${f.id}">${esc(f.label)}</label>
           <input class="form-control" id="mcf_${f.id}" type="${f.type || "text"}" autocomplete="${f.autocomplete || "off"}" value="${esc(f.value || "")}"></div>`
         )
         .join("");
@@ -146,12 +159,14 @@ const MC = (() => {
     });
   }
 
-  /* Aviso com botão único (ex.: "Barril retirado com sucesso!"). lines: [[rótulo, valor], ...] */
-  function notice({ title, text, lines = [], type = "ok", buttonLabel = "OK" }) {
+  /* Aviso com botão único (ex.: "Barril retirado com sucesso!"). lines: [[rótulo, valor], ...]
+     html: conteúdo extra já escapado (ex.: histórico de uma torneira). */
+  function notice({ title, text, lines = [], html = "", type = "ok", buttonLabel = "OK" }) {
     return new Promise((resolve) => {
       const overlay = openOverlay(`<h2 class="notice-title notice-title--${type}">${esc(title)}</h2>
         ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}
         ${lines.length ? `<dl class="notice-lines">${lines.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}
+        ${html}
         <div class="mc-modal-actions"><button type="button" class="btn btn-mc btn-mc-sm" id="mcOk">${esc(buttonLabel)}</button></div>`);
       const close = () => { overlay.remove(); resolve(true); };
       overlay.querySelector("#mcOk").addEventListener("click", close);
@@ -221,5 +236,5 @@ const MC = (() => {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchTables);
   else watchTables();
 
-  return { OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, fmtDate, toast, run, bindPasswordRules, dialog, showSecret, notice, maskCnpj };
+  return { OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, chopeLabel, fmtDate, toast, run, bindPasswordRules, dialog, showSecret, notice, maskCnpj };
 })();

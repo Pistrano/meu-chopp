@@ -102,7 +102,7 @@
           return `<tr>
             <td class="t-strong">Torneira ${t.numero}</td>
             <td><span class="op-badge op-badge--${situacao[0]}">${situacao[1]}</span></td>
-            <td>${t.ocupada ? `<span class="t-strong">#${MC.esc(t.codigo)}</span> <span class="t-muted">${MC.esc(t.estilo)}</span>` : '<span class="t-muted">—</span>'}</td>
+            <td>${t.ocupada ? `<span class="t-strong">#${MC.esc(t.codigo)}</span> <span class="t-muted">${MC.esc(MC.chopeLabel(t))}</span>` : '<span class="t-muted">—</span>'}</td>
             <td>${t.ocupada ? `${MC.fmtDate(t.engatado_em)} <span class="t-muted">por ${MC.esc(t.engatado_por)}</span>` : '<span class="t-muted">—</span>'}</td>
             <td>${t.usos}</td>
             <td><div class="row-actions">${acts.join("")}</div></td></tr>`;
