@@ -48,7 +48,11 @@ button:focus:not(:focus-visible) { outline: 0; }
   .col-md-4 { flex: 0 0 auto; width: 33.33333333%; }
   .col-md-5 { flex: 0 0 auto; width: 41.66666667%; }
 }
-@media (min-width: 992px) { .col-lg-6 { flex: 0 0 auto; width: 50%; } }
+@media (min-width: 992px) {
+  .col-lg-2 { flex: 0 0 auto; width: 16.66666667%; }
+  .col-lg-3 { flex: 0 0 auto; width: 25%; }
+  .col-lg-6 { flex: 0 0 auto; width: 50%; }
+}
 @media (min-width: 1200px) { .row-cols-xl-5 > * { flex: 0 0 auto; width: 20%; } }
 
 /* ---------- Formulários ---------- */

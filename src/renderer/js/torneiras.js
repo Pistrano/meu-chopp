@@ -41,6 +41,7 @@
         <span class="tap-chope">${MC.esc(nome)}</span>
         ${t.chope_nome && t.estilo ? `<span class="tap-estilo">${MC.esc(t.estilo)}</span>` : ""}
         <span class="tap-meta">#${MC.esc(t.codigo)}${t.tamanho_l ? ` · ${t.tamanho_l} L` : ""}</span>
+        ${t.validade ? `<span class="tap-validade">Validade ${MC.fmtDia(t.validade)} ${MC.validadeBadge(t.situacao_validade)}</span>` : ""}
         <span class="tap-since">Engatado em ${diaHora(t.engatado_em)}${t.engatado_por ? ` por ${MC.esc(t.engatado_por)}` : ""}</span>
         <span class="tap-age">${desde(t.engatado_em_iso)}</span>
       </button>`;

@@ -22,38 +22,45 @@
   <main class="dashboard-main">
     <div class="page-head">
       <div><h1>Barris</h1><p id="subtitle">Estoque da unidade.</p></div>
+      <button id="btnRecolher" class="btn btn-mc btn-mc-sm" type="button">Registrar recolhimento</button>
     </div>
 
     <section class="panel">
       <h2 class="panel-title">Cadastrar barril</h2>
-      <form id="formBarril" class="row g-3 align-items-end" novalidate>
-        <div class="col-6 col-md-3">
+      <form id="formBarril" class="row g-3 form-barril" novalidate>
+        <div class="col-6 col-lg-2">
           <label class="form-label" for="codigo">Código</label>
           <input id="codigo" class="form-control" placeholder="Ex.: 0241" maxlength="12" required>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-lg-3">
           <label class="form-label" for="chope">Chope</label>
           <select id="chope" class="form-select" required><option value="">Carregando…</option></select>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-lg-2">
           <label class="form-label" for="tamanho">Tamanho</label>
           <select id="tamanho" class="form-select"><option value="30">30 litros</option><option value="50">50 litros</option><option value="20">20 litros</option></select>
         </div>
-        <div class="col-6 col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar barril</button></div>
+        <div class="col-6 col-lg-3">
+          <label class="form-label" for="validade">Validade</label>
+          <input id="validade" class="form-control" type="date" required aria-describedby="validadeDica">
+          <div id="validadeDica" class="form-hint">Normalmente 5 dias a partir da chegada</div>
+        </div>
+        <div class="col-12 col-lg-2"><span class="form-label form-label-spacer" aria-hidden="true">&nbsp;</span><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar barril</button></div>
       </form>
     </section>
 
     <div class="filters">
       <input id="q" class="form-control" type="search" placeholder="Buscar por código, chope ou estilo">
       <select id="status" class="form-select">
-        <option value="">Todos os status</option><option value="disponivel">Disponível</option>
-        <option value="em_uso">Em uso</option><option value="em_transferencia">Em transferência</option><option value="esgotado">Chopp Esgotado</option>
+        <option value="">Todos, menos recolhidos</option><option value="disponivel">Disponível</option>
+        <option value="em_uso">Em uso</option><option value="em_transferencia">Em transferência</option><option value="esgotado">Vazio</option>
+        <option value="recolhido">Recolhidos</option>
       </select>
     </div>
 
     <div class="table-card">
       <table>
-        <thead><tr><th>Barril</th><th>Chope</th><th>Tamanho</th><th>Status</th><th>Torneira</th><th></th></tr></thead>
+        <thead><tr><th>Barril</th><th>Chope</th><th>Tamanho</th><th>Validade</th><th>Status</th><th>Torneira</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
