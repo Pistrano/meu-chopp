@@ -1,7 +1,8 @@
 /* BarrilFacil — utilitários compartilhados pelas telas */
 const MC = (() => {
-  const OP_LABELS = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Chopp Esgotado" };
-  const STATUS_LABELS = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Chopp Esgotado" };
+  const OP_LABELS = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento" };
+  // Rótulo curto (badge). Nos detalhes, o vazio aparece como "Vazio (aguardando recolhimento)".
+  const STATUS_LABELS = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Vazio", recolhido: "Recolhido" };
   const TRANSFER_LABELS = { pendente: "Pendente", confirmada: "Confirmada", cancelada: "Cancelada" };
 
   /* Chama o sistema (processo principal). Lança erro com a mensagem amigável. */
@@ -13,6 +14,7 @@ const MC = (() => {
       if (res.code === "MUST_CHANGE" && !page.endsWith("primeiro-acesso.html")) location.href = "primeiro-acesso.html";
       const err = new Error(res.error);
       err.code = res.code;
+      err.info = res.info; // dados extras de alguns erros (ex.: validade do barril vencido)
       throw err;
     }
     return res.data;
@@ -28,6 +30,14 @@ const MC = (() => {
   function chopeLabel(b) {
     if (!b) return "";
     return b.chope_nome ? `${b.chope_nome} · ${b.estilo || ""}` : b.estilo || "";
+  }
+
+  /* Validade: "2026-10-22" -> "22/10/2026" e o selo de alerta (amarelo: vence hoje/amanhã; vermelho: vencido) */
+  const fmtDia = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");
+  const VALIDADE_SELO = { vence_amanha: ["vence", "Vence amanhã"], vence_hoje: ["vence", "Vence hoje"], vencido: ["vencido", "Vencido"] };
+  function validadeBadge(situacao) {
+    const selo = VALIDADE_SELO[situacao];
+    return selo ? `<span class="op-badge op-badge--${selo[0]}">${selo[1]}</span>` : "";
   }
 
   /* "2026-10-06 14:32:10" -> "06/10 14:32" */
@@ -175,6 +185,21 @@ const MC = (() => {
     });
   }
 
+  /* Pergunta com dois botões. Resolve true se a pessoa confirmar. */
+  function confirm({ title, text, confirmLabel = "Confirmar", cancelLabel = "Cancelar", type = "plain" }) {
+    return new Promise((resolve) => {
+      const overlay = openOverlay(`<h2 class="notice-title notice-title--${type}">${esc(title)}</h2>
+        ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}
+        <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>${esc(cancelLabel)}</button>
+        <button type="button" class="btn btn-mc btn-mc-sm" data-ok>${esc(confirmLabel)}</button></div>`);
+      const close = (v) => { overlay.remove(); resolve(v); };
+      overlay.querySelector("[data-cancel]").addEventListener("click", () => close(false));
+      overlay.querySelector("[data-ok]").addEventListener("click", () => close(true));
+      overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") close(false); });
+      overlay.querySelector("[data-cancel]").focus();
+    });
+  }
+
   /* Máscara de CNPJ (numérico ou alfanumérico): 00.000.000/0000-00. A validação final é no servidor. */
   function formatCnpjInput(value) {
     const c = String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 14);
@@ -236,5 +261,8 @@ const MC = (() => {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchTables);
   else watchTables();
 
-  return { OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, chopeLabel, fmtDate, toast, run, bindPasswordRules, dialog, showSecret, notice, maskCnpj };
+  return {
+    OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, chopeLabel, fmtDate, fmtDia, validadeBadge, toast, run,
+    bindPasswordRules, dialog, showSecret, notice, confirm, openOverlay, maskCnpj,
+  };
 })();

@@ -110,10 +110,24 @@ registrado está no banco.
 - **Engate:** em *Barris > Engatar na torneira*, o funcionário escolhe uma torneira livre da unidade do barril.
   Sem torneira livre, o engate não é feito.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
-  Pela regra atual, o barril retirado passa para *Chopp Esgotado*.
+  O barril retirado fica *Vazio* (aguardando recolhimento).
 - O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
 - Aba **Torneiras** (todos os usuários): um cartão por torneira ativa da unidade, com o chope engatado, desde quando e por
   quem. Tocar no cartão mostra o histórico de engates daquela torneira. A tela se atualiza sozinha a cada minuto.
+
+## Validade e recolhimento
+
+- **Validade:** no cadastro do barril, a data de validade é obrigatória e começa em branco (a pessoa confere a data no
+  barril; normalmente são 5 dias a partir da chegada). Não aceita data no passado. A lista de barris e a aba Torneiras
+  mostram um selo amarelo quando o barril vence hoje ou amanhã e vermelho quando já venceu. O sino de alertas avisa
+  os mesmos casos, com os vencidos primeiro.
+- O sistema **só avisa, nunca bloqueia**: ao engatar um barril vencido, ele pede confirmação ("Engatar mesmo assim?").
+  O engate confirmado fica registrado na *Auditoria* como `engate_barril_vencido`.
+- **Recolhimento:** os barris vazios esperam a fábrica. Em *Barris > Registrar recolhimento*, marque os vasilhames que
+  estão sendo levados (ou *Marcar todos*) e confirme. Eles passam para *Recolhido* e saem da lista (o filtro *Recolhidos*
+  mostra o histórico). Se o mesmo vasilhame voltar, é um cadastro novo com o mesmo código.
+- O Painel mostra quantos barris estão *Vazios para recolher*, e o sino avisa quando um vazio espera há mais de 3 dias.
+- Datas "de hoje" seguem o fuso `APP_TZ` (padrão `America/Cuiaba`), nunca o horário UTC do servidor.
 
 ## Chopes e estilos
 

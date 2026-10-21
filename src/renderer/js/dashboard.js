@@ -21,7 +21,7 @@
       { key: "disponivel", label: "Disponíveis", value: s.disponiveis, icon: icons.disponivel },
       { key: "uso", label: "Em Uso", value: s.emUso, icon: icons.uso },
       { key: "transfer", label: "Em Transferência", value: s.emTransferencia, icon: icons.transfer },
-      { key: "esgotado", label: "Chopp Esgotado", value: s.choppEsgotado, icon: icons.esgotado },
+      { key: "esgotado", label: "Vazios para recolher", value: s.vazios, icon: icons.esgotado },
     ];
     statsGrid.innerHTML = cards
       .map((c) => `<div class="col"><div class="stat-card stat-card--${c.key}">

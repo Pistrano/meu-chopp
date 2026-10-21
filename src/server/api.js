@@ -33,15 +33,24 @@ const tsFmt = new Intl.DateTimeFormat("sv-SE", {
   hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
 });
 const fmtTs = (v) => (v ? tsFmt.format(new Date(v)) : null); // "AAAA-MM-DD HH:MM:SS"
+const dayFmt = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+const hojeTZ = () => dayFmt.format(new Date()); // "AAAA-MM-DD" de hoje no fuso da operação (nunca em UTC)
+const somaDias = (dia, n) => {                  // "AAAA-MM-DD" + n dias
+  const d = new Date(`${dia}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const diaMes = (dia) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`; // "2026-10-22" -> "22/10"
 // Quem entrega os barris: aparece como origem das entradas no histórico (NOME_FORNECEDOR no .env)
 const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
 const b2i = (v) => (v ? 1 : 0);
 
 class AppError extends Error {
-  constructor(message, code, detail) {
+  constructor(message, code, detail, info) {
     super(message);
     this.appCode = code;
     this.detail = detail;
+    this.info = info; // dados extras que a tela usa (vão na resposta junto com o erro)
   }
 }
 
@@ -124,6 +133,7 @@ async function dispatch(channel, payload, token, meta = {}) {
     }
     if (err instanceof AppError) {
       body = { ok: false, error: err.message, code: err.appCode };   // erro de regra: mensagem para o usuário
+      if (err.info) body.info = err.info;
     } else {
       console.error(`[erro] ${channel}:`, err);                       // falha técnica: detalhe só no servidor
       body = { ok: false, error: "Erro inesperado. Tente novamente." };
@@ -210,7 +220,20 @@ function normalizeCnpj(value) {
 }
 const formatCnpj = (c) => (c ? `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}` : null);
 
-const STATUS_TEXTO = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Chopp Esgotado" };
+const STATUS_TEXTO = {
+  disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência",
+  esgotado: "Vazio (aguardando recolhimento)", recolhido: "Recolhido",
+};
+
+/* Validade (conta a partir da chegada na loja). O sistema só avisa, nunca bloqueia.
+   Vazios e recolhidos não têm situação: o chope já saiu do barril. */
+function situacaoValidade(validade, status, hoje = hojeTZ()) {
+  if (!validade || status === "esgotado" || status === "recolhido") return null;
+  if (validade < hoje) return "vencido";
+  if (validade === hoje) return "vence_hoje";
+  if (validade === somaDias(hoje, 1)) return "vence_amanha";
+  return "ok";
+}
 const MSG_SEM_TORNEIRA = "Não há torneiras disponíveis nesta unidade. Verifique as torneiras cadastradas ou libere uma torneira antes de continuar.";
 
 async function emailTaken(email, exceptId = 0) {
@@ -238,7 +261,7 @@ async function getUserById(id) {
    A situação (livre/ocupada) nunca é gravada na torneira: ela é derivada do engate ativo
    (engates.retirado_em IS NULL). */
 const TAPS_SELECT =
-  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l), usuarios!engatado_por(nome))";
+  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status), usuarios!engatado_por(nome))";
 
 function tapRow(t) {
   const e = (t.engates || []).find((x) => x.retirado_em === null) || null;
@@ -256,6 +279,8 @@ function tapRow(t) {
     estilo: e && e.barris ? e.barris.estilo : null,
     chope_nome: e && e.barris ? e.barris.chope_nome : null,
     tamanho_l: e && e.barris ? e.barris.tamanho_l : null,
+    validade: e && e.barris ? e.barris.validade : null,
+    situacao_validade: e && e.barris ? situacaoValidade(e.barris.validade, e.barris.status) : null,
     usos: (t.engates || []).length,
     ocupada: !!e,
   };
@@ -467,7 +492,7 @@ function registerHandlers() {
   handle("auth:me", (_p, ctx) => ctx.session);
 
   // Dados do servidor que as telas usam (carregados junto com o cabeçalho)
-  handle("config:get", () => ({ fornecedor: FORNECEDOR }));
+  handle("config:get", () => ({ fornecedor: FORNECEDOR, hoje: hojeTZ() }));
   handle("auth:ping", () => true); // mantém a sessão viva enquanto o usuário está ativo
 
   /* Primeiro acesso / senha temporária: define e-mail (se faltar) e uma senha nova */
@@ -572,7 +597,7 @@ function registerHandlers() {
     const u = r.data;
     if (!u) throw new AppError("Unidade não encontrada.");
     if (u.ativo) {
-      const a = await supabase.from("barris").select("id", { count: "exact", head: true }).eq("unidade_id", u.id).neq("status", "esgotado");
+      const a = await supabase.from("barris").select("id", { count: "exact", head: true }).eq("unidade_id", u.id).not("status", "in", "(esgotado,recolhido)");
       dbError(a.error);
       const b = await supabase.from("transferencias").select("id", { count: "exact", head: true }).eq("destino_id", u.id).eq("status", "pendente");
       dbError(b.error);
@@ -655,7 +680,10 @@ function registerHandlers() {
         id: t.id, numero: t.numero, ocupada: t.ocupada, barril: t.codigo || null, estilo: t.estilo || null, chope_nome: t.chope_nome || null,
       }));
     return {
-      barril: { id: b.id, codigo: b.codigo, estilo: b.estilo, chope_nome: b.chope_nome || null, status: b.status },
+      barril: {
+        id: b.id, codigo: b.codigo, estilo: b.estilo, chope_nome: b.chope_nome || null, status: b.status,
+        validade: b.validade, situacao_validade: situacaoValidade(b.validade, b.status),
+      },
       unidade: r.data,
       torneiras,
     };
@@ -676,6 +704,8 @@ function registerHandlers() {
         chope_nome: t.ocupada ? t.chope_nome : null,
         estilo: t.ocupada ? t.estilo : null,
         tamanho_l: t.ocupada ? t.tamanho_l : null,
+        validade: t.ocupada ? t.validade : null,
+        situacao_validade: t.ocupada ? t.situacao_validade : null,
         engatado_em: t.engatado_em,
         engatado_em_iso: t.engatado_em_iso,
         engatado_por: t.engatado_por,
@@ -823,13 +853,25 @@ function registerHandlers() {
   /* ======== Dashboard ======== */
   handle("dashboard:get", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
-    const stats = await rpc("fn_dashboard_stats", { p_unit: unit });
+    const stats = await rpc("fn_dashboard_stats_v2", { p_unit: unit });
     return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8 }) };
   });
 
+  /* Ordem: validade (vencidos primeiro), transferências pendentes, vazios aguardando recolhimento.
+     nivel "erro" = barril vencido (a tela destaca em vermelho). */
   handle("alerts:list", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const alerts = [];
+
+    const hoje = hojeTZ();
+    const validade = await rpc("fn_alertas_validade", { p_unit: unit, p_hoje: hoje });
+    validade.forEach((b) => {
+      const quem = `Barril #${b.codigo}${b.chope ? ` (${b.chope})` : ""}`;
+      if (b.validade < hoje)
+        alerts.push({ nivel: "erro", texto: `${quem} venceu em ${diaMes(b.validade)}. Confira se estava na câmara fria.` });
+      else if (b.validade === hoje) alerts.push({ texto: `${quem} vence hoje.` });
+      else alerts.push({ texto: `${quem} vence amanhã (${diaMes(b.validade)}).` });
+    });
 
     const pend = ok(
       await supabase.from("transferencias")
@@ -847,8 +889,8 @@ function registerHandlers() {
       });
     });
 
-    const parados = await rpc("fn_alertas_esgotados", { p_unit: unit });
-    parados.forEach((codigo) => alerts.push({ texto: `Barril #${codigo} esgotado há mais de 3 dias sem atualização.` }));
+    const vazios = await rpc("fn_alertas_vazios", { p_unit: unit });
+    vazios.forEach((v) => alerts.push({ texto: `Barril #${v.codigo} vazio aguardando recolhimento há ${v.dias} dias` }));
 
     return alerts;
   });
@@ -862,15 +904,18 @@ function registerHandlers() {
       .eq("unidade_id", unit)
       .order("codigo", { ascending: true })
       .limit(1000);
-    if (status) query = query.eq("status", String(status));
+    // Recolhidos já voltaram para a fábrica: só aparecem quando o filtro pede por eles
+    query = status ? query.eq("status", String(status)) : query.neq("status", "recolhido");
     const termo = cleanTerm(q);
     if (termo) query = query.or(`codigo.ilike.*${termo}*,estilo.ilike.*${termo}*,chope_nome.ilike.*${termo}*`);
 
     const data = ok(await query);
+    const hoje = hojeTZ();
     return data.map(({ unidades, engates, ...b }) => {
       const ativo = (engates || []).find((e) => e.retirado_em === null);
       return {
         ...b,
+        situacao_validade: situacaoValidade(b.validade, b.status, hoje),
         criado_em: fmtTs(b.criado_em),
         unidade: unidades ? unidades.nome_curto : null,
         torneira_numero: ativo && ativo.torneiras ? ativo.torneiras.numero : null,
@@ -878,42 +923,42 @@ function registerHandlers() {
     });
   });
 
-  /* O barril é cadastrado com um chope do catálogo. barris.estilo continua sendo gravada
-     (com o estilo do chope) porque o histórico, as transferências e as funções fn_* usam essa coluna. */
-  handle("barris:create", async ({ codigo, chopeId, tamanho, unitId }, ctx) => {
+  /* Entrada do barril: chope do catálogo + validade informada (olhando a data no barril).
+     A fn_barril_entrada grava o barril (com barris.estilo = estilo do chope, usado no histórico e nas
+     transferências), a movimentação e a auditoria numa única transação. */
+  const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const diaValido = (v) => DIA_RE.test(v) && new Date(`${v}T12:00:00Z`).toISOString().slice(0, 10) === v;
+
+  handle("barris:create", async ({ codigo, chopeId, tamanho, validade, unitId }, ctx) => {
     const cod = String(codigo || "").replace("#", "").trim().toUpperCase();
     const tam = Number(tamanho);
     if (!cod || !Number(chopeId) || !(tam > 0)) throw new AppError("Preencha código, chope e tamanho do barril.");
+    const val = String(validade || "").trim();
+    if (!val) throw new AppError("Informe a data de validade do barril.");
+    if (!diaValido(val)) throw new AppError("Data de validade inválida.");
+    if (val < hojeTZ()) throw new AppError("A validade não pode estar no passado");
     const unit = await resolveUnit(ctx, unitId);
     await assertUnit(ctx, unit);
-    const r = await supabase.from("chopes").select("id, nome, ativo, estilos(nome)").eq("id", Number(chopeId)).maybeSingle();
-    dbError(r.error);
-    const chope = r.data;
-    if (!chope) throw new AppError("Chope não encontrado. Recarregue a página e escolha de novo.");
-    if (!chope.ativo) throw new AppError(`O chope "${chope.nome}" está desativado. Escolha outro.`);
-    if (!chope.estilos) throw new AppError(`O chope "${chope.nome}" está sem estilo. Peça a um administrador para corrigir.`);
-
-    const ret = await rpc("fn_barril_criar", {
-      p_codigo: cod, p_estilo: chope.estilos.nome, p_tamanho: tam, p_unidade: unit, p_usuario: ctx.session.id,
+    const id = await rpc("fn_barril_entrada", {
+      p_codigo: cod, p_chope: Number(chopeId), p_tamanho: tam, p_validade: val, p_unidade: unit, p_usuario: ctx.session.id,
     });
-    const id = Number(ret && typeof ret === "object" ? ret.id : ret);
-    const upd = id ? await supabase.from("barris").update({ chope_id: chope.id, chope_nome: chope.nome }).eq("id", id).select("id") : {};
-    if (!id || upd.error || !upd.data || !upd.data.length) {
-      console.error("[barris:create] barril criado sem chope", { id, chope: chope.id, error: upd.error });
-      throw new AppError(
-        `O barril #${cod} foi cadastrado, mas não foi possível ligá-lo ao chope "${chope.nome}". ` +
-        "Ele aparece na lista só com o estilo. Avise o administrador."
-      );
-    }
-    return { id };
+    return { id: Number(id) };
   });
 
   /* Engate (início de uso): disponível → em uso, sempre em uma torneira livre da unidade do barril.
      A função SQL faz todas as verificações e gravações numa única transação. */
-  handle("barris:use", async ({ id, torneiraId, unitId }, ctx) => {
+  /* Barril vencido: não engata sem confirmação (BARRIL_VENCIDO). Com confirmarVencido, engata e registra
+     na auditoria. Nunca bloqueia: quem decide é a gerência. */
+  handle("barris:use", async ({ id, torneiraId, unitId, confirmarVencido }, ctx) => {
     const b = await loadBarril(ctx, id); // barril existe + usuário tem acesso à unidade dele
     if (unitId && Number(unitId) !== b.unidade_id)
       throw new AppError(`O barril #${b.codigo} não pertence à unidade selecionada.`);
+    const vencido = b.status === "disponivel" && situacaoValidade(b.validade, b.status) === "vencido";
+    if (vencido && torneiraId && confirmarVencido !== true)
+      throw new AppError(
+        `Este barril venceu em ${diaMes(b.validade)}. Confira se ele estava armazenado na câmara fria. Engatar mesmo assim?`,
+        "BARRIL_VENCIDO", null, { codigo: b.codigo, validade: b.validade }
+      );
 
     if (!torneiraId) {
       if (b.status !== "disponivel")
@@ -921,19 +966,49 @@ function registerHandlers() {
       const livres = (await tapsOfUnit(b.unidade_id)).filter((t) => t.ativo && !t.ocupada).length;
       throw new AppError(livres ? "Selecione a torneira em que o barril será engatado." : MSG_SEM_TORNEIRA);
     }
-    return rpc("fn_barril_engatar", { p_barril: b.id, p_torneira: Number(torneiraId), p_usuario: ctx.session.id });
+    const r = await rpc("fn_barril_engatar", { p_barril: b.id, p_torneira: Number(torneiraId), p_usuario: ctx.session.id });
+    if (vencido) {
+      const [ano, mes, dia] = b.validade.split("-");
+      await audit(ctx, "engate_barril_vencido",
+        `Barril #${b.codigo} (validade ${dia}/${mes}/${ano}) engatado vencido na Torneira ${r.torneira} (${r.unidade})`);
+    }
+    return r;
   });
 
-  /* Retirada (o barril sai da torneira quando o chopp esgota): em uso → esgotado.
+  /* Retirada (o barril sai da torneira quando o chopp acaba): em uso → vazio (status esgotado).
      A torneira vem do engate registrado — nunca é escolhida pelo usuário — e é liberada aqui. */
   handle("barris:empty", async ({ id }, ctx) => {
     const b = await loadBarril(ctx, id);
     return rpc("fn_barril_esgotar", { p_barril: b.id, p_usuario: ctx.session.id });
   });
 
-  handle("barris:refill", async ({ id }, ctx) => {
-    const b = await loadBarril(ctx, id);
-    return rpc("fn_barril_reabastecer", { p_barril: b.id, p_usuario: ctx.session.id });
+  /* Barris vazios da unidade para o recolhimento, com há quantos dias cada um está vazio */
+  handle("barris:emptyList", async ({ unitId }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    const rows = ok(
+      await supabase.from("barris")
+        .select("id, codigo, estilo, chope_nome, tamanho_l, movimentacoes(operacao, criado_em)")
+        .eq("unidade_id", unit).eq("status", "esgotado").order("codigo")
+    );
+    const agora = Date.now();
+    return rows.map(({ movimentacoes, ...b }) => {
+      const datas = (movimentacoes || []).map((m) => ({ op: m.operacao, t: new Date(m.criado_em).getTime() }));
+      const vazio = datas.filter((m) => m.op === "esgotado");
+      const desde = Math.max(...(vazio.length ? vazio : datas).map((m) => m.t), 0) || null;
+      return { ...b, vazio_desde: desde ? fmtTs(desde) : null, dias: desde ? Math.floor((agora - desde) / 86400000) : null };
+    });
+  });
+
+  /* Recolhimento: a fábrica leva os vasilhames vazios. Vários de uma vez, tudo ou nada (fn_barris_recolher).
+     Se o mesmo vasilhame voltar, é um cadastro novo com o mesmo código. */
+  handle("barris:collect", async ({ ids, unitId }, ctx) => {
+    const lista = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (!lista.length) throw new AppError("Marque ao menos um barril para registrar o recolhimento.");
+    if (lista.length > 500) throw new AppError("Recolhimento grande demais de uma vez. Divida em partes.");
+    const unit = await resolveUnit(ctx, unitId);
+    await assertUnit(ctx, unit);
+    const codigos = await rpc("fn_barris_recolher", { p_barris: lista, p_unidade: unit, p_usuario: ctx.session.id });
+    return { codigos };
   });
 
   /* ======== Transferências ======== */
@@ -994,7 +1069,7 @@ function registerHandlers() {
 
   handle("history:export", async ({ unitId, q, operacao }, ctx) => {
     const rows = await queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao });
-    const labels = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Chopp Esgotado" };
+    const labels = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento" };
     // Células que começam com = + - @ viram texto (evita que o Excel execute fórmulas digitadas por usuários)
     const esc = (v) => {
       let t = String(v ?? "");

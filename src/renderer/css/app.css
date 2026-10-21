@@ -289,3 +289,33 @@
 @media (max-width: 575.98px) {
   .tap-grid { grid-template-columns: 1fr; gap: .75rem; }
 }
+
+/* ---------- Validade e recolhimento ---------- */
+.op-badge--recolhido, .op-badge--recolhimento { background: #ececee; color: var(--mc-muted); }
+.op-badge--vence { background: #fff1c7; color: #7a5a16; }
+.op-badge--vencido { background: var(--mc-danger-soft); color: var(--mc-danger); }
+.validade-cell { display: inline-flex; align-items: center; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+.form-hint { font-size: .78rem; color: var(--mc-muted); margin-top: .3rem; }
+.form-label-spacer { display: block; visibility: hidden; }
+@media (max-width: 991.98px) { .form-label-spacer { display: none; } }
+
+/* Diálogo de recolhimento: usado em pé, no tablet, com alvos de toque grandes */
+.mc-modal--collect { max-width: 520px; }
+.collect-list { display: flex; flex-direction: column; gap: .5rem; max-height: 50vh; overflow-y: auto; margin-bottom: .75rem; }
+.collect-item {
+  position: relative; display: flex; flex-direction: column; justify-content: center; gap: .1rem;
+  min-height: 60px; padding: .6rem .9rem .6rem 3.2rem; border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius);
+  cursor: pointer; user-select: none;
+}
+.collect-item input { position: absolute; left: .9rem; top: 50%; width: 26px; height: 26px; margin: -13px 0 0; accent-color: var(--mc-gold-dark); }
+.collect-item:hover { border-color: var(--mc-gold-dark); }
+.collect-item:has(input:checked) { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
+.collect-main { font-weight: 700; font-size: 1.02rem; }
+.collect-chope { font-weight: 500; color: var(--mc-muted); }
+.collect-hint { font-size: .85rem; color: var(--mc-muted); }
+.collect-all { margin-bottom: .6rem; background: var(--mc-bg); }
+.mc-modal--collect .mc-modal-actions .btn { min-height: 52px; }
+
+/* Aviso de barril vencido na lista de alertas */
+.alert-item--erro .alert-icon { color: var(--mc-danger); }
+.tap-validade { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; color: var(--mc-muted); margin-top: .2rem; }

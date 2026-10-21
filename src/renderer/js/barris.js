@@ -1,4 +1,4 @@
-/* BarrilFacil — cadastro e controle de estoque de barris (engate em torneira e retirada) */
+/* BarrilFacil — cadastro e controle de estoque de barris (validade, engate em torneira, retirada e recolhimento) */
 (async () => {
   const ctx = await MCLayout.init("barris");
   if (!ctx) return;
@@ -7,6 +7,8 @@
   const q = document.getElementById("q");
   const status = document.getElementById("status");
   const selChope = document.getElementById("chope");
+  const validade = document.getElementById("validade");
+  if (ctx.config.hoje) validade.min = ctx.config.hoje; // sem valor pré-preenchido: a pessoa olha a data no barril
   const NOVO = "__novo"; // última opção dos selects: cadastrar um chope/estilo novo
   let rows = [];
 
@@ -79,7 +81,8 @@
       return `<button class="btn-ghost" data-act="use" data-id="${b.id}">Engatar na torneira</button>
               <a class="btn-ghost text-decoration-none" href="transferencias.html?barril=${b.id}">Transferir</a>`;
     if (b.status === "em_uso") return `<button class="btn-ghost btn-ghost--danger" data-act="empty" data-id="${b.id}">Retirar barril</button>`;
-    if (b.status === "esgotado") return `<button class="btn-ghost" data-act="refill" data-id="${b.id}">Reabastecido</button>`;
+    if (b.status === "esgotado") return `<span class="t-muted">Vazio (aguardando recolhimento)</span>`;
+    if (b.status === "recolhido") return "";
     return `<span class="t-muted">Aguardando recebimento</span>`;
   }
 
@@ -102,10 +105,11 @@
             ? `<span class="t-strong">${MC.esc(b.chope_nome)}</span><br><span class="t-muted">${MC.esc(b.estilo)}</span>`
             : MC.esc(b.estilo)}</td>
           <td>${b.tamanho_l} L</td>
+          <td><span class="validade-cell">${MC.fmtDia(b.validade)} ${MC.validadeBadge(b.situacao_validade)}</span></td>
           <td><span class="op-badge op-badge--${b.status}">${MC.STATUS_LABELS[b.status]}</span></td>
           <td>${tapCell(b)}</td>
           <td><div class="row-actions">${actions(b)}</div></td></tr>`).join("")
-      : `<tr><td colspan="6" class="table-empty">Nenhum barril encontrado nesta unidade.</td></tr>`;
+      : `<tr><td colspan="7" class="table-empty">Nenhum barril encontrado nesta unidade.</td></tr>`;
   }
 
   /* ---------- Engate: escolher uma torneira livre da unidade ---------- */
@@ -146,7 +150,22 @@
       submitLabel: "Confirmar engate",
       onSubmit: async (v) => {
         if (!v.torneira) throw new Error("Selecione uma torneira livre para continuar.");
-        return MC.call("barris:use", { id, torneiraId: Number(v.torneira), unitId: ctx.unitId });
+        const pedido = { id, torneiraId: Number(v.torneira), unitId: ctx.unitId };
+        try {
+          return await MC.call("barris:use", pedido);
+        } catch (err) {
+          if (err.code !== "BARRIL_VENCIDO") throw err;
+          // Vencido: só avisa. Quem decide é a gerência; o engate confirmado fica na auditoria.
+          const [, mes, dia] = String(err.info && err.info.validade || "").split("-");
+          const sim = await MC.confirm({
+            title: "Barril vencido",
+            type: "err",
+            text: `Este barril venceu em ${dia}/${mes}. Confira se ele estava armazenado na câmara fria. Engatar mesmo assim?`,
+            confirmLabel: "Engatar mesmo assim",
+          });
+          if (!sim) return false;
+          return MC.call("barris:use", { ...pedido, confirmarVencido: true });
+        }
       },
     });
     if (result && result.torneira) {
@@ -163,8 +182,8 @@
     const result = await MC.dialog({
       title: `Retirar barril #${b.codigo}`,
       intro: b.torneira_numero
-        ? `Unidade: ${unit.nome}. O barril está na Torneira ${b.torneira_numero}, que será liberada. Pela regra atual, ao ser retirado o barril passa para "Chopp Esgotado".`
-        : `Unidade: ${unit.nome}. Este barril não tem torneira registrada (foi engatado antes do controle de torneiras), então nenhuma torneira será liberada. O barril passa para "Chopp Esgotado".`,
+        ? `Unidade: ${unit.nome}. O barril está na Torneira ${b.torneira_numero}, que será liberada. Ao ser retirado, o barril fica "Vazio" até a fábrica recolher.`
+        : `Unidade: ${unit.nome}. Este barril não tem torneira registrada (foi engatado antes do controle de torneiras), então nenhuma torneira será liberada. O barril fica "Vazio" até a fábrica recolher.`,
       submitLabel: "Confirmar retirada",
       onSubmit: () => MC.call("barris:empty", { id }),
     });
@@ -177,8 +196,67 @@
         ["Barril", `#${result.codigo}`],
         ["Unidade", result.unidade],
         ["Torneira liberada", result.torneira ? `Torneira ${result.torneira}` : "Nenhuma (sem torneira registrada)"],
+        ["Situação", "Vazio (aguardando recolhimento)"],
       ],
     });
+  }
+
+  /* ---------- Recolhimento: a fábrica leva os vasilhames vazios (usado em pé, no tablet) ---------- */
+  const diasVazio = (d) => (d == null ? "" : d < 1 ? "vazio há menos de 1 dia" : `vazio há ${d} dia${d === 1 ? "" : "s"}`);
+
+  async function recolher() {
+    const unit = ctx.units.find((u) => u.id === ctx.unitId);
+    const vazios = await MC.run(() => MC.call("barris:emptyList", { unitId: ctx.unitId }));
+    if (!vazios) return;
+    if (!vazios.length) {
+      await MC.notice({ title: "Nenhum barril vazio", type: "plain", text: `Não há barris vazios aguardando recolhimento em ${unit.nome}.` });
+      return;
+    }
+    const overlay = MC.openOverlay(`<h2>Registrar recolhimento</h2>
+      <p class="mc-modal-intro">Marque os barris vazios que a fábrica está levando de ${MC.esc(unit.nome)}.</p>
+      <label class="collect-item collect-all"><input type="checkbox" id="colTodos"><span class="collect-main">Marcar todos (${vazios.length})</span></label>
+      <div class="collect-list">${vazios.map((b) => `<label class="collect-item">
+          <input type="checkbox" value="${b.id}">
+          <span class="collect-main">#${MC.esc(b.codigo)} <span class="collect-chope">${MC.esc(MC.chopeLabel(b))}</span></span>
+          <span class="collect-hint">${b.tamanho_l} L · ${diasVazio(b.dias)}</span></label>`).join("")}</div>
+      <div class="field-error" id="colErr" aria-live="polite"></div>
+      <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
+      <button type="button" class="btn btn-mc btn-mc-sm" id="colOk" disabled>Marque os barris recolhidos</button></div>`);
+    overlay.querySelector(".mc-modal").classList.add("mc-modal--collect");
+
+    const caixas = [...overlay.querySelectorAll(".collect-list input")];
+    const todos = overlay.querySelector("#colTodos");
+    const okBtn = overlay.querySelector("#colOk");
+    const errEl = overlay.querySelector("#colErr");
+    const marcados = () => caixas.filter((c) => c.checked).map((c) => Number(c.value));
+    const atualizar = () => {
+      const n = marcados().length;
+      todos.checked = n === caixas.length;
+      todos.indeterminate = n > 0 && n < caixas.length;
+      okBtn.disabled = n === 0;
+      okBtn.textContent = n ? `Confirmar recolhimento de ${n} barri${n === 1 ? "l" : "s"}` : "Marque os barris recolhidos";
+      errEl.textContent = "";
+    };
+    todos.addEventListener("change", () => { caixas.forEach((c) => { c.checked = todos.checked; }); atualizar(); });
+    caixas.forEach((c) => c.addEventListener("change", atualizar));
+    const fechar = () => overlay.remove();
+    overlay.querySelector("[data-cancel]").addEventListener("click", fechar);
+    overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") fechar(); });
+    okBtn.addEventListener("click", async () => {
+      okBtn.disabled = true;
+      try {
+        const r = await MC.call("barris:collect", { ids: marcados(), unitId: ctx.unitId });
+        fechar();
+        const n = r.codigos.length;
+        MC.toast(`Recolhimento registrado: ${n} barri${n === 1 ? "l" : "s"} (#${r.codigos.join(", #")}).`);
+        load();
+        MCLayout.refreshAlerts();
+      } catch (err) {
+        errEl.textContent = err.message;
+        okBtn.disabled = false;
+      }
+    });
+    todos.focus();
   }
 
   tbody.addEventListener("click", async (e) => {
@@ -187,19 +265,23 @@
     const id = Number(btn.dataset.id);
     if (btn.dataset.act === "use") return engatar(id);
     if (btn.dataset.act === "empty") return retirar(id);
-    const ok = await MC.run(() => MC.call("barris:refill", { id }), "Barril disponível novamente.");
-    if (ok) load();
   });
+
+  document.getElementById("btnRecolher").addEventListener("click", recolher);
 
   document.getElementById("formBarril").addEventListener("submit", async (e) => {
     e.preventDefault();
     const codigo = document.getElementById("codigo");
     if (!selChope.value || selChope.value === NOVO) return MC.toast("Escolha o chope do barril.", "err");
+    if (!validade.value) { validade.focus(); return MC.toast("Informe a data de validade que está no barril.", "err"); }
     const ok = await MC.run(
-      () => MC.call("barris:create", { codigo: codigo.value, chopeId: Number(selChope.value), tamanho: document.getElementById("tamanho").value, unitId: ctx.unitId }),
+      () => MC.call("barris:create", {
+        codigo: codigo.value, chopeId: Number(selChope.value), tamanho: document.getElementById("tamanho").value,
+        validade: validade.value, unitId: ctx.unitId,
+      }),
       "Barril cadastrado."
     );
-    if (ok) { codigo.value = ""; selChope.value = ""; codigo.focus(); load(); }
+    if (ok) { codigo.value = ""; selChope.value = ""; validade.value = ""; codigo.focus(); load(); MCLayout.refreshAlerts(); }
   });
 
   let t;
