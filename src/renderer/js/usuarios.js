@@ -69,6 +69,12 @@
     const id = Number(btn.dataset.id);
     const user = users.find((u) => u.id === id);
     if (btn.dataset.act === "toggle") {
+      if (user.ativo && !await MC.confirm({
+        title: "Desativar usuário",
+        text: `Desativar ${user.nome}? A pessoa perderá acesso ao BarrilFácil.`,
+        confirmLabel: "Desativar usuário",
+        type: "err",
+      })) return;
       if (await MC.run(() => MC.call("users:toggle", { id }), "Situação do usuário atualizada.")) load();
     } else if (btn.dataset.act === "unlock") {
       if (await MC.run(() => MC.call("users:unlock", { id }), "Usuário desbloqueado.")) load();
@@ -82,7 +88,12 @@
       });
       if (saved) { MC.toast("Acesso atualizado."); load(); }
     } else if (btn.dataset.act === "reset") {
-      if (!window.confirm("Gerar uma nova senha temporária? A senha atual deixa de funcionar.")) return;
+      if (!await MC.confirm({
+        title: "Gerar senha temporária",
+        text: `A senha atual de ${user.nome} deixará de funcionar. Deseja continuar?`,
+        confirmLabel: "Gerar nova senha",
+        type: "err",
+      })) return;
       const r = await MC.run(() => MC.call("users:resetPassword", { id }));
       if (r) { load(); MC.showSecret({ title: "Senha temporária gerada", intro: `Nova senha para ${r.email}:`, secret: r.senha }); }
     }

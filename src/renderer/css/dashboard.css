@@ -67,6 +67,10 @@
   margin: 2.25rem 0 1rem;
 }
 
+/* app.css define uma margem genérica zerada para .section-title. Preserve o
+   espaço entre os indicadores e as movimentações do Painel. */
+.dashboard-main > section > .section-title { margin: 2.25rem 0 1rem; }
+
 /* ---------- Movimentações recentes ---------- */
 .movement-list {
   background: var(--mc-surface);

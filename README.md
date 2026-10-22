@@ -128,6 +128,8 @@ registrado está no banco.
 - **Tema claro/escuro:** menu do usuário (canto superior direito) > *Tema*. Alterna entre *Automático* (segue o Windows ou o
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
+- **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras e geração de senha temporária pedem confirmação antes de alterar os dados.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências e Usuários). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.

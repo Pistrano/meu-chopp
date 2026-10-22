@@ -138,6 +138,12 @@
       });
       if (saved) { MC.toast("Número da torneira atualizado."); openDetail(current.id); }
     } else {
+      if (t.ativo && !await MC.confirm({
+        title: `Desativar Torneira ${t.numero}`,
+        text: "A torneira deixará de aparecer como opção para engatar barris.",
+        confirmLabel: "Desativar torneira",
+        type: "err",
+      })) return;
       const ok = await MC.run(() => MC.call("taps:toggle", { id: t.id }), t.ativo ? `Torneira ${t.numero} desativada.` : `Torneira ${t.numero} reativada.`);
       if (ok) { openDetail(current.id); load(); }
     }
@@ -160,7 +166,14 @@
       detail.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (btn.dataset.act === "edit") {
       editUnit(id);
-    } else if (await MC.run(() => MC.call("units:toggle", { id }), u.ativo ? "Unidade desativada." : "Unidade reativada.")) {
+    } else {
+      if (u.ativo && !await MC.confirm({
+        title: "Desativar unidade",
+        text: `Desativar ${u.nome}? Ela deixará de operar no sistema até ser reativada.`,
+        confirmLabel: "Desativar unidade",
+        type: "err",
+      })) return;
+      if (!await MC.run(() => MC.call("units:toggle", { id }), u.ativo ? "Unidade desativada." : "Unidade reativada.")) return;
       await load();
       if (current && current.id === id) openDetail(id);
     }

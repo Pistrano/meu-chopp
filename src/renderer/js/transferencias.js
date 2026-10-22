@@ -58,6 +58,13 @@
   document.getElementById("formTransfer").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!selBarril.value) return MC.toast("Não há barril disponível para transferir.", "err");
+    const barril = selBarril.selectedOptions[0].textContent;
+    const destino = selDestino.selectedOptions[0] && selDestino.selectedOptions[0].textContent;
+    if (!await MC.confirm({
+      title: "Confirmar transferência",
+      text: `Enviar ${barril} para ${destino}? O barril ficará aguardando a confirmação de recebimento na unidade de destino.`,
+      confirmLabel: "Enviar barril",
+    })) return;
     const ok = await MC.run(() => MC.call("transfer:create", { barrilId: Number(selBarril.value), destinoId: Number(selDestino.value) }), "Transferência iniciada. O destino precisa confirmar o recebimento.");
     if (ok) reload();
   });
@@ -65,7 +72,18 @@
   tbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
-    if (btn.dataset.act === "cancel" && !window.confirm("Cancelar esta transferência? O barril volta a ficar disponível.")) return;
+    const transfer = transfers.find((t) => t.id === Number(btn.dataset.id));
+    if (!transfer) return loadTable();
+    const isReceive = btn.dataset.act === "confirm";
+    const confirmed = await MC.confirm({
+      title: isReceive ? "Confirmar recebimento" : "Cancelar transferência",
+      text: isReceive
+        ? `Confirma que o barril #${transfer.codigo} chegou à unidade ${transfer.destino}?`
+        : `Cancelar o envio do barril #${transfer.codigo}? Ele voltará a ficar disponível na unidade de origem.`,
+      confirmLabel: isReceive ? "Confirmar recebimento" : "Cancelar transferência",
+      type: isReceive ? "plain" : "err",
+    });
+    if (!confirmed) return;
     const msg = btn.dataset.act === "confirm" ? "Recebimento confirmado." : "Transferência cancelada.";
     const ok = await MC.run(() => MC.call(`transfer:${btn.dataset.act}`, { id: Number(btn.dataset.id) }), msg);
     if (ok) reload();

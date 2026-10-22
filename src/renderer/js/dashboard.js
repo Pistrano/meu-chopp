@@ -14,6 +14,8 @@
 
   const statsGrid = document.getElementById("statsGrid");
   const movementList = document.getElementById("movementList");
+  let loading = false;
+  let reloadPending = false;
 
   function renderStats(s) {
     const cards = [
@@ -54,16 +56,32 @@
   }
 
   async function load() {
+    if (document.visibilityState === "hidden") return;
+    if (loading) { reloadPending = true; return; }
+    loading = true;
     const unit = ctx.units.find((u) => u.id === ctx.unitId);
+    if (!unit) { loading = false; return; }
     document.getElementById("greetingTitle").textContent = `Olá, ${ctx.user.nome}`;
     document.getElementById("greetingText").textContent = `Confira o resumo da operação de ${unit.nome}.`;
-    await MC.run(async () => {
-      const data = await MC.call("dashboard:get", { unitId: ctx.unitId });
-      renderStats(data.stats);
-      renderMovements(data.movimentacoes);
-    });
+    try {
+      await MC.run(async () => {
+        const data = await MC.call("dashboard:get", { unitId: ctx.unitId });
+        renderStats(data.stats);
+        renderMovements(data.movimentacoes);
+      });
+    } finally {
+      loading = false;
+      if (reloadPending) {
+        reloadPending = false;
+        load();
+      }
+    }
   }
 
   ctx.onUnitChange = load;
   load();
+  window.setInterval(load, 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") load();
+  });
 })();

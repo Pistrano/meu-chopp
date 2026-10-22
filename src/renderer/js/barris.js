@@ -255,9 +255,17 @@
     overlay.querySelector("[data-cancel]").addEventListener("click", fechar);
     overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") fechar(); });
     okBtn.addEventListener("click", async () => {
+      const ids = marcados();
+      const codigos = vazios.filter((b) => ids.includes(b.id)).map((b) => `#${b.codigo}`);
+      if (!await MC.confirm({
+        title: "Confirmar recolhimento",
+        text: `Registrar que ${codigos.length} ${codigos.length === 1 ? "barril foi recolhido" : "barris foram recolhidos"} (${codigos.join(", ")}) pela fábrica? Esta operação altera o estoque da unidade.`,
+        confirmLabel: "Registrar recolhimento",
+        type: "err",
+      })) return;
       okBtn.disabled = true;
       try {
-        const r = await MC.call("barris:collect", { ids: marcados(), unitId: ctx.unitId });
+        const r = await MC.call("barris:collect", { ids, unitId: ctx.unitId });
         fechar();
         const n = r.codigos.length;
         MC.toast(`Recolhimento registrado: ${n} barri${n === 1 ? "l" : "s"} (#${r.codigos.join(", #")}).`);
