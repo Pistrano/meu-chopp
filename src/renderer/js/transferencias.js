@@ -11,6 +11,11 @@
 
   const canAct = (unitId) => ctx.units.some((u) => u.id === unitId); // quiosques liberados para este usuário
 
+  let transfers = [];
+  const sorter = MC.sortable(document.querySelector(".table-card table"), {
+    0: (t) => t.codigo, 1: (t) => t.origem, 2: (t) => t.solicitante, 3: (t) => t.criado_em, 4: (t) => MC.TRANSFER_LABELS[t.status],
+  }, { key: "transferencias", onChange: () => renderTable() });
+
   async function loadForm() {
     const barris = (await MC.call("barris:list", { unitId: ctx.unitId, status: "disponivel" })) || [];
     selBarril.innerHTML = barris.length
@@ -22,9 +27,8 @@
       .join("");
   }
 
-  async function loadTable() {
-    const list = await MC.run(() => MC.call("transfer:list", { unitId: ctx.unitId }));
-    if (!list) return;
+  function renderTable() {
+    const list = sorter.apply(transfers);
     tbody.innerHTML = list.length
       ? list.map((t) => {
           let act = "";
@@ -40,6 +44,13 @@
             <td><div class="row-actions">${act}</div></td></tr>`;
         }).join("")
       : `<tr><td colspan="6" class="table-empty">Nenhuma transferência registrada para esta unidade.</td></tr>`;
+  }
+
+  async function loadTable() {
+    const list = await MC.run(() => MC.call("transfer:list", { unitId: ctx.unitId }));
+    if (!list) return;
+    transfers = list;
+    renderTable();
   }
 
   const reload = () => { loadForm(); loadTable(); MCLayout.refreshAlerts(); };

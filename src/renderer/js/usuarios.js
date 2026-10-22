@@ -24,11 +24,13 @@
   }
 
   let users = [];
-  async function load() {
-    const list = await MC.run(() => MC.call("users:list"));
-    if (!list) return;
-    users = list;
-    tbody.innerHTML = list.map((u) => {
+  const sorter = MC.sortable(document.querySelector(".table-card table"), {
+    0: (u) => u.nome, 1: (u) => u.email || u.usuario, 2: (u) => u.cargo,
+    3: (u) => (u.cargo === "admin" ? "Todas" : u.unidades.join(", ")), 4: (u) => situacao(u)[1],
+  }, { key: "usuarios", onChange: () => render() });
+
+  function render() {
+    tbody.innerHTML = sorter.apply(users).map((u) => {
       const [cls, label] = situacao(u);
       const quiosques = u.cargo === "admin" ? "Todas" : u.unidades.length ? MC.esc(u.unidades.join(", ")) : '<span class="t-muted">Nenhuma</span>';
       return `<tr>
@@ -42,6 +44,13 @@
           ${u.id === ctx.user.id ? "" : `<button class="btn-ghost ${u.ativo ? "btn-ghost--danger" : ""}" data-act="toggle" data-id="${u.id}">${u.ativo ? "Desativar" : "Reativar"}</button>`}
         </div></td></tr>`;
     }).join("");
+  }
+
+  async function load() {
+    const list = await MC.run(() => MC.call("users:list"));
+    if (!list) return;
+    users = list;
+    render();
   }
 
   document.getElementById("formUser").addEventListener("submit", async (e) => {

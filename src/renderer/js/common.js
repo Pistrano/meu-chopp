@@ -10,7 +10,7 @@ const MC = (() => {
     const res = await window.api.invoke(channel, payload);
     if (!res.ok) {
       const page = location.pathname;
-      if (res.code === "SESSION" && !page.endsWith("index.html")) location.href = "index.html?expirada=1";
+      if (res.code === "SESSION" && !page.endsWith("index.html")) { clearRemembered(); location.href = "index.html?expirada=1"; }
       if (res.code === "MUST_CHANGE" && !page.endsWith("primeiro-acesso.html")) location.href = "primeiro-acesso.html";
       const err = new Error(res.error);
       err.code = res.code;
@@ -236,6 +236,80 @@ const MC = (() => {
     });
   }
 
+  /* ---------- Filtros e ordem lembrados ----------
+     Ficam no sessionStorage: valem enquanto a janela estiver aberta (dá para ir de uma aba a outra
+     e voltar sem perder a busca) e somem ao fechar ou ao sair do sistema (outra pessoa no mesmo PC
+     não herda a tela de quem saiu). Nada disso vai para o servidor. */
+  const MEM = "bf:";
+  const memGet = (k) => { try { return JSON.parse(sessionStorage.getItem(MEM + k)); } catch (_) { return null; } };
+  const memSet = (k, v) => { try { sessionStorage.setItem(MEM + k, JSON.stringify(v)); } catch (_) { /* sem armazenamento: só não lembra */ } };
+  function clearRemembered() {
+    try { Object.keys(sessionStorage).filter((k) => k.startsWith(MEM)).forEach((k) => sessionStorage.removeItem(k)); } catch (_) { /* ignora */ }
+  }
+
+  /* fields: { nome: elemento } (campo de busca, select de filtro...). Chame ANTES da primeira carga da lista. */
+  function rememberFields(page, fields) {
+    const key = `filtros:${page}`;
+    const saved = memGet(key) || {};
+    Object.entries(fields).forEach(([name, el]) => {
+      if (typeof saved[name] !== "string") return;
+      el.value = saved[name];
+      if (el.tagName === "SELECT" && el.selectedIndex < 0) el.selectedIndex = 0; // opção que não existe mais
+    });
+    const save = () => memSet(key, Object.fromEntries(Object.entries(fields).map(([n, el]) => [n, el.value])));
+    Object.values(fields).forEach((el) => { el.addEventListener("input", save); el.addEventListener("change", save); });
+  }
+
+  /* ---------- Ordenar tabelas clicando no cabeçalho ----------
+     columns: { posição da coluna: (linha) => valor para ordenar }. As colunas que não entram (ações,
+     observações) ficam como estão. Clique: crescente, depois decrescente, depois ordem original.
+     Vazios ficam sempre no fim. Retorna { apply(rows) }: use no lugar da lista ao desenhar a tabela.
+     A ordem vale para as linhas já carregadas (o servidor continua devolvendo o que foi pedido). */
+  const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+  function sortable(table, columns, { key, onChange } = {}) {
+    const storeKey = key ? `ordem:${key}` : null;
+    let state = storeKey ? memGet(storeKey) : null;
+    if (state && !columns[state.col]) state = null;
+    const ths = [...table.querySelectorAll("thead th")];
+    ths.forEach((th, i) => {
+      if (!columns[i]) return;
+      th.innerHTML = `<button type="button" class="th-sort" data-col="${i}" title="Ordenar por ${esc(th.textContent.trim())}">${esc(th.textContent.trim())}</button>`;
+    });
+    const paint = () => ths.forEach((th, i) => {
+      if (!columns[i]) return;
+      if (state && state.col === i) th.setAttribute("aria-sort", state.dir === "asc" ? "ascending" : "descending");
+      else th.removeAttribute("aria-sort");
+    });
+    table.querySelector("thead").addEventListener("click", (e) => {
+      const btn = e.target.closest(".th-sort");
+      if (!btn) return;
+      const col = Number(btn.dataset.col);
+      if (!state || state.col !== col) state = { col, dir: "asc" };
+      else if (state.dir === "asc") state = { col, dir: "desc" };
+      else state = null;
+      if (storeKey) memSet(storeKey, state);
+      paint();
+      if (onChange) onChange();
+    });
+    paint();
+
+    function apply(rows) {
+      if (!state) return rows;
+      const get = columns[state.col];
+      const sign = state.dir === "asc" ? 1 : -1;
+      const blank = (v) => v == null || v === "";
+      return rows
+        .map((row, i) => ({ row, i, v: get(row) }))
+        .sort((a, b) => {
+          if (blank(a.v) || blank(b.v)) return blank(a.v) && blank(b.v) ? a.i - b.i : blank(a.v) ? 1 : -1; // vazio no fim
+          const c = typeof a.v === "number" && typeof b.v === "number" ? a.v - b.v : collator.compare(String(a.v), String(b.v));
+          return c ? c * sign : a.i - b.i;
+        })
+        .map((x) => x.row);
+    }
+    return { apply };
+  }
+
   /* ---------- Tabelas no celular ----------
      Copia o título de cada coluna para as células (data-label). No celular o CSS
      usa isso para mostrar cada linha como um cartão ("Estilo: Pilsen"), sem precisar
@@ -264,5 +338,6 @@ const MC = (() => {
   return {
     OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, chopeLabel, fmtDate, fmtDia, validadeBadge, toast, run,
     bindPasswordRules, dialog, showSecret, notice, confirm, openOverlay, maskCnpj,
+    rememberFields, sortable, clearRemembered,
   };
 })();

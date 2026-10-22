@@ -9,9 +9,16 @@
 
   const filters = () => ({ unitId: ctx.unitId, q: q.value, operacao: operacao.value });
 
-  async function load() {
-    const list = await MC.run(() => MC.call("history:list", filters()));
-    if (!list) return;
+  // Busca e filtro lembrados ao trocar de aba; colunas ordenam ao clicar no título (sobre as linhas carregadas)
+  MC.rememberFields("historico", { q, operacao });
+  let movs = [];
+  const sorter = MC.sortable(document.querySelector("#tabMov table"), {
+    0: (m) => m.criado_em, 1: (m) => m.codigo, 2: (m) => MC.OP_LABELS[m.operacao],
+    3: (m) => m.origem || ctx.config.fornecedor, 4: (m) => m.torneira_numero, 5: (m) => m.responsavel,
+  }, { key: "historico", onChange: () => render() });
+
+  function render() {
+    const list = sorter.apply(movs);
     tbody.innerHTML = list.length
       ? list.map((m) => {
           const origem = m.origem || ctx.config.fornecedor;
@@ -23,6 +30,13 @@
             <td>${rota}</td><td>${m.torneira_numero ? `Torneira ${m.torneira_numero}` : '<span class="t-muted">—</span>'}</td><td>${MC.esc(m.responsavel)}</td><td class="t-muted">${MC.esc(m.observacao || "")}</td></tr>`;
         }).join("")
       : `<tr><td colspan="7" class="table-empty">Nenhuma movimentação encontrada com estes filtros.</td></tr>`;
+  }
+
+  async function load() {
+    const list = await MC.run(() => MC.call("history:list", filters()));
+    if (!list) return;
+    movs = list;
+    render();
   }
 
   async function loadAudit() {

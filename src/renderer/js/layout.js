@@ -74,6 +74,7 @@ const MCLayout = (() => {
             </span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item" id="btnTema" type="button"></button></li>
             <li><button class="dropdown-item" id="btnChangePwd" type="button">Alterar minha senha</button></li>
             <li><button class="dropdown-item" id="btnLogout" type="button">Sair</button></li>
           </ul>
@@ -82,6 +83,17 @@ const MCLayout = (() => {
 
     document.getElementById("btnLogout").addEventListener("click", () => BarrilFacilAuth.logout());
     document.getElementById("btnChangePwd").addEventListener("click", changePassword);
+
+    // Tema: Automático (segue o Windows) -> Claro -> Escuro. Fica salvo só neste aparelho.
+    const btnTema = document.getElementById("btnTema");
+    const rotuloTema = () => { btnTema.textContent = `Tema: ${window.BFTema ? window.BFTema.rotulo() : "Automático"}`; };
+    rotuloTema();
+    btnTema.addEventListener("click", () => {
+      if (!window.BFTema) return;
+      const modo = window.BFTema.proximo();
+      rotuloTema();
+      MC.toast(`Tema: ${window.BFTema.rotulo(modo)}.`);
+    });
   }
 
   function changePassword() {
@@ -111,6 +123,7 @@ const MCLayout = (() => {
       clearTimeout(idleTimer);
       idleTimer = setTimeout(async () => {
         try { await window.api.invoke("auth:logout"); } catch (_) {}
+        MC.clearRemembered();
         window.location.href = "index.html?expirada=1";
       }, IDLE_MS);
     };

@@ -12,6 +12,13 @@
   const NOVO = "__novo"; // última opção dos selects: cadastrar um chope/estilo novo
   let rows = [];
 
+  // Busca e filtro de status ficam lembrados ao trocar de aba; as colunas ordenam ao clicar no título
+  MC.rememberFields("barris", { q, status });
+  const sorter = MC.sortable(document.querySelector(".table-card table"), {
+    0: (b) => b.codigo, 1: (b) => MC.chopeLabel(b), 2: (b) => b.tamanho_l, 3: (b) => b.validade,
+    4: (b) => MC.STATUS_LABELS[b.status], 5: (b) => b.torneira_numero,
+  }, { key: "barris", onChange: () => render() });
+
   /* ---------- Chope do barril (catálogo) ---------- */
   async function loadChopes(selectId) {
     const list = await MC.run(() => MC.call("chopes:list"));
@@ -92,12 +99,8 @@
     return `<span class="t-muted">—</span>`;
   }
 
-  async function load() {
-    const unit = ctx.units.find((u) => u.id === ctx.unitId);
-    document.getElementById("subtitle").textContent = `Estoque de ${unit.nome}.`;
-    const list = await MC.run(() => MC.call("barris:list", { unitId: ctx.unitId, q: q.value, status: status.value }));
-    if (!list) return;
-    rows = list;
+  function render() {
+    const list = sorter.apply(rows);
     tbody.innerHTML = list.length
       ? list.map((b) => `<tr>
           <td class="t-strong">#${MC.esc(b.codigo)}</td>
@@ -110,6 +113,15 @@
           <td>${tapCell(b)}</td>
           <td><div class="row-actions">${actions(b)}</div></td></tr>`).join("")
       : `<tr><td colspan="7" class="table-empty">Nenhum barril encontrado nesta unidade.</td></tr>`;
+  }
+
+  async function load() {
+    const unit = ctx.units.find((u) => u.id === ctx.unitId);
+    document.getElementById("subtitle").textContent = `Estoque de ${unit.nome}.`;
+    const list = await MC.run(() => MC.call("barris:list", { unitId: ctx.unitId, q: q.value, status: status.value }));
+    if (!list) return;
+    rows = list;
+    render();
   }
 
   /* ---------- Engate: escolher uma torneira livre da unidade ---------- */

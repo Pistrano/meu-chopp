@@ -7,12 +7,14 @@
     "server": "node --use-system-ca src/server/server.js",
     "test": "node --test",
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:publicar": "electron-builder --publish always"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^18.0.8"
+    "dotenv": "^18.0.8",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -34,8 +36,15 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "artifactName": "${productName} Setup.${ext}"
-    }
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Pistrano",
+        "repo": "meu-chopp"
+      }
+    ]
   },
   "engines": {
     "node": ">=18"

@@ -4,12 +4,19 @@
    fica guardado neste aparelho. O endereço do servidor é informado
    uma vez e fica salvo em config.json.
    ========================================================== */
-const { app, BrowserWindow, Menu, ipcMain, net } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, net, dialog, nativeTheme } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
 const CONNECT_PAGE = path.join(__dirname, "connect.html");
 let win = null;
+
+/* Atualização automática do aplicativo (electron-updater, via GitHub Releases).
+   Só funciona no aplicativo instalado (npm run dist). Se o pacote não estiver instalado ou algo falhar,
+   o app segue funcionando normalmente: atualizar nunca pode impedir o uso. */
+let autoUpdater = null;
+try { ({ autoUpdater } = require("electron-updater")); } catch (_) { autoUpdater = null; }
+let verificacaoManual = false; // true só quando a pessoa pede em "Verificar atualizações…"
 
 const configFile = () => path.join(app.getPath("userData"), "config.json");
 
@@ -58,13 +65,56 @@ function openApp() {
   win.loadURL(cfg.serverUrl).catch(() => {}); // falhas aparecem em did-fail-load
 }
 
+function setupAutoUpdate() {
+  if (!app.isPackaged || !autoUpdater) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true; // se a pessoa ignorar o aviso, instala ao fechar o app
+
+  const caixa = (opts) => dialog.showMessageBox(win, { type: "info", buttons: ["OK"], ...opts });
+
+  autoUpdater.on("update-available", (info) => {
+    if (verificacaoManual) caixa({ title: "BarrilFacil", message: `Versão ${info.version} encontrada.`, detail: "Ela está sendo baixada em segundo plano. Você será avisado quando estiver pronta." });
+  });
+  autoUpdater.on("update-not-available", () => {
+    if (verificacaoManual) caixa({ title: "BarrilFacil", message: "Você já está na versão mais recente.", detail: `Versão ${app.getVersion()}.` });
+    verificacaoManual = false;
+  });
+  autoUpdater.on("error", (err) => {
+    console.error("[atualização]", err && err.message);
+    if (verificacaoManual) caixa({ type: "warning", title: "BarrilFacil", message: "Não foi possível verificar atualizações.", detail: "Confira a internet deste aparelho e tente de novo mais tarde." });
+    verificacaoManual = false;
+  });
+  autoUpdater.on("update-downloaded", async (info) => {
+    verificacaoManual = false;
+    // Não reinicia sozinho: poderia interromper alguém no meio de um engate ou recolhimento.
+    const { response } = await dialog.showMessageBox(win, {
+      type: "info", title: "BarrilFacil", buttons: ["Reiniciar agora", "Depois"], defaultId: 1, cancelId: 1,
+      message: `A versão ${info.version} está pronta.`,
+      detail: "Reinicie o aplicativo para atualizar. Se escolher \"Depois\", a atualização é instalada quando o aplicativo for fechado.",
+    });
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
+
+  const verificar = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(verificar, 10 * 1000);                 // logo depois de abrir
+  setInterval(verificar, 6 * 60 * 60 * 1000);       // e a cada 6 horas (o tablet/PC da unidade fica ligado o dia todo)
+}
+
+function verificarAtualizacoes() {
+  const aviso = (message) => dialog.showMessageBox(win, { type: "info", buttons: ["OK"], title: "BarrilFacil", message, detail: `Versão ${app.getVersion()}.` });
+  if (!app.isPackaged) return aviso("A atualização automática só funciona no aplicativo instalado.");
+  if (!autoUpdater) return aviso("Esta versão do aplicativo foi gerada sem o componente de atualização automática.");
+  verificacaoManual = true;
+  return autoUpdater.checkForUpdates().catch(() => {});
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
     minHeight: 560,
-    backgroundColor: "#f4f5f7",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f1115" : "#f4f5f7", // evita o clarão branco ao abrir no tema escuro
     title: "BarrilFacil",
     icon: path.join(__dirname, "..", "..", "build", "icon.ico"),
     autoHideMenuBar: true,
@@ -76,6 +126,9 @@ function createWindow() {
       { label: "Alterar servidor…", click: () => showConnect() },
       { label: "Recarregar", accelerator: "CmdOrCtrl+R", click: () => win.webContents.reload() },
       { label: "Tela cheia", accelerator: "F11", click: () => win.setFullScreen(!win.isFullScreen()) },
+      { type: "separator" },
+      { label: `Versão ${app.getVersion()}`, enabled: false },
+      { label: "Verificar atualizações…", click: () => verificarAtualizacoes() },
       { type: "separator" },
       { label: "Sair", role: "quit" },
     ] },
@@ -96,6 +149,7 @@ function createWindow() {
   });
 
   openApp();
+  setupAutoUpdate();
 }
 
 /* A tela de conexão (arquivo local) é a única que pode usar estes comandos */

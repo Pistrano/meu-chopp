@@ -42,6 +42,18 @@
 .table-card th { text-align: left; font-size: .8rem; color: var(--mc-muted); font-weight: 700; padding: .75rem 1rem; border-bottom: 1px solid var(--mc-line); white-space: nowrap; }
 .table-card td { padding: .75rem 1rem; border-top: 1px solid var(--mc-line); vertical-align: middle; }
 .table-card tbody tr:first-child td { border-top: 0; }
+/* Cabeçalho clicável (ordenar). A seta vem do CSS para não entrar no texto do título */
+.th-sort {
+  display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .3rem; margin: -.15rem -.3rem;
+  font: inherit; font-weight: 700; color: inherit; border-radius: 6px; white-space: nowrap;
+}
+.th-sort::after { content: "\2195"; font-size: .85em; opacity: .35; }
+.th-sort:hover { color: var(--mc-text); background: var(--mc-gold-soft); }
+.th-sort:hover::after { opacity: .8; }
+th[aria-sort] .th-sort { color: var(--mc-text); }
+th[aria-sort="ascending"] .th-sort::after { content: "\25B2"; font-size: .65em; opacity: 1; color: var(--mc-gold-dark); }
+th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em; opacity: 1; color: var(--mc-gold-dark); }
+
 .table-card .t-strong { font-weight: 700; }
 .table-card .t-muted { color: var(--mc-muted); font-size: .82rem; }
 .table-empty { padding: 2.2rem 1rem; text-align: center; color: var(--mc-muted); }

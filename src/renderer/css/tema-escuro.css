@@ -1,0 +1,80 @@
+/* ==========================================================
+   BarrilFacil — tema escuro
+   Ativado por js/tema.js (<html data-tema="escuro">). Carregue DEPOIS dos outros CSS.
+   Só troca os tokens de cor e corrige as poucas cores fixas que existiam nos outros arquivos.
+   O cabeçalho e o painel da marca já eram escuros: continuam iguais.
+   ========================================================== */
+:root[data-tema="escuro"] {
+  color-scheme: dark; /* campos, calendário, barras de rolagem nativos em escuro */
+
+  --mc-bg: #0f1115;
+  --mc-surface: #1a1d24;
+  --mc-text: #e6e8ec;
+  --mc-muted: #9ba4b3;
+  --mc-line: #343a46;
+
+  --mc-gold-soft: #3a2f16;
+  --mc-gold-dark: #e6b95a;     /* usado como cor de texto/borda: precisa ser claro sobre fundo escuro */
+
+  --mc-danger: #f2887f;
+  --mc-danger-soft: #3b1f1e;
+  --mc-success: #5cc98f;
+  --mc-success-soft: #15301f;
+  --mc-info: #86b4d6;
+  --mc-info-soft: #1c2c39;
+}
+
+/* Cabeçalho: separa do fundo, que agora tem quase a mesma cor */
+:root[data-tema="escuro"] .app-header { border-bottom: 1px solid #2a2f39; }
+
+/* Campos */
+:root[data-tema="escuro"] .form-control,
+:root[data-tema="escuro"] .form-select { background-color: #13161c; border-color: var(--mc-line); color: var(--mc-text); }
+:root[data-tema="escuro"] .form-control::placeholder { color: #7f8897; }
+:root[data-tema="escuro"] .form-control:disabled,
+:root[data-tema="escuro"] .form-select:disabled { background-color: #232832; color: var(--mc-muted); }
+:root[data-tema="escuro"] .form-select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23aab2c0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+:root[data-tema="escuro"] .toggle-password:hover { color: var(--mc-text); }
+
+/* Botão principal: no hover o dourado escuro com texto branco ficava ilegível sobre dourado claro */
+:root[data-tema="escuro"] .btn-mc:hover,
+:root[data-tema="escuro"] .btn-mc:focus { background: #ecc57a; border-color: #ecc57a; color: var(--mc-ink); }
+:root[data-tema="escuro"] .btn-mc:active { background: #f1d08f; border-color: #f1d08f; color: var(--mc-ink); }
+
+/* Menus suspensos */
+:root[data-tema="escuro"] .dropdown-menu { background-color: var(--mc-surface); border-color: var(--mc-line); box-shadow: 0 8px 28px rgba(0, 0, 0, .55); }
+:root[data-tema="escuro"] .dropdown-item:hover,
+:root[data-tema="escuro"] .dropdown-item:focus { background-color: #262b35; color: var(--mc-text); }
+:root[data-tema="escuro"] .nav-more-menu .dropdown-item.active { color: var(--mc-text); }
+
+/* Janelas de diálogo e avisos */
+:root[data-tema="escuro"] .mc-overlay { background: rgba(0, 0, 0, .62); }
+:root[data-tema="escuro"] .mc-modal { border: 1px solid var(--mc-line); }
+:root[data-tema="escuro"] .toast-mc { box-shadow: 0 6px 24px rgba(0, 0, 0, .55); }
+:root[data-tema="escuro"] .toast-mc--ok { border-color: #245a3b; }
+:root[data-tema="escuro"] .toast-mc--err { border-color: #6b2f2c; }
+:root[data-tema="escuro"] .alert-error { border-color: #6b2f2c; }
+:root[data-tema="escuro"] .alert-success { border-color: #245a3b; }
+:root[data-tema="escuro"] .alerts-badge { background: #c93b32; }
+
+/* Selos */
+:root[data-tema="escuro"] .op-badge--em_uso,
+:root[data-tema="escuro"] .op-badge--utilizacao { background: var(--mc-gold-soft); color: var(--mc-gold-dark); }
+:root[data-tema="escuro"] .op-badge--cancelada,
+:root[data-tema="escuro"] .op-badge--inativo,
+:root[data-tema="escuro"] .op-badge--recolhido,
+:root[data-tema="escuro"] .op-badge--recolhimento { background: #2a2f39; color: var(--mc-muted); }
+:root[data-tema="escuro"] .op-badge--vence { background: #4a3a10; color: #f2cf7a; }
+
+/* Painel: cartões de indicadores */
+:root[data-tema="escuro"] .stat-card--total { --mc-accent: #aab2c0; --mc-accent-soft: #2a2f39; }
+:root[data-tema="escuro"] .stat-card--uso { --mc-accent-soft: var(--mc-gold-soft); }
+
+/* Tabelas, avisos e listas */
+:root[data-tema="escuro"] .table-card tr.is-selected td { background: #2a2519; }
+:root[data-tema="escuro"] .warn-note { color: #f0d9a0; border-color: #5a4619; }
+:root[data-tema="escuro"] .radio-item.is-disabled { background: #13161c; }
+:root[data-tema="escuro"] .tap-age { color: var(--mc-gold-dark); }
+:root[data-tema="escuro"] .tap-history li.is-current .th-line { color: #e8d3a0; }

@@ -80,9 +80,30 @@ Não coloque na internet sem HTTPS.
 
 - **Tablet Android / celular:** abra o endereço no Chrome > menu ⋮ > *Instalar app* (ou *Adicionar à tela inicial*).
 - **iPad / iPhone:** abra no Safari > Compartilhar > *Adicionar à Tela de Início*.
-- **PC ou tablet Windows:** use o aplicativo `BarrilFacil Setup.exe` (gere com `npm run dist`). Na primeira abertura ele
+- **PC ou tablet Windows:** use o aplicativo `BarrilFacil-Setup-<versão>.exe` (gere com `npm run dist`). Na primeira abertura ele
   pede o endereço do servidor. Marque *Abrir em tela cheia* para deixar a tela da unidade travada no sistema (F11 alterna;
   tecla Alt abre o menu com *Alterar servidor*). Também funciona só pelo navegador.
+
+### Atualização automática do aplicativo Windows
+
+As telas vêm do servidor, então **mudanças nas telas chegam sozinhas** a todos os aparelhos assim que o servidor é atualizado
+(basta recarregar). A atualização automática do aplicativo serve só para o "casco" do Windows (janela, menu, ícone, tela de conexão).
+
+O aplicativo instalado procura versão nova 10 segundos depois de abrir e a cada 6 horas, baixa em segundo plano e **avisa**
+("Reiniciar agora" / "Depois"). Se a pessoa escolher *Depois*, instala quando o aplicativo for fechado. Nunca reinicia sozinho
+no meio do uso. No menu (tecla Alt) há *Verificar atualizações…* e a versão instalada.
+
+Para publicar uma versão nova do aplicativo (o repositório no GitHub precisa ser público):
+
+1. Uma única vez, na pasta do projeto: `npm install electron-updater` (atualiza o `package.json` e o `package-lock.json`; faça o commit dos dois).
+2. Aumente o `"version"` no `package.json` (ex.: `2.0.0` para `2.0.1`).
+3. Gere um token do GitHub com permissão de escrita em *Contents* e rode (PowerShell):
+   ```
+   $env:GH_TOKEN="seu_token"; npm run dist:publicar
+   ```
+4. No GitHub, abra *Releases*, confira o rascunho criado e clique em **Publish release**. Só depois disso os aparelhos enxergam a versão.
+
+Os aparelhos que já têm o aplicativo instalado **sem** essa função precisam instalar uma vez o novo `.exe` à mão; dali em diante atualizam sozinhos.
 
 Sem internet o sistema não abre dados (aparece o aviso *Sem conexão* e ele tenta de novo sozinho). Nada se perde: o que já foi
 registrado está no banco.
@@ -101,6 +122,18 @@ registrado está no banco.
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
 - No celular e no tablet, o menu fica numa barra embaixo e o Mais vira ☰.
+
+## Conforto de uso
+
+- **Tema claro/escuro:** menu do usuário (canto superior direito) > *Tema*. Alterna entre *Automático* (segue o Windows ou o
+  navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
+  e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
+- **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências e Usuários). Primeiro clique ordena de forma
+  crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
+  para as linhas carregadas (até 300), não para o banco inteiro.
+- **Filtros lembrados:** a busca e o filtro de Barris e do Histórico, e a ordem escolhida, continuam ao trocar de aba e voltar.
+  Ficam só enquanto a janela estiver aberta e são apagados ao entrar e ao sair do sistema. Para usar em outra tela, chame
+  `MC.rememberFields("nome-da-tela", { q, status })` antes da primeira carga e `MC.sortable(tabela, colunas, opções)` ao desenhar a lista.
 
 ## Unidades e torneiras
 
