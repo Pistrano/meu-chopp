@@ -167,7 +167,7 @@ const MCLayout = (() => {
     badge.classList.remove("d-none");
     menu.innerHTML =
       `<div class="alerts-menu-header">Alertas</div>` +
-      alerts.map((a) => `<div class="alert-item${a.nivel === "erro" ? " alert-item--erro" : ""}"><span class="alert-icon">${ICON_WARN}</span><span>${MC.esc(a.texto)}</span></div>`).join("");
+      alerts.map((a) => `<div class="alert-item${a.nivel === "erro" ? " alert-item--erro" : a.nivel === "aviso" ? " alert-item--aviso" : ""}"><span class="alert-icon">${ICON_WARN}</span><span>${MC.esc(a.texto)}</span></div>`).join("");
   }
 
   function selectUnit(id) {
@@ -231,7 +231,13 @@ const MCLayout = (() => {
       return null;
     }
 
-    if (ctx.unitId) renderAlerts();
+    if (ctx.unitId) {
+      renderAlerts();
+      window.setInterval(() => { if (document.visibilityState === "visible") renderAlerts(); }, 60 * 1000);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") renderAlerts();
+      });
+    }
     return ctx;
   }
 

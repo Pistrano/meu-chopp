@@ -892,6 +892,28 @@ function registerHandlers() {
     const vazios = await rpc("fn_alertas_vazios", { p_unit: unit });
     vazios.forEach((v) => alerts.push({ texto: `Barril #${v.codigo} vazio aguardando recolhimento há ${v.dias} dias` }));
 
+    // Estoque baixo por chope (considera apenas tipos já presentes na unidade).
+    const estoque = ok(await supabase.from("barris")
+      .select("chope_id, chope_nome, estilo, status")
+      .eq("unidade_id", unit)
+      .neq("status", "recolhido")
+      .limit(5000));
+    const porChope = new Map();
+    estoque.forEach((b) => {
+      const chave = b.chope_id || `${b.chope_nome || ""}|${b.estilo || ""}`;
+      const item = porChope.get(chave) || { nome: b.chope_nome || b.estilo || "Chope", disponiveis: 0 };
+      if (b.status === "disponivel") item.disponiveis += 1;
+      porChope.set(chave, item);
+    });
+    porChope.forEach((b) => {
+      if (b.disponiveis <= 2) alerts.push({
+        nivel: b.disponiveis === 0 ? "erro" : "aviso",
+        texto: b.disponiveis === 0
+          ? `Estoque baixo: nenhum barril disponível de ${b.nome} nesta unidade.`
+          : `Estoque baixo: restam ${b.disponiveis} barris disponíveis de ${b.nome} nesta unidade.`,
+      });
+    });
+
     return alerts;
   });
 
@@ -921,6 +943,35 @@ function registerHandlers() {
         torneira_numero: ativo && ativo.torneiras ? ativo.torneiras.numero : null,
       };
     });
+  });
+
+  handle("barris:exportStock", async ({ unitId }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    const rows = ok(await supabase.from("barris")
+      .select("codigo, chope_nome, estilo, tamanho_l, validade, status, unidades(nome_curto), engates(retirado_em, torneiras(numero))")
+      .eq("unidade_id", unit)
+      .neq("status", "recolhido")
+      .order("codigo", { ascending: true })
+      .limit(5000));
+    const labels = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Vazio" };
+    const esc = (v) => {
+      let t = String(v ?? "");
+      if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+    const header = ["Barril", "Chope", "Estilo", "Tamanho (L)", "Situação", "Validade", "Unidade", "Torneira"];
+    const lines = rows.map((b) => {
+      const engate = (b.engates || []).find((e) => e.retirado_em === null);
+      return ["#" + b.codigo, b.chope_nome, b.estilo, b.tamanho_l, labels[b.status] || b.status, b.validade,
+        b.unidades ? b.unidades.nome_curto : "", engate && engate.torneiras ? `Torneira ${engate.torneiras.numero}` : ""]
+        .map(esc).join(";");
+    });
+    await audit(ctx, "relatorio_estoque_exportado", `${rows.length} barris`);
+    return {
+      filename: `relatorio-estoque-${hojeTZ()}.csv`,
+      csv: "\uFEFF" + [header.map(esc).join(";"), ...lines].join("\r\n"),
+      total: rows.length,
+    };
   });
 
   /* Entrada do barril: chope do catálogo + validade informada (olhando a data no barril).

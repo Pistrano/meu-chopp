@@ -8,12 +8,14 @@
   const status = document.getElementById("status");
   const selChope = document.getElementById("chope");
   const validade = document.getElementById("validade");
+  const statusInicial = new URLSearchParams(location.search).get("status");
   if (ctx.config.hoje) validade.min = ctx.config.hoje; // sem valor pré-preenchido: a pessoa olha a data no barril
   const NOVO = "__novo"; // última opção dos selects: cadastrar um chope/estilo novo
   let rows = [];
 
   // Busca e filtro de status ficam lembrados ao trocar de aba; as colunas ordenam ao clicar no título
   MC.rememberFields("barris", { q, status });
+  if (["disponivel", "em_uso", "em_transferencia", "esgotado", "recolhido"].includes(statusInicial)) status.value = statusInicial;
   const sorter = MC.sortable(document.querySelector(".table-card table"), {
     0: (b) => b.codigo, 1: (b) => MC.chopeLabel(b), 2: (b) => b.tamanho_l, 3: (b) => b.validade,
     4: (b) => MC.STATUS_LABELS[b.status], 5: (b) => b.torneira_numero,
@@ -288,6 +290,17 @@
   });
 
   document.getElementById("btnRecolher").addEventListener("click", recolher);
+
+  document.getElementById("btnExportStock").addEventListener("click", async () => {
+    const r = await MC.run(() => MC.call("barris:exportStock", { unitId: ctx.unitId }));
+    if (!r) return;
+    const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = r.filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    MC.toast(`Relatório do estoque gerado (${r.total} barris).`, "ok");
+  });
 
   document.getElementById("formBarril").addEventListener("submit", async (e) => {
     e.preventDefault();

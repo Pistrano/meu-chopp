@@ -330,4 +330,5 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 
 /* Aviso de barril vencido na lista de alertas */
 .alert-item--erro .alert-icon { color: var(--mc-danger); }
+.alert-item--aviso .alert-icon { color: var(--mc-gold-dark); }
 .tap-validade { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; color: var(--mc-muted); margin-top: .2rem; }

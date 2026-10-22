@@ -16,6 +16,13 @@
   const movementList = document.getElementById("movementList");
   let loading = false;
   let reloadPending = false;
+  const filtros = {
+    total: "",
+    disponivel: "disponivel",
+    uso: "em_uso",
+    transfer: "em_transferencia",
+    esgotado: "esgotado",
+  };
 
   function renderStats(s) {
     const cards = [
@@ -26,10 +33,10 @@
       { key: "esgotado", label: "Vazios para recolher", value: s.vazios, icon: icons.esgotado },
     ];
     statsGrid.innerHTML = cards
-      .map((c) => `<div class="col"><div class="stat-card stat-card--${c.key}">
+      .map((c) => `<div class="col"><a class="stat-link" href="barris.html${filtros[c.key] ? `?status=${filtros[c.key]}` : ""}" aria-label="Ver ${c.value} barris: ${c.label}"><div class="stat-card stat-card--${c.key}">
           <span class="stat-icon">${c.icon}</span>
           <span><span class="stat-value">${c.value}</span><span class="stat-label">${c.label}</span></span>
-        </div></div>`)
+        </div></a></div>`)
       .join("");
   }
 

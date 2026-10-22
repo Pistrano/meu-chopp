@@ -130,6 +130,8 @@ registrado está no banco.
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
 - **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras e geração de senha temporária pedem confirmação antes de alterar os dados.
+- **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
+- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências e Usuários). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.
