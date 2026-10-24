@@ -706,6 +706,7 @@ function registerHandlers() {
         id: t.id,
         numero: t.numero,
         ocupada: t.ocupada,
+        barril_id: t.ocupada ? t.barril_id : null, // para retirar o barril direto pela aba Torneiras
         codigo: t.ocupada ? t.codigo : null,
         chope_nome: t.ocupada ? t.chope_nome : null,
         estilo: t.ocupada ? t.estilo : null,

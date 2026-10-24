@@ -33,9 +33,9 @@
       { key: "esgotado", label: "Vazios para recolher", value: s.vazios, icon: icons.esgotado },
     ];
     statsGrid.innerHTML = cards
-      .map((c) => `<div class="col"><a class="stat-link" href="barris.html${filtros[c.key] ? `?status=${filtros[c.key]}` : ""}" aria-label="Ver ${c.value} barris: ${c.label}"><div class="stat-card stat-card--${c.key}">
+      .map((c) => `<div class="col stat-col--${c.key}"><a class="stat-link" href="barris.html${filtros[c.key] ? `?status=${filtros[c.key]}` : ""}" aria-label="Ver ${c.value} barris: ${c.label}"><div class="stat-card stat-card--${c.key}">
           <span class="stat-icon">${c.icon}</span>
-          <span><span class="stat-value">${c.value}</span><span class="stat-label">${c.label}</span></span>
+          <span class="stat-text"><span class="stat-value">${c.value}</span><span class="stat-label">${c.label}</span></span>
         </div></a></div>`)
       .join("");
   }
