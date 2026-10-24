@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="icon" href="assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Relatório de barris | BarrilFacil</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <link href="css/tema-escuro.css" rel="stylesheet">
+  <link href="css/relatorio.css" rel="stylesheet">
+  <script src="js/tema.js"></script>
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Relatório de barris</h1><p>Quantos barris de cada chope chegaram, foram usados e saíram no período.</p></div>
+      <div class="row-actions rel-acoes">
+        <button id="btnCsv" class="btn-ghost" type="button">Exportar CSV</button>
+        <button id="btnPrint" class="btn btn-mc btn-mc-sm" type="button">Imprimir</button>
+      </div>
+    </div>
+
+    <!-- Só aparece na impressão: o filtro fica escondido no papel -->
+    <div id="printHead" class="rel-print-head"></div>
+
+    <section class="panel rel-filtros" aria-label="Filtros do relatório">
+      <div class="rel-campos">
+        <div class="rel-campo rel-campo--unidade">
+          <label class="form-label" for="fUnidade">Unidade</label>
+          <select id="fUnidade" class="form-select"></select>
+        </div>
+        <div class="rel-campo">
+          <label class="form-label" for="fDe">De</label>
+          <input id="fDe" class="form-control" type="date" required>
+        </div>
+        <div class="rel-campo">
+          <label class="form-label" for="fAte">Até</label>
+          <input id="fAte" class="form-control" type="date" required>
+        </div>
+      </div>
+      <div id="atalhos" class="rel-atalhos" role="group" aria-label="Atalhos de período">
+        <button type="button" class="btn-ghost" data-periodo="hoje" aria-pressed="false">Hoje</button>
+        <button type="button" class="btn-ghost" data-periodo="7-dias" aria-pressed="false">Últimos 7 dias</button>
+        <button type="button" class="btn-ghost" data-periodo="este-mes" aria-pressed="false">Este mês</button>
+        <button type="button" class="btn-ghost" data-periodo="mes-passado" aria-pressed="false">Mês passado</button>
+      </div>
+      <p id="relErro" class="rel-erro d-none" role="alert"></p>
+    </section>
+
+    <div class="rel-resumo">
+      <span id="relPeriodo"></span>
+      <span id="relSituacao" class="rel-situacao"></span>
+    </div>
+
+    <div class="table-card rel-tabela">
+      <table id="relTable">
+        <thead>
+          <tr class="rel-faixa" aria-hidden="true"><td colspan="6">No período</td><td colspan="4" id="faixaAgora" class="rel-agora">Situação agora</td></tr>
+          <tr>
+            <th>Estilo / chope</th><th>Recebidos</th><th>Utilizados</th><th>Litros utilizados</th><th>Esvaziados</th><th>Recolhidos</th>
+            <th class="rel-agora rel-agora--ini">Em estoque</th><th class="rel-agora">Engatados</th><th class="rel-agora">Vazios aguardando recolhimento</th><th class="rel-agora">Em transferência</th>
+          </tr>
+        </thead>
+        <tbody id="relBody"><tr><td colspan="10" class="table-empty">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="small-note rel-nota">Utilizado = barril engatado pela primeira vez dentro do período.
+      <span class="rel-dica">Clique no nome de um chope para ver os barris utilizados.</span></p>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/relatorio-barris.js"></script>
+</body>
+</html>

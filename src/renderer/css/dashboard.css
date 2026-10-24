@@ -17,6 +17,9 @@
   margin-bottom: .25rem;
 }
 .greeting p { color: var(--mc-muted); margin-bottom: 1.75rem; }
+/* Atalho para o Relatório de barris (abre em "Este mês") */
+.greeting--acoes { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem 1rem; flex-wrap: wrap; }
+.greeting--acoes .btn-ghost { min-height: 44px; padding: 0 1rem; text-decoration: none; margin-bottom: 1rem; }
 
 /* ---------- Cards de indicadores ---------- */
 .stat-card {

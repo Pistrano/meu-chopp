@@ -116,8 +116,8 @@ registrado está no banco.
 
 ## Menu
 
-- Abas principais, sempre visíveis: **Barris**, **Torneiras**, **Chopes** e **Histórico**.
-- O botão **Mais** abre as outras telas: Painel, Transferências e, para o administrador, Unidades e Usuários.
+- Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências e, para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
@@ -132,7 +132,7 @@ registrado está no banco.
 - **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras e geração de senha temporária pedem confirmação antes de alterar os dados.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
 - **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
-- **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências e Usuários). Primeiro clique ordena de forma
+- **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.
 - **Filtros lembrados:** a busca e o filtro de Barris e do Histórico, e a ordem escolhida, continuam ao trocar de aba e voltar.
@@ -165,6 +165,23 @@ registrado está no banco.
   mostra o histórico). Se o mesmo vasilhame voltar, é um cadastro novo com o mesmo código.
 - O Painel mostra quantos barris estão *Vazios para recolher*, e o sino avisa quando um vazio espera há mais de 3 dias.
 - Datas "de hoje" seguem o fuso `APP_TZ` (padrão `America/Cuiaba`), nunca o horário UTC do servidor.
+
+## Relatório de barris
+
+- Em **Mais > Relatório de barris** (ou no botão *Relatório de barris* do Painel, que abre em *Este mês*). Todos os usuários
+  abrem, cada um vê só as unidades liberadas para ele (uma unidade ou *Todas as minhas*).
+- Período: atalhos *Hoje*, *Últimos 7 dias*, *Este mês* e *Mês passado*, ou as datas *De* e *Até* (os dois dias entram inteiros,
+  no fuso `APP_TZ`). Até 400 dias.
+- Uma linha por chope, agrupada por estilo, com o total de cada estilo e o total geral:
+  - **Recebidos:** barris cadastrados na unidade no período (transferência recebida não conta).
+  - **Utilizados** e **Litros utilizados:** barris engatados pela **primeira vez** no período. O barril engatado em 30/09 e
+    esvaziado em 02/10 conta só em setembro.
+  - **Esvaziados** e **Recolhidos:** retiradas e recolhimentos feitos no período.
+  - **Situação agora:** em estoque, engatados, vazios aguardando recolhimento e em transferência, com a hora da consulta.
+- Tudo é contado por barril (cada cadastro é um ciclo), nunca pelo código, que se repete quando o vasilhame volta.
+- Clicar no nome do chope mostra os barris utilizados no período. *Exportar CSV* e *Imprimir* saem com o período e a unidade.
+- As contas ficam no banco, nas funções `fn_relatorio_barris` e `fn_relatorio_barris_detalhe`
+  (`supabase/migrations/20261023000000_relatorio_barris.sql`).
 
 ## Chopes e estilos
 

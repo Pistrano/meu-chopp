@@ -1,0 +1,109 @@
+/* ==========================================================
+   BarrilFacil — Relatório de barris
+   Só usa os tokens --mc-* (funciona no tema claro e no escuro). Carregue depois de tema-escuro.css.
+   ========================================================== */
+
+/* Filtros: unidade, De, Até e os atalhos de período */
+.rel-filtros { padding: 1rem 1.25rem; }
+.rel-campos { display: flex; gap: .75rem 1rem; flex-wrap: wrap; align-items: flex-start; }
+.rel-campo { display: flex; flex-direction: column; min-width: 150px; }
+.rel-campo--unidade { flex: 1 1 240px; max-width: 340px; }
+.rel-campo .form-label { font-size: .8rem; font-weight: 700; color: var(--mc-muted); margin-bottom: .3rem; }
+.rel-campo .form-control, .rel-campo .form-select { height: 46px; }
+.rel-atalhos { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .85rem; }
+.rel-atalhos .btn-ghost[aria-pressed="true"] { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); color: var(--mc-text); }
+.rel-erro { margin: .75rem 0 0; color: var(--mc-danger); font-weight: 700; font-size: .9rem; }
+
+/* Linha acima da tabela: unidade e período à esquerda, hora da situação à direita */
+.rel-resumo { display: flex; justify-content: space-between; gap: .25rem 1rem; flex-wrap: wrap; margin: 0 0 .6rem; font-weight: 700; }
+.rel-situacao { color: var(--mc-muted); font-weight: 600; }
+
+/* Tabela: 10 colunas, espaçamento um pouco menor que o das outras telas para caber sem rolar */
+.rel-tabela th, .rel-tabela td { padding-left: .65rem; padding-right: .65rem; }
+.rel-tabela th:first-child, .rel-tabela td:first-child { min-width: 190px; padding-left: 1rem; }
+.rel-tabela th { white-space: normal; vertical-align: bottom; }
+.rel-tabela .th-sort { white-space: normal; text-align: left; }
+.rel-tabela td.rel-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rel-tabela th:not(:first-child) { text-align: right; }
+.rel-tabela th:not(:first-child) .th-sort { justify-content: flex-end; text-align: right; }
+/* As colunas da situação agora ficam num bloco à parte (fundo da página), separadas por uma linha */
+.rel-tabela .rel-agora { background: var(--mc-bg); }
+.rel-tabela .rel-agora--ini { border-left: 2px solid var(--mc-line); }
+.rel-faixa td {
+  padding: .5rem 1rem 0; border-top: 0; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mc-muted);
+}
+.rel-faixa td.rel-agora { border-left: 2px solid var(--mc-line); }
+
+.rel-estilo td { font-weight: 700; background: var(--mc-gold-soft); border-top: 2px solid var(--mc-line); }
+.rel-estilo td.rel-agora { background: var(--mc-gold-soft); }
+.rel-estilo-nome { font-family: var(--mc-font-display); }
+.rel-sub { font-size: .75rem; font-weight: 600; color: var(--mc-muted); }
+.rel-tabela .rel-chope td:first-child { padding-left: 2rem; }
+.rel-link {
+  padding: .1rem .3rem; margin: -.1rem -.3rem; border: 0; border-radius: 6px; background: none;
+  font: inherit; font-weight: 600; color: var(--mc-text); text-align: left;
+  text-decoration: underline; text-decoration-color: var(--mc-line); text-underline-offset: 3px;
+}
+.rel-link:hover, .rel-link:focus-visible { background: var(--mc-gold-soft); text-decoration-color: var(--mc-gold-dark); }
+.rel-chope:hover td { background: var(--mc-gold-soft); }
+.rel-total td { font-weight: 700; border-top: 2px solid var(--mc-text); }
+.rel-nota { color: var(--mc-muted); margin-top: .75rem; }
+
+/* Detalhe do chope (janela) */
+.mc-modal--rel { max-width: 860px; }
+.rel-detalhe { margin-top: .25rem; }
+.rel-detalhe td, .rel-detalhe th { white-space: nowrap; }
+
+/* Celular: cada linha vira um cartão em duas colunas; os chopes ficam recuados sob o estilo */
+@media (max-width: 767.98px) {
+  .rel-tabela tbody tr:not(:has(.table-empty)) { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1rem; }
+  .rel-tabela tbody tr td:first-child { grid-column: 1 / -1; text-align: left; min-width: 0; padding-left: 0; border-top: 0; }
+  .rel-tabela tbody tr td:first-child::before { display: none; }
+  /* Cada número como um quadrinho: rótulo em cima, valor embaixo (rótulos longos quebram sem empurrar o valor) */
+  .rel-tabela tbody tr td.rel-num { white-space: normal; text-align: left; padding-left: 0; padding-right: 0; font-weight: 700; }
+  .rel-tabela td.rel-num[data-label]::before { float: none; display: block; margin: 0 0 .1rem; }
+  .rel-tabela .rel-agora, .rel-estilo td.rel-agora { background: transparent; }
+  .rel-tabela .rel-agora--ini { border-left: 0; }
+  .rel-tabela .rel-estilo { background: var(--mc-gold-soft); }
+  .rel-estilo td { background: transparent; border-top: 1px solid var(--mc-line); }
+  .rel-tabela .rel-chope { margin-left: .9rem; width: calc(100% - .9rem); }
+  .rel-tabela .rel-chope td:first-child { padding-left: 0; }
+  .rel-chope:hover td { background: transparent; }
+  .rel-total td { border-top: 1px solid var(--mc-line); }
+  .rel-tabela .rel-total { border: 2px solid var(--mc-text); }
+  .rel-resumo { flex-direction: column; }
+  .mc-modal--rel .rel-detalhe td { white-space: normal; }
+}
+
+/* Cabeçalho da impressão: escondido na tela */
+.rel-print-head { display: none; }
+
+/* Impressão: sem menu, filtros e botões; período e unidade no topo; sempre em cores claras (mesmo no tema escuro) */
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  :root, :root[data-tema="escuro"] {
+    color-scheme: light;
+    --mc-bg: #f2f3f5; --mc-surface: #fff; --mc-text: #111; --mc-muted: #555; --mc-line: #c8ccd2;
+    --mc-gold-soft: #f3ead6; --mc-gold-dark: #8a6416;
+  }
+  body { background: #fff; padding-bottom: 0 !important; }
+  .app-header, .app-nav, .rel-filtros, .rel-acoes, .rel-resumo, .rel-dica, .toast-mc, .mc-overlay { display: none !important; }
+  .dashboard-main { max-width: none; padding: 0; }
+  .page-head { margin-bottom: .5rem; }
+  .page-head p { display: none; }
+  .rel-print-head { display: block; margin-bottom: .9rem; font-size: .9rem; }
+  .rel-print-titulo { font-weight: 700; color: var(--mc-muted); font-size: .8rem; margin-bottom: .15rem; }
+  /* Mesmo numa folha estreita a tabela continua tabela (sem o modo cartão do celular) */
+  .rel-tabela { border: 1px solid var(--mc-line); overflow: visible; background: #fff; }
+  .rel-tabela table { display: table !important; font-size: .78rem; }
+  .rel-tabela thead { display: table-header-group !important; }
+  .rel-tabela tbody { display: table-row-group !important; }
+  .rel-tabela tr { display: table-row !important; margin: 0; width: auto; border: 0; break-inside: avoid; }
+  .rel-tabela td, .rel-tabela th { display: table-cell !important; width: auto; padding: .35rem .5rem; }
+  .rel-tabela td::before { display: none !important; }
+  .rel-tabela .th-sort::after { display: none; }
+  .rel-tabela td:first-child { text-align: left; }
+  .rel-tabela .rel-chope td:first-child { padding-left: 1.25rem; }
+  .rel-link { text-decoration: none; padding: 0; margin: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
