@@ -54,10 +54,15 @@
   line-height: 1.1;
   display: block;
 }
+/* O texto pode encolher (min-width: 0) e o rótulo quebra a palavra longa em vez de vazar do cartão */
+.stat-text { min-width: 0; }
 .stat-label {
+  display: block;
   color: var(--mc-muted);
   font-size: .85rem;
   font-weight: 600;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .stat-card--total    { --mc-accent: var(--mc-ink);     --mc-accent-soft: #e7e8ea; }
@@ -65,6 +70,15 @@
 .stat-card--uso       { --mc-accent: var(--mc-gold-dark); --mc-accent-soft: #f6e9cc; }
 .stat-card--transfer  { --mc-accent: var(--mc-info);    --mc-accent-soft: var(--mc-info-soft); }
 .stat-card--esgotado  { --mc-accent: var(--mc-danger);  --mc-accent-soft: var(--mc-danger-soft); }
+
+/* Celular: ícone em cima, número e rótulo embaixo. "Total de Barris" ocupa a linha inteira e os outros quatro ficam 2 + 2 */
+@media (max-width: 575.98px) {
+  .stat-card { flex-direction: column; gap: .45rem; padding: .8rem .85rem; }
+  .stat-icon { width: 32px; height: 32px; }
+  .stat-value { font-size: 1.45rem; }
+  .stat-label { font-size: .8rem; }
+  .row-cols-2 > .stat-col--total { width: 100%; }
+}
 
 /* ---------- Seção genérica ---------- */
 .section-title {

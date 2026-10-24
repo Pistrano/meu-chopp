@@ -162,57 +162,20 @@
         })),
       }],
       submitLabel: "Confirmar engate",
-      onSubmit: async (v) => {
+      // Engate e confirmação de barril vencido ficam em acoes-barril.js (os mesmos da aba Torneiras)
+      onSubmit: (v) => {
         if (!v.torneira) throw new Error("Selecione uma torneira livre para continuar.");
-        const pedido = { id, torneiraId: Number(v.torneira), unitId: ctx.unitId };
-        try {
-          return await MC.call("barris:use", pedido);
-        } catch (err) {
-          if (err.code !== "BARRIL_VENCIDO") throw err;
-          // Vencido: só avisa. Quem decide é a gerência; o engate confirmado fica na auditoria.
-          const [, mes, dia] = String(err.info && err.info.validade || "").split("-");
-          const sim = await MC.confirm({
-            title: "Barril vencido",
-            type: "err",
-            text: `Este barril venceu em ${dia}/${mes}. Confira se ele estava armazenado na câmara fria. Engatar mesmo assim?`,
-            confirmLabel: "Engatar mesmo assim",
-          });
-          if (!sim) return false;
-          return MC.call("barris:use", { ...pedido, confirmarVencido: true });
-        }
+        return MCBarril.engatar({ barrilId: id, torneiraId: Number(v.torneira), unitId: ctx.unitId });
       },
     });
-    if (result && result.torneira) {
-      MC.toast(`Barril #${result.codigo} engatado na Torneira ${result.torneira}.`);
-      load();
-      MCLayout.refreshAlerts();
-    }
+    if (result && result.torneira) load();
   }
 
-  /* ---------- Retirada: a torneira vem do engate registrado ---------- */
+  /* ---------- Retirada: a torneira vem do engate registrado (fluxo em acoes-barril.js) ---------- */
   async function retirar(id) {
     const b = rows.find((r) => r.id === id);
     const unit = ctx.units.find((u) => u.id === ctx.unitId);
-    const result = await MC.dialog({
-      title: `Retirar barril #${b.codigo}`,
-      intro: b.torneira_numero
-        ? `Unidade: ${unit.nome}. O barril está na Torneira ${b.torneira_numero}, que será liberada. Ao ser retirado, o barril fica "Vazio" até a fábrica recolher.`
-        : `Unidade: ${unit.nome}. Este barril não tem torneira registrada (foi engatado antes do controle de torneiras), então nenhuma torneira será liberada. O barril fica "Vazio" até a fábrica recolher.`,
-      submitLabel: "Confirmar retirada",
-      onSubmit: () => MC.call("barris:empty", { id }),
-    });
-    if (!result || !result.codigo) return;
-    load();
-    MCLayout.refreshAlerts();
-    await MC.notice({
-      title: "Barril retirado com sucesso!",
-      lines: [
-        ["Barril", `#${result.codigo}`],
-        ["Unidade", result.unidade],
-        ["Torneira liberada", result.torneira ? `Torneira ${result.torneira}` : "Nenhuma (sem torneira registrada)"],
-        ["Situação", "Vazio (aguardando recolhimento)"],
-      ],
-    });
+    await MCBarril.retirar({ barril: b, unidade: unit.nome, aoRetirar: () => load() });
   }
 
   /* ---------- Recolhimento: a fábrica leva os vasilhames vazios (usado em pé, no tablet) ---------- */

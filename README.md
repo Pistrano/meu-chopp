@@ -149,8 +149,16 @@ registrado está no banco.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
   O barril retirado fica *Vazio* (aguardando recolhimento).
 - O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
-- Aba **Torneiras** (todos os usuários): um cartão por torneira ativa da unidade, com o chope engatado, desde quando e por
-  quem. Tocar no cartão mostra o histórico de engates daquela torneira. A tela se atualiza sozinha a cada minuto.
+- Aba **Torneiras** (todos os usuários com acesso à unidade): um cartão por torneira ativa, com o chope engatado, desde
+  quando e por quem. Cada cartão tem dois botões:
+  - Torneira livre: **Engatar barril** abre a lista dos barris disponíveis da unidade (o que vence primeiro fica em cima,
+    com busca por código, chope ou estilo). Barril vencido pede a mesma confirmação da aba Barris.
+  - Torneira ocupada: **Retirar barril**, com a mesma confirmação e o mesmo aviso da aba Barris. O barril fica *Vazio*.
+  - **Histórico**: os engates daquela torneira.
+- A tela se atualiza sozinha a cada minuto, menos enquanto uma janela estiver aberta. Se outro aparelho usou a torneira ou o
+  barril nesse meio tempo, aparece o motivo e o quadro é recarregado.
+- Engatar e retirar ficam num só lugar, `src/renderer/js/acoes-barril.js` (`MCBarril.engatar` e `MCBarril.retirar`),
+  usado pelas abas Barris e Torneiras.
 
 ## Validade e recolhimento
 
