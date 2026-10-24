@@ -6,11 +6,12 @@ const MCLayout = (() => {
   /* principal: true = aba fixa no topo. O resto fica no botão "Mais" (toda tela nova entra lá por padrão).
      short: rótulo da barra inferior no celular. admin: só o administrador vê. */
   const NAV = [
+    { id: "dashboard", label: "Painel", href: "dashboard.html", principal: true },
     { id: "barris", label: "Barris", href: "barris.html", principal: true },
     { id: "torneiras", label: "Torneiras", short: "Torn.", href: "torneiras.html", principal: true },
-    { id: "catalogo", label: "Chopes", href: "catalogo.html", principal: true },
     { id: "historico", label: "Histórico", short: "Hist.", href: "historico.html", principal: true },
-    { id: "dashboard", label: "Painel", href: "dashboard.html" },
+    { id: "catalogo", label: "Chopes", href: "catalogo.html" },
+    { id: "relatorio", label: "Relatório de barris", href: "relatorio-barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
     { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
     { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },

@@ -41,6 +41,12 @@ const somaDias = (dia, n) => {                  // "AAAA-MM-DD" + n dias
   return d.toISOString().slice(0, 10);
 };
 const diaMes = (dia) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`; // "2026-10-22" -> "22/10"
+// Instante em que o dia "AAAA-MM-DD" começa no fuso da operação (ex.: 2026-10-01 em Cuiabá = 2026-10-01T04:00:00Z)
+const inicioDoDia = (dia) => {
+  const meiaNoiteUTC = new Date(`${dia}T00:00:00Z`);
+  const lidoNoFuso = new Date(tsFmt.format(meiaNoiteUTC).replace(" ", "T") + "Z");
+  return new Date(meiaNoiteUTC.getTime() - (lidoNoFuso - meiaNoiteUTC));
+};
 // Quem entrega os barris: aparece como origem das entradas no histórico (NOME_FORNECEDOR no .env)
 const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
 const b2i = (v) => (v ? 1 : 0);
@@ -1139,6 +1145,128 @@ function registerHandlers() {
     await audit(ctx, "relatorio_exportado", `${rows.length} movimentações`);
     const dia = new Date().toISOString().slice(0, 10);
     return { filename: `relatorio-movimentacoes-${dia}.csv`, csv, total: rows.length };
+  });
+
+  /* Relatório de barris: uso por estilo e chope num período, mais a situação agora.
+     Cada linha de barris é um ciclo (o código se repete depois do recolhimento), por isso o banco conta por barris.id.
+     unidadeId vazio = todas as unidades liberadas para o usuário. */
+  async function reportUnits(ctx, unidadeId) {
+    const allowed = await allowedUnitIds(ctx);
+    if (!allowed.length)
+      throw new AppError("Você ainda não tem acesso a nenhuma unidade. Peça a um administrador para liberar.");
+    if (unidadeId === null || unidadeId === undefined || unidadeId === "")
+      return { ids: allowed, nome: "Todas as minhas unidades", slug: "todas" };
+    const id = Number(unidadeId);
+    if (!allowed.includes(id)) throw new AppError("Você não tem acesso a esta unidade.", "FORBIDDEN", `unidade ${unidadeId}`);
+    const u = ok(await supabase.from("unidades").select("nome_curto").eq("id", id).maybeSingle());
+    const nome = u ? u.nome_curto : `Unidade ${id}`;
+    const slug = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return { ids: [id], nome, slug: slug || `unidade-${id}` };
+  }
+
+  // De e Até contam inteiros, no fuso da operação: do começo de De ao começo do dia seguinte a Até
+  function reportPeriod(de, ate) {
+    if (!diaValido(String(de || "")) || !diaValido(String(ate || ""))) throw new AppError("Informe as datas De e Até do período.");
+    if (de > ate) throw new AppError("A data De não pode ser depois da data Até.");
+    const dias = (Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86400000 + 1;
+    if (dias > 400) throw new AppError("Escolha um período de até 400 dias.");
+    return { de, ate, inicio: inicioDoDia(de).toISOString(), fim: inicioDoDia(somaDias(ate, 1)).toISOString() };
+  }
+
+  // Sem o SQL do relatório no banco, o PostgREST responde PGRST202 (função não encontrada)
+  async function rpcRelatorio(fn, args) {
+    const { data, error } = await supabase.rpc(fn, args);
+    if (error && error.code === "PGRST202")
+      throw new AppError("O relatório de barris ainda não foi instalado no banco. Peça para rodar o SQL do relatório no Supabase.");
+    dbError(error);
+    return data;
+  }
+
+  const REL_NUMS = ["recebidos", "utilizados", "litros", "esvaziados", "recolhidos", "estoque", "engatados", "vazios", "em_transferencia"];
+  const relNums = (src) => Object.fromEntries(REL_NUMS.map((k) => [k, Number(src ? src[k] : 0) || 0]));
+
+  // Linhas do banco (uma por chope) agrupadas por estilo; "Pilsen" de barril antigo cai no mesmo grupo do "Pilsen" do catálogo
+  function agruparPorEstilo(linhas) {
+    const grupos = new Map();
+    for (const l of linhas) {
+      const chave = l.estilo.toLocaleLowerCase("pt-BR");
+      if (!grupos.has(chave)) grupos.set(chave, { estilo: l.estilo, chopes: [], total: relNums() });
+      const g = grupos.get(chave);
+      const nums = relNums(l);
+      g.chopes.push({
+        chope: l.chope || "Chope não informado",
+        // Chave para abrir o detalhe: o chope do catálogo ou, no barril antigo, os textos gravados nele
+        chave: l.chope_id ? { chopeId: l.chope_id } : { estilo: l.estilo_chave || "", chope: l.chope_chave || "" },
+        ...nums,
+      });
+      for (const k of REL_NUMS) g.total[k] += nums[k];
+    }
+    return [...grupos.values()];
+  }
+
+  async function relatorioBarris(ctx, { unidadeId, de, ate }) {
+    const periodo = reportPeriod(de, ate);
+    const unidade = await reportUnits(ctx, unidadeId);
+    const r = await rpcRelatorio("fn_relatorio_barris", { p_unidades: unidade.ids, p_de: periodo.inicio, p_ate: periodo.fim });
+    return {
+      de: periodo.de, ate: periodo.ate,
+      unidade: unidade.nome, slug: unidade.slug,
+      geradoEm: fmtTs(r.gerado_em),
+      grupos: agruparPorEstilo(r.linhas || []),
+      total: relNums(r.totais),
+    };
+  }
+
+  handle("reports:barrels", async (p, ctx) => {
+    const { slug, ...rel } = await relatorioBarris(ctx, p || {});
+    return rel;
+  });
+
+  handle("reports:barrelsDetail", async (p, ctx) => {
+    const { unidadeId, chopeId, estilo, chope, de, ate } = p || {};
+    const periodo = reportPeriod(de, ate);
+    const unidade = await reportUnits(ctx, unidadeId);
+    const id = Number(chopeId) || null;
+    const rows = await rpcRelatorio("fn_relatorio_barris_detalhe", {
+      p_unidades: unidade.ids, p_de: periodo.inicio, p_ate: periodo.fim,
+      p_chope: id, p_estilo: id ? null : String(estilo ?? "").trim(), p_chope_nome: id ? null : String(chope ?? "").trim(),
+    });
+    return (rows || []).map((b) => ({
+      id: b.id, codigo: b.codigo, tamanho_l: b.tamanho_l, validade: b.validade,
+      engatado_em: fmtTs(b.engatado_em), retirado_em: fmtTs(b.retirado_em),
+      torneira: b.torneira, unidade: b.unidade,
+    }));
+  });
+
+  handle("reports:barrelsExport", async (p, ctx) => {
+    const rel = await relatorioBarris(ctx, p || {});
+    const esc = (v) => {
+      let t = String(v ?? "");
+      if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+    const num = (n) => String(n).replace(".", ","); // litros com vírgula, como o Excel em português espera
+    const linha = (estilo, chope, n) => [estilo, chope, n.recebidos, n.utilizados, num(n.litros), n.esvaziados, n.recolhidos,
+      n.estoque, n.engatados, n.vazios, n.em_transferencia].map(esc).join(";");
+    const header = ["Estilo", "Chope", "Recebidos", "Utilizados", "Litros utilizados", "Esvaziados", "Recolhidos",
+      "Em estoque agora", "Engatados agora", "Vazios aguardando recolhimento", "Em transferência agora"];
+    const lines = [];
+    for (const g of rel.grupos) {
+      for (const c of g.chopes) lines.push(linha(g.estilo, c.chope, c));
+      lines.push(linha(g.estilo, `Total ${g.estilo}`, g.total));
+    }
+    lines.push(linha("Total geral", "", rel.total));
+    const br = (dia) => dia.split("-").reverse().join("/");
+    lines.push("", ["Período", `${br(rel.de)} a ${br(rel.ate)}`].map(esc).join(";"),
+      ["Unidade", rel.unidade].map(esc).join(";"),
+      ["Situação agora em", rel.geradoEm ? `${br(rel.geradoEm.slice(0, 10))} ${rel.geradoEm.slice(11, 16)}` : ""].map(esc).join(";"),
+      esc("Utilizado = barril engatado pela primeira vez dentro do período."));
+    await audit(ctx, "relatorio_barris_exportado", `${rel.unidade}, ${br(rel.de)} a ${br(rel.ate)}`);
+    return {
+      filename: `relatorio-barris-${rel.slug}-${rel.de}-a-${rel.ate}.csv`,
+      csv: "﻿" + [header.map(esc).join(";"), ...lines].join("\r\n"),
+      total: rel.grupos.reduce((s, g) => s + g.chopes.length, 0),
+    };
   });
 
   handle("audit:list", async () => {
