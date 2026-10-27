@@ -1,5 +1,5 @@
 /* ==========================================================
-   BarrilFacil — cabeçalho compartilhado (menu, unidade, alertas, usuário)
+   BarrilFacil — cabeçalho compartilhado (menu, unidade, alertas, usuário) e faixa do ambiente de testes
    Uso em cada página: const ctx = await MCLayout.init("barris");
    ========================================================== */
 const MCLayout = (() => {
@@ -25,6 +25,25 @@ const MCLayout = (() => {
 
   // config: dados do servidor para as telas (ex.: config.fornecedor, nome de quem entrega os barris)
   const ctx = { user: null, units: [], unitId: null, config: { fornecedor: "Fornecedor" }, onUnitChange: () => {} };
+
+  /* Ambiente de testes (APP_ENV=beta no servidor): faixa amarela no topo e "[TESTE] " no título da aba.
+     Roda assim que o script carrega, também nas telas sem login (entrar, primeiro acesso, configuração inicial),
+     que carregam este arquivo só por causa disso. O init() reaproveita a mesma resposta. */
+  const pedidoConfig = window.api.invoke("config:get");
+  pedidoConfig.then((res) => {
+    if (!res || !res.ok || res.data.ambiente !== "beta" || document.querySelector(".faixa-teste")) return;
+    const faixa = document.createElement("div");
+    faixa.className = "faixa-teste";
+    faixa.setAttribute("role", "note");
+    faixa.textContent = "AMBIENTE DE TESTES: os dados daqui não são das lojas";
+    document.body.prepend(faixa);
+    if (!document.title.startsWith("[TESTE] ")) document.title = `[TESTE] ${document.title}`;
+  });
+  // Com login, a resposta já traz fornecedor e "hoje"; se veio sem (sessão criada depois), pede de novo
+  async function lerConfig() {
+    const res = await pedidoConfig;
+    return res && res.ok && res.data.hoje ? res.data : MC.call("config:get");
+  }
 
   function buildNav(pageId) {
     const itens = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin");
@@ -202,7 +221,7 @@ const MCLayout = (() => {
     if (ADMIN_PAGES.includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
 
     try {
-      [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), MC.call("config:get")]);
+      [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), lerConfig()]);
     } catch (err) {
       if (err.code === "OFFLINE") return showOffline();
       throw err;

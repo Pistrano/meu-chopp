@@ -21,6 +21,9 @@
   --mc-success-soft: #e6f4ec;
   --mc-info: #3d6b8c;
   --mc-info-soft: #e7eef2;
+  /* Faixa do ambiente de testes: amarela nos dois temas, de propósito */
+  --mc-faixa-teste-bg: #ffd43b;
+  --mc-faixa-teste-texto: #2b2100;
 
   --mc-header-h: 64px;
   --mc-radius: 10px;
@@ -36,6 +39,21 @@ body {
 }
 
 :focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+
+/* Faixa fina no topo de todas as telas quando o servidor é o de testes (APP_ENV=beta; ver js/layout.js) */
+.faixa-teste {
+  background: var(--mc-faixa-teste-bg);
+  color: var(--mc-faixa-teste-texto);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.35;
+  text-align: center;
+  padding: .3rem .75rem;
+}
+@media (max-width: 400px) {
+  .faixa-teste { font-size: .68rem; letter-spacing: 0; padding: .25rem .5rem; }
+}
 
 /* ---------- Layout ---------- */
 .login-layout { min-height: 100vh; }

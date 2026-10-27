@@ -17,8 +17,9 @@ Cada unidade só enxerga o próprio estoque. O administrador libera quais unidad
 ## 1) Testar o servidor no seu computador
 
 1. Instale o **Node.js 18 ou superior** (https://nodejs.org).
-2. Na pasta do projeto, copie `.env.example` para `.env` e preencha `SUPABASE_URL` e `SUPABASE_SECRET_KEY`
-   (Supabase > *Project Settings* > *API Keys* > *Secret keys*). O `.env` nunca vai para o repositório.
+2. Na pasta do projeto, copie `.env.example` para `.env` e preencha `SUPABASE_URL` (Supabase > *Project Settings* >
+   *Data API*) e `SUPABASE_SECRET_KEY` (*Project Settings* > *API Keys* > *Secret keys*). O `.env` nunca vai para o repositório.
+   Use um banco de testes, nunca o das lojas.
 3. Rode:
    ```
    npm install --omit=dev
@@ -29,12 +30,16 @@ Cada unidade só enxerga o próprio estoque. O administrador libera quais unidad
 
 ### Variáveis do `.env`
 
+O modelo comentado está em `.env.example`. Só as duas primeiras são obrigatórias.
+
 | Variável | Para que serve |
 |---|---|
 | `SUPABASE_URL` | Endereço do projeto no Supabase (sem `/rest/v1`). |
 | `SUPABASE_SECRET_KEY` | Chave secreta do Supabase. Só o servidor usa. |
 | `APP_TZ` | Fuso da operação (padrão `America/Cuiaba`). Usado para mostrar data e hora e para as datas "de hoje". |
 | `NOME_FORNECEDOR` | Quem entrega os barris; aparece como origem das entradas no histórico (padrão "Fornecedor"). |
+| `APP_ENV` | `beta` no servidor de testes: todas as telas mostram a faixa amarela "AMBIENTE DE TESTES" e a aba ganha "[TESTE]". Vazio no servidor das lojas. |
+| `PORT`, `HOST`, `TRUST_PROXY` | Porta (padrão 3000), endereço de escuta (padrão 0.0.0.0) e `1` atrás do Caddy. No servidor Linux já vêm do serviço `deploy/barrilfacil.service`; não coloque no `.env` de lá, porque ele passaria por cima. |
 
 ## 2) Colocar o servidor no ar (VM Linux na Oracle Cloud)
 
@@ -199,16 +204,38 @@ registrado está no banco.
   administrador. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
   (os barris antigos continuam com ele).
 
-## Testes
+## Rodar os testes
 
-Os testes automáticos de `tests/` ainda são da época do banco local e não funcionam com o Supabase. Enquanto não forem
-refeitos, cada PR traz um roteiro de teste manual.
+Os testes automáticos (`tests/`) sobem o servidor de verdade e usam um **Supabase local**, no seu computador. Eles apagam
+todas as tabelas antes de começar, por isso só aceitam um endereço local (`127.0.0.1`/`localhost`): nunca aponte para o
+banco das lojas nem para o de testes do beta. Precisa do Node.js 20 ou superior.
+
+1. Instale o **Docker Desktop** (https://www.docker.com/products/docker-desktop) e deixe-o aberto.
+2. Na pasta do projeto, instale as dependências e suba o Supabase local (a primeira vez demora, porque baixa as imagens):
+   ```
+   npm install --omit=dev
+   npx supabase start
+   ```
+   Ele aplica as migrations de `supabase/migrations/` e, no fim, mostra o endereço (`API URL`, normalmente
+   `http://127.0.0.1:54321`) e a chave secreta (`Secret key`, que começa com `sb_secret_`; em versões antigas aparece
+   como `service_role key`).
+3. Copie esses dois valores para as variáveis `TEST_SUPABASE_URL` e `TEST_SUPABASE_SECRET_KEY` e rode `npm test`.
+   No PowerShell:
+   ```
+   $env:TEST_SUPABASE_URL="http://127.0.0.1:54321"; $env:TEST_SUPABASE_SECRET_KEY="sb_secret_..."; npm test
+   ```
+   No Linux/macOS: `TEST_SUPABASE_URL=http://127.0.0.1:54321 TEST_SUPABASE_SECRET_KEY=sb_secret_... npm test`
+
+Sem as duas variáveis, os testes são pulados com um aviso. Depois de mudar alguma migration, `npx supabase db reset`
+recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 
 ## Segurança
 
 - Entrada com e-mail e senha forte (8+ caracteres, letras e números); sem senha padrão.
 - 5 tentativas erradas bloqueiam a conta por 15 minutos; também há limite de tentativas por aparelho.
-- A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido).
+- A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no
+  banco (tabela `sessoes`, só com o hash do token), então atualizar o servidor não desloga ninguém. Desativar um usuário
+  ou gerar uma senha temporária derruba as sessões dele; trocar a própria senha derruba as dos outros aparelhos.
 - Cada unidade é isolada: o servidor confere a permissão a cada ação. Tentativas indevidas ficam na *Auditoria*.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.
@@ -220,5 +247,6 @@ refeitos, cada PR traz um roteiro de teste manual.
 - `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`)
 - `src/renderer/` — as telas (servidas pelo servidor)
 - `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
-- `supabase/migrations/` — schema e mudanças do banco
+- `supabase/migrations/` — schema e mudanças do banco (`supabase/config.toml` é do Supabase local dos testes)
+- `tests/` — testes automáticos (veja *Rodar os testes*)
 - `deploy/` — arquivos de implantação (Linux + HTTPS)
