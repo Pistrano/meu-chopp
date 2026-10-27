@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeOperator } = require("./helpers");
 
 const SEM_TORNEIRA = /Não há torneiras disponíveis nesta unidade/;
-const SO_ADMIN = /Apenas administradores/;
+const SO_ADMIN = /Você não tem permissão para esta ação/;
 const SEM_ACESSO = /não tem acesso a esta unidade/;
 
 const somaDias = (dia, n) => {

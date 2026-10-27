@@ -152,7 +152,7 @@
   fAte.addEventListener("change", carregar);
   ctx.onUnitChange = (id) => { fUnidade.value = String(id); carregar(); };
 
-  document.getElementById("btnCsv").addEventListener("click", async () => {
+  document.getElementById("btnCsv")?.addEventListener("click", async () => {
     if (!rel) return;
     const r = await MC.run(() => MC.call("reports:barrelsExport", rel.filtros));
     if (!r) return;

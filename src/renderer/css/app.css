@@ -34,6 +34,9 @@
 }
 .btn-ghost:hover { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
 .btn-ghost--danger:hover { border-color: var(--mc-danger); background: var(--mc-danger-soft); color: var(--mc-danger); }
+/* Apagar (Usuários): vermelho sempre, não só ao passar o mouse */
+.btn-ghost--apagar { border-color: var(--mc-danger); color: var(--mc-danger); }
+.btn-ghost--apagar:hover { border-color: var(--mc-danger); background: var(--mc-danger-soft); color: var(--mc-danger); }
 .row-actions { display: flex; gap: .4rem; justify-content: flex-end; flex-wrap: wrap; }
 
 /* Tabelas */
@@ -240,6 +243,8 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .radio-item input { position: absolute; left: .8rem; top: .85rem; width: 16px; height: 16px; margin: 0; accent-color: var(--mc-gold-dark); }
 .radio-item .radio-main { font-weight: 700; }
 .radio-item .radio-hint { font-size: .78rem; color: var(--mc-success); font-weight: 600; }
+.radio-item .radio-hint--texto { color: var(--mc-muted); font-weight: 500; line-height: 1.4; }
+.radio-list:has(.radio-hint--texto) { grid-template-columns: 1fr; } /* com explicação: uma opção por linha */
 .radio-item:hover { border-color: var(--mc-gold-dark); }
 .radio-item:has(input:checked) { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
 .radio-item:has(input:focus-visible) { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
@@ -349,3 +354,11 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .alert-item--erro .alert-icon { color: var(--mc-danger); }
 .alert-item--aviso .alert-icon { color: var(--mc-gold-dark); }
 .tap-validade { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; color: var(--mc-muted); margin-top: .2rem; }
+
+/* Usuários: o que cada cargo faz (o escolhido fica em destaque) e o aviso antes de apagar */
+.cargo-info { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; font-size: .85rem; color: var(--mc-muted); }
+.cargo-info li { position: relative; padding-left: .9rem; }
+.cargo-info li::before { content: ""; position: absolute; left: 0; top: .5em; width: 6px; height: 6px; border-radius: 50%; background: var(--mc-line); }
+.cargo-info li.is-sel { color: var(--mc-text); }
+.cargo-info li.is-sel::before { background: var(--mc-gold-dark); }
+.apagar-aviso { background: var(--mc-danger-soft); color: var(--mc-danger); border-radius: 8px; padding: .6rem .8rem; font-size: .88rem; font-weight: 600; }

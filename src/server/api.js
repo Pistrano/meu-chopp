@@ -15,9 +15,20 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { supabase } = require("./supabase");
 
-const handlers = new Map();   // canal -> { fn, auth, admin }
+const handlers = new Map();   // canal -> { fn, auth, perm }
 
-const CARGO_LABEL = { admin: "Administrador", operador: "Operador" };
+const CARGO_LABEL = { admin: "Administrador", gerente: "Gerente", operador: "Operador" };
+
+/* ---------- Permissões (num lugar só) ----------
+   O que cada cargo pode fazer além do dia a dia (barris, engates, transferências, histórico e relatório),
+   que é de todos. As rotas pedem uma permissão com handle(canal, fn, { perm }) e as telas perguntam com MC.pode(). */
+const PERMISSOES_TODAS = ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios"];
+const PERMISSOES = {
+  admin: PERMISSOES_TODAS,
+  gerente: ["catalogo:editar", "funcionarios"],
+  operador: [],
+};
+const pode = (user, perm) => !!user && (PERMISSOES[user.cargo] || []).includes(perm);
 
 /* ---------- Infraestrutura ---------- */
 const IDLE_MS = 15 * 60 * 1000;          // sessão expira após 15 min sem atividade
@@ -61,9 +72,10 @@ class AppError extends Error {
   }
 }
 
-/* auth: true exige sessão; false dispensa; "opcional" usa a sessão se houver uma válida (ex.: config:get na tela de login) */
-function handle(channel, fn, { auth = true, admin = false } = {}) {
-  handlers.set(channel, { fn, auth, admin });
+/* auth: true exige sessão; false dispensa; "opcional" usa a sessão se houver uma válida (ex.: config:get na tela de login).
+   perm: permissão que o cargo precisa ter (tabela PERMISSOES); sem perm, qualquer usuário logado. */
+function handle(channel, fn, { auth = true, perm = null } = {}) {
+  handlers.set(channel, { fn, auth, perm });
 }
 
 /* Converte erro do Supabase/Postgres em erro do app.
@@ -182,7 +194,7 @@ function recarregarSessoes(usuarioId) {
 async function dispatch(channel, payload, token, meta = {}) {
   const entry = handlers.get(channel);
   if (!entry) return { body: { ok: false, error: "Operação desconhecida.", code: "NOT_FOUND" } };
-  const { fn, auth, admin } = entry;
+  const { fn, auth, perm } = entry;
   const ctx = { session: null, sessionAction: null, clientIp: meta.ip || "", token: token || null };
 
   let body;
@@ -211,7 +223,7 @@ async function dispatch(channel, payload, token, meta = {}) {
         throw new AppError("Defina sua senha para continuar.", "MUST_CHANGE");
       await marcarAtividade(rec);
     }
-    if (admin && ctx.session.cargo !== "admin") throw new AppError("Apenas administradores podem executar esta ação.");
+    if (perm && !pode(ctx.session, perm)) throw new AppError("Você não tem permissão para esta ação.");
     const data = await fn(payload || {}, ctx);
     body = { ok: true, data };
   } catch (err) {
@@ -401,7 +413,7 @@ async function activeEngateOfTap(torneiraId) {
 
 /* ---------- Acesso por quiosque ----------
    Administrador: todos os quiosques ativos.
-   Operador: somente os quiosques que um administrador liberou para ele. */
+   Gerente e operador: somente os quiosques que um administrador liberou para eles. */
 async function allowedUnitIds(ctx) {
   if (ctx.session.cargo === "admin") {
     return ok(await supabase.from("unidades").select("id").eq("ativo", true).order("id")).map((r) => r.id);
@@ -446,6 +458,7 @@ function publicUser(u) {
     usuario: u.usuario,
     cargo: u.cargo,
     cargoLabel: CARGO_LABEL[u.cargo],
+    permissoes: PERMISSOES[u.cargo] || [],
     iniciais: u.nome.trim().charAt(0).toUpperCase(),
     trocarSenha: !!u.trocar_senha || !u.email,
   };
@@ -641,7 +654,7 @@ function registerHandlers() {
   handle("units:adminList", async () => {
     const rows = await rpc("fn_unidades_resumo", {});
     return rows.map((u) => ({ ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj) }));
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   /* Detalhes de uma unidade + suas torneiras (tela Unidades) */
   handle("units:details", async ({ id }) => {
@@ -650,7 +663,7 @@ function registerHandlers() {
     if (!r.data) throw new AppError("Unidade não encontrada.");
     const u = r.data;
     return { ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj), torneiras: await tapsOfUnit(u.id) };
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   /* Nome, CNPJ e endereço são obrigatórios ao cadastrar e ao editar. */
   const likeEscape = (s) => s.replace(/[\\%_]/g, "\\$&");
@@ -678,7 +691,7 @@ function registerHandlers() {
     );
     await audit(ctx, "unidade_criada", `${full} (CNPJ ${formatCnpj(doc)})`);
     return { id: row.id };
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   handle("units:update", async (p, ctx) => {
     const id = Number(p.id);
@@ -691,7 +704,7 @@ function registerHandlers() {
     );
     await audit(ctx, "unidade_editada", `${full} (CNPJ ${formatCnpj(doc)})`);
     return true;
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   handle("units:toggle", async ({ id }, ctx) => {
     const r = await supabase.from("unidades").select("*").eq("id", Number(id)).maybeSingle();
@@ -711,7 +724,7 @@ function registerHandlers() {
     dbError((await supabase.from("unidades").update({ ativo: !u.ativo }).eq("id", u.id)).error);
     await audit(ctx, u.ativo ? "unidade_desativada" : "unidade_reativada", u.nome);
     return true;
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   /* ======== Torneiras ======== */
   const loadTap = async (id) => {
@@ -739,7 +752,7 @@ function registerHandlers() {
       p_unidade: Number(unitId), p_qtd: Number(quantidade), p_usuario: ctx.session.id,
     });
     return { numeros };
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   // Altera o número visível. O histórico guarda o número usado em cada operação, então não muda.
   handle("taps:update", async ({ id, numero }, ctx) => {
@@ -752,7 +765,7 @@ function registerHandlers() {
     const un = await unitById(t.unidade_id);
     await audit(ctx, "torneira_renumerada", `${un.nome}: Torneira ${t.numero} → Torneira ${num}`);
     return true;
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   // Desativa/reativa. Torneiras nunca são apagadas: o histórico de engates continua apontando para elas.
   handle("taps:toggle", async ({ id }, ctx) => {
@@ -769,7 +782,7 @@ function registerHandlers() {
     dbError((await supabase.from("torneiras").update({ ativo: !t.ativo }).eq("id", t.id)).error);
     await audit(ctx, t.ativo ? "torneira_desativada" : "torneira_reativada", `${un.nome}: Torneira ${t.numero}`);
     return true;
-  }, { admin: true });
+  }, { perm: "unidades" });
 
   // Torneiras da unidade do barril, para o funcionário escolher no engate (respeita o acesso à unidade)
   handle("taps:forBarril", async ({ barrilId }, ctx) => {
@@ -846,7 +859,7 @@ function registerHandlers() {
 
   /* ======== Catálogo de chopes e estilos ========
      Cadastrar: qualquer usuário logado (direto do cadastro de barril).
-     Editar e desativar: só administrador. Nada é apagado: barris antigos continuam apontando para o chope. */
+     Editar e desativar: permissão catalogo:editar (administrador e gerente). Nada é apagado: barris antigos continuam apontando para o chope. */
   const cleanCatalogName = (value, tipo) => {
     const nome = String(value || "").trim().replace(/\s+/g, " ");
     if (nome.length < 2 || nome.length > 60) throw new AppError(`O nome do ${tipo} deve ter de 2 a 60 caracteres.`);
@@ -872,7 +885,7 @@ function registerHandlers() {
     if (!r.data) throw new AppError("Chope não encontrado.");
     return r.data;
   };
-  const wantsAll = (p, ctx) => !!p.todos && ctx.session.cargo === "admin";
+  const wantsAll = (p, ctx) => !!p.todos && pode(ctx.session, "catalogo:editar");
 
   handle("estilos:list", async (p, ctx) => {
     let query = supabase.from("estilos").select("id, nome, ativo").order("nome");
@@ -899,14 +912,14 @@ function registerHandlers() {
     if (chopeIds.length) dbError((await supabase.from("barris").update({ estilo: n }).in("chope_id", chopeIds)).error);
     await audit(ctx, "estilo_editado", `${e.nome} → ${n}`);
     return true;
-  }, { admin: true });
+  }, { perm: "catalogo:editar" });
 
   handle("estilos:toggle", async ({ id }, ctx) => {
     const e = await loadEstilo(id);
     dbError((await supabase.from("estilos").update({ ativo: !e.ativo }).eq("id", e.id)).error);
     await audit(ctx, e.ativo ? "estilo_desativado" : "estilo_reativado", e.nome);
     return true;
-  }, { admin: true });
+  }, { perm: "catalogo:editar" });
 
   handle("chopes:list", async (p, ctx) => {
     let query = supabase.from("chopes").select("id, nome, estilo_id, ativo, estilos(nome)").order("nome");
@@ -944,14 +957,14 @@ function registerHandlers() {
     const antes = `${c.nome} (${c.estilos ? c.estilos.nome : "?"})`;
     await audit(ctx, "chope_editado", `${antes} → ${n} (${e.nome})`);
     return true;
-  }, { admin: true });
+  }, { perm: "catalogo:editar" });
 
   handle("chopes:toggle", async ({ id }, ctx) => {
     const c = await loadChope(id);
     dbError((await supabase.from("chopes").update({ ativo: !c.ativo }).eq("id", c.id)).error);
     await audit(ctx, c.ativo ? "chope_desativado" : "chope_reativado", c.nome);
     return true;
-  }, { admin: true });
+  }, { perm: "catalogo:editar" });
 
   /* ======== Dashboard ======== */
   handle("dashboard:get", async ({ unitId }, ctx) => {
@@ -1075,7 +1088,7 @@ function registerHandlers() {
       csv: "\uFEFF" + [header.map(esc).join(";"), ...lines].join("\r\n"),
       total: rows.length,
     };
-  });
+  }, { perm: "exportar" });
 
   /* Entrada do barril: chope do catálogo + validade informada (olhando a data no barril).
      A fn_barril_entrada grava o barril (com barris.estilo = estilo do chope, usado no histórico e nas
@@ -1242,7 +1255,7 @@ function registerHandlers() {
     await audit(ctx, "relatorio_exportado", `${rows.length} movimentações`);
     const dia = new Date().toISOString().slice(0, 10);
     return { filename: `relatorio-movimentacoes-${dia}.csv`, csv, total: rows.length };
-  });
+  }, { perm: "exportar" });
 
   /* Relatório de barris: uso por estilo e chope num período, mais a situação agora.
      Cada linha de barris é um ciclo (o código se repete depois do recolhimento), por isso o banco conta por barris.id.
@@ -1364,7 +1377,7 @@ function registerHandlers() {
       csv: "﻿" + [header.map(esc).join(";"), ...lines].join("\r\n"),
       total: rel.grupos.reduce((s, g) => s + g.chopes.length, 0),
     };
-  });
+  }, { perm: "exportar" });
 
   handle("audit:list", async () => {
     const rows = ok(
@@ -1373,12 +1386,13 @@ function registerHandlers() {
     return rows.map((a) => ({
       id: a.id, acao: a.acao, detalhe: a.detalhe, criado_em: fmtTs(a.criado_em), usuario: a.usuarios ? a.usuarios.nome : "—",
     }));
-  }, { admin: true });
+  }, { perm: "auditoria" });
 
   /* ======== Usuários (somente administrador) ======== */
-  const cleanUnitIds = async (ids) => {
+  const CARGOS = Object.keys(CARGO_LABEL);
+  const cleanUnitIds = async (ids, cargo = "operador") => {
     const list = [...new Set((Array.isArray(ids) ? ids : [ids]).map(Number).filter(Boolean))];
-    if (!list.length) throw new AppError("Escolha ao menos uma unidade para o operador.");
+    if (!list.length) throw new AppError(`Escolha ao menos uma unidade para o ${cargo === "gerente" ? "gerente" : "operador"}.`);
     const valid = ok(await supabase.from("unidades").select("id").eq("ativo", true)).map((r) => r.id);
     if (list.some((id) => !valid.includes(id))) throw new AppError("Unidade inválida ou desativada.");
     return list;
@@ -1387,6 +1401,20 @@ function registerHandlers() {
     const u = await getUserById(Number(id));
     if (!u) throw new AppError("Usuário não encontrado.");
     return u;
+  };
+  // Existe outro administrador ativo além deste? (o sistema nunca fica sem nenhum)
+  const outroAdminAtivo = async (exceptId) =>
+    ok(await supabase.from("usuarios").select("id").eq("cargo", "admin").eq("ativo", true).neq("id", exceptId).limit(1)).length > 0;
+  const ultimoAdmin = async (u) => u.cargo === "admin" && u.ativo && !(await outroAdminAtivo(u.id));
+  // Troca as unidades liberadas: primeiro adiciona as novas, depois remove as que saíram (nunca fica sem acesso no meio do caminho)
+  const gravarUnidades = async (usuarioId, units) => {
+    dbError(
+      (await supabase.from("usuario_unidades")
+        .upsert(units.map((uid) => ({ usuario_id: usuarioId, unidade_id: uid })), { onConflict: "usuario_id,unidade_id", ignoreDuplicates: true })).error
+    );
+    dbError(
+      (await supabase.from("usuario_unidades").delete().eq("usuario_id", usuarioId).not("unidade_id", "in", `(${units.join(",")})`)).error
+    );
   };
 
   handle("users:list", async () => {
@@ -1407,15 +1435,15 @@ function registerHandlers() {
       unidadeIds: access.filter((a) => a.usuario_id === u.id).map((a) => a.unidades.id),
       unidades: access.filter((a) => a.usuario_id === u.id).map((a) => a.unidades.nome_curto),
     }));
-  }, { admin: true });
+  }, { perm: "usuarios" });
 
   /* Cria o usuário com uma senha temporária aleatória, exibida uma única vez ao administrador */
   handle("users:create", async ({ nome, email, cargo, unidadeIds }, ctx) => {
     const name = String(nome || "").trim();
     if (!name) throw new AppError("Informe o nome.");
     const em = normalizeEmail(email);
-    if (!["admin", "operador"].includes(cargo)) throw new AppError("Cargo inválido.");
-    const units = cargo === "operador" ? await cleanUnitIds(unidadeIds) : [];
+    if (!CARGOS.includes(cargo)) throw new AppError("Cargo inválido.");
+    const units = cargo === "admin" ? [] : await cleanUnitIds(unidadeIds, cargo);
     if (await emailTaken(em)) throw new AppError(`O e-mail ${em} já está cadastrado.`);
 
     const senha = generateTempPassword();
@@ -1434,25 +1462,18 @@ function registerHandlers() {
     }
     await audit(ctx, "usuario_criado", `${em} (${cargo})`);
     return { email: em, senha };
-  }, { admin: true });
+  }, { perm: "usuarios" });
 
-  /* Altera a quais quiosques o operador tem acesso */
+  /* Altera a quais quiosques o gerente ou operador tem acesso */
   handle("users:setUnits", async ({ id, unidadeIds }, ctx) => {
     const u = await loadUser(id);
     if (u.cargo === "admin") throw new AppError("Administradores têm acesso a todas as unidades.");
-    const units = await cleanUnitIds(unidadeIds);
-    // Primeiro adiciona os novos, depois remove os que saíram (nunca fica sem acesso no meio do caminho)
-    dbError(
-      (await supabase.from("usuario_unidades")
-        .upsert(units.map((uid) => ({ usuario_id: u.id, unidade_id: uid })), { onConflict: "usuario_id,unidade_id", ignoreDuplicates: true })).error
-    );
-    dbError(
-      (await supabase.from("usuario_unidades").delete().eq("usuario_id", u.id).not("unidade_id", "in", `(${units.join(",")})`)).error
-    );
+    const units = await cleanUnitIds(unidadeIds, u.cargo);
+    await gravarUnidades(u.id, units);
     recarregarSessoes(u.id);
     await audit(ctx, "acesso_alterado", `${u.email || u.usuario}: unidades ${units.join(", ")}`);
     return true;
-  }, { admin: true });
+  }, { perm: "usuarios" });
 
   handle("users:resetPassword", async ({ id }, ctx) => {
     const u = await loadUser(id);
@@ -1464,23 +1485,77 @@ function registerHandlers() {
     await encerrarSessoes(u.id); // a pessoa sai de todos os aparelhos e entra de novo com a senha temporária
     await audit(ctx, "senha_temporaria_gerada", u.email || u.usuario);
     return { email: u.email || u.usuario, senha };
-  }, { admin: true });
+  }, { perm: "usuarios" });
 
   handle("users:unlock", async ({ id }, ctx) => {
     const u = await loadUser(id);
     dbError((await supabase.from("usuarios").update({ falhas: 0, bloqueado_ate: null }).eq("id", u.id)).error);
     await audit(ctx, "usuario_desbloqueado", u.email || u.usuario);
     return true;
-  }, { admin: true });
+  }, { perm: "usuarios" });
 
   handle("users:toggle", async ({ id }, ctx) => {
     if (Number(id) === ctx.session.id) throw new AppError("Você não pode desativar o seu próprio usuário.");
     const u = await loadUser(id);
+    if (await ultimoAdmin(u)) throw new AppError("Não é possível desativar o último administrador ativo.");
     dbError((await supabase.from("usuarios").update({ ativo: !u.ativo }).eq("id", u.id)).error);
     if (u.ativo) await encerrarSessoes(u.id); // desativado: a próxima ação dele leva ao login
     await audit(ctx, u.ativo ? "usuario_desativado" : "usuario_ativado", u.email || u.usuario);
     return true;
-  }, { admin: true });
+  }, { perm: "usuarios" });
+
+  /* Troca o cargo. Gerente e operador precisam de ao menos uma unidade; administrador vê todas (a lista sai). */
+  handle("users:setRole", async ({ id, cargo, unidadeIds }, ctx) => {
+    if (Number(id) === ctx.session.id) throw new AppError("Você não pode alterar o seu próprio cargo.");
+    if (!CARGOS.includes(cargo)) throw new AppError("Cargo inválido.");
+    const u = await loadUser(id);
+    if (u.cargo === cargo) throw new AppError(`${u.nome} já é ${CARGO_LABEL[cargo]}. Escolha outro cargo.`);
+    if (await ultimoAdmin(u)) throw new AppError("Não é possível tirar o cargo do último administrador ativo.");
+    const units = cargo === "admin" ? [] : await cleanUnitIds(unidadeIds, cargo);
+    if (units.length) await gravarUnidades(u.id, units);
+    dbError((await supabase.from("usuarios").update({ cargo }).eq("id", u.id)).error);
+    if (!units.length) dbError((await supabase.from("usuario_unidades").delete().eq("usuario_id", u.id)).error);
+    recarregarSessoes(u.id); // a próxima chamada da pessoa já usa o cargo novo
+    const extra = units.length ? `, unidades ${units.join(", ")}` : "";
+    await audit(ctx, "cargo_alterado", `${u.email || u.usuario}: ${CARGO_LABEL[u.cargo]} → ${CARGO_LABEL[cargo]}${extra}`);
+    return true;
+  }, { perm: "usuarios" });
+
+  /* Antes de apagar: quanto histórico a pessoa tem e para quem ele pode passar */
+  const contar = async (tabela, filtro) => {
+    const r = await filtro(supabase.from(tabela).select("id", { count: "exact", head: true }));
+    dbError(r.error);
+    return r.count || 0;
+  };
+  handle("users:deletePreview", async ({ id }, ctx) => {
+    if (Number(id) === ctx.session.id) throw new AppError("Você não pode apagar o seu próprio usuário.");
+    const u = await loadUser(id);
+    if (await ultimoAdmin(u)) throw new AppError("Não é possível apagar o último administrador ativo.");
+    const engates = await contar("engates", (q) => q.or(`engatado_por.eq.${u.id},retirado_por.eq.${u.id}`));
+    const movimentacoes = await contar("movimentacoes", (q) => q.eq("usuario_id", u.id));
+    const transferencias = await contar("transferencias", (q) => q.or(`solicitante_id.eq.${u.id},recebedor_id.eq.${u.id}`));
+    const outros = ok(await supabase.from("usuarios").select("id, nome, email, usuario, ativo").neq("id", u.id).order("nome"));
+    return {
+      usuario: { id: u.id, nome: u.nome, email: u.email || u.usuario },
+      engates, movimentacoes, transferencias, total: engates + movimentacoes + transferencias,
+      outros: outros.map((o) => ({ id: o.id, nome: o.nome, email: o.email || o.usuario, ativo: b2i(o.ativo) })),
+    };
+  }, { perm: "usuarios" });
+
+  /* Apaga de vez (fn_usuario_apagar: tudo ou nada). Com histórico, só passando o histórico para outro usuário (destinoId). */
+  handle("users:delete", async ({ id, destinoId }, ctx) => {
+    const u = await loadUser(id);
+    const destino = Number(destinoId) || null;
+    const r = await rpc("fn_usuario_apagar", { p_usuario: u.id, p_destino: destino, p_admin: ctx.session.id });
+    recarregarSessoes(u.id); // as sessões saíram do banco junto com o usuário; aqui sai o cache
+    let detalhe = u.email || u.usuario;
+    if (destino && r.total > 0) {
+      const d = await getUserById(destino);
+      detalhe += `, histórico passado para ${d ? d.email || d.usuario : `usuário ${destino}`} (${r.total} registros)`;
+    }
+    await audit(ctx, "usuario_apagado", detalhe);
+    return r;
+  }, { perm: "usuarios" });
 }
 
 module.exports = { registerHandlers, dispatch };

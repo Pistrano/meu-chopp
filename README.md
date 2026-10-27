@@ -128,15 +128,35 @@ registrado está no banco.
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
 - No celular e no tablet, o menu fica numa barra embaixo e o Mais vira ☰.
 
+## Cargos e permissões
+
+Três cargos. O dia a dia (barris, engates e retiradas, transferências, histórico e Relatório de barris) é de todos;
+o resto depende da permissão do cargo:
+
+| Permissão | Administrador | Gerente | Operador |
+|---|:-:|:-:|:-:|
+| `usuarios`: criar, trocar cargo, desativar e apagar usuários | ✓ | | |
+| `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
+| `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
+| `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
+| `catalogo:editar`: editar, desativar e reativar chopes e estilos | ✓ | ✓ | |
+| `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
+| Unidades que vê | todas | as liberadas | as liberadas |
+
+- A tabela fica num lugar só: `PERMISSOES` em `src/server/api.js`. As rotas pedem uma permissão com
+  `handle(canal, fn, { perm: "exportar" })` e respondem *Você não tem permissão para esta ação.* para quem não tem.
+- As telas perguntam com `MC.pode("exportar")` (a lista vem do servidor no login). Botão com `data-perm="exportar"`
+  some sozinho para quem não tem; item do menu com `perm` também, e a tela manda de volta para o Painel.
+
 ## Conforto de uso
 
 - **Tema claro/escuro:** menu do usuário (canto superior direito) > *Tema*. Alterna entre *Automático* (segue o Windows ou o
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
-- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras e geração de senha temporária pedem confirmação antes de alterar os dados.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras, apagar usuário e geração de senha temporária pedem confirmação antes de alterar os dados.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
-- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
+- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.
@@ -200,9 +220,20 @@ registrado está no banco.
 
 - O barril é cadastrado escolhendo um **chope** do catálogo (ex.: *German Pilsen · Pilsen*). Se o chope ainda não existe,
   a opção *+ Cadastrar novo chope…* cria o chope (e, se precisar, o estilo) sem sair da tela.
-- Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são só do
-  administrador. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
+- Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são do
+  administrador e do gerente. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
   (os barris antigos continuam com ele).
+
+## Usuários
+
+- Aba **Usuários** (administrador): cria a conta com uma senha temporária, escolhe o cargo e as unidades de gerentes e operadores.
+- **Cargo:** troca o cargo de outra pessoa (ninguém troca o próprio). Gerente e operador precisam de ao menos uma unidade.
+  Vale na próxima ação da pessoa, sem precisar sair; o menu novo aparece na próxima tela que ela abrir.
+- **Apagar:** para contas criadas por engano (por exemplo, com e-mail errado). Sem histórico, só confirma. Com histórico
+  (engates, movimentações ou transferências), o histórico passa para a outra conta da mesma pessoa, escolhida na hora; o
+  Histórico passa a mostrar o nome dela. Quem saiu da empresa deve ser **desativado**, não apagado. Tudo é feito de uma vez
+  pela função `fn_usuario_apagar` (`supabase/migrations/20261027100000_cargo_gerente_apagar_usuario.sql`).
+- O sistema nunca fica sem administrador ativo: o último não pode ser apagado, desativado nem perder o cargo.
 
 ## Rodar os testes
 
@@ -235,7 +266,7 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 - 5 tentativas erradas bloqueiam a conta por 15 minutos; também há limite de tentativas por aparelho.
 - A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no
   banco (tabela `sessoes`, só com o hash do token), então atualizar o servidor não desloga ninguém. Desativar um usuário
-  ou gerar uma senha temporária derruba as sessões dele; trocar a própria senha derruba as dos outros aparelhos.
+  ou gerar uma senha temporária derruba as sessões dele (apagar também); trocar a própria senha derruba as dos outros aparelhos.
 - Cada unidade é isolada: o servidor confere a permissão a cada ação. Tentativas indevidas ficam na *Auditoria*.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.
