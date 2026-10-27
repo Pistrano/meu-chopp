@@ -48,8 +48,8 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     await limparBanco();
     srv = await startServer();
     admin = await setupAdmin(srv.base);
-    u.centro = (await admin.ok("units:create", { nome: "Loja Centro", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT" })).id;
-    u.pantanal = (await admin.ok("units:create", { nome: "Loja Pantanal", cnpj: "11.444.777/0001-61", endereco: "Av. do Pantanal, 200, Cuiabá - MT" })).id;
+    u.centro = (await admin.ok("units:create", { razaoSocial: "Loja Centro Comércio de Bebidas Ltda", nome: "Loja Centro", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT" })).id;
+    u.pantanal = (await admin.ok("units:create", { razaoSocial: "Loja Pantanal Comércio de Bebidas Ltda", nome: "Loja Pantanal", cnpj: "11.444.777/0001-61", endereco: "Av. do Pantanal, 200, Cuiabá - MT" })).id;
     await admin.ok("taps:create", { unitId: u.centro, quantidade: 3 });
     await admin.ok("taps:create", { unitId: u.pantanal, quantidade: 2 });
     const pilsen = await admin.ok("estilos:create", { nome: "Pilsen" });
@@ -117,7 +117,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     await gerente.fail("taps:create", { unitId: u.centro, quantidade: 1 }, SEM_PERMISSAO);
     await gerente.fail("units:adminList", {}, SEM_PERMISSAO);
     await gerente.fail("units:details", { id: u.centro }, SEM_PERMISSAO);
-    await gerente.fail("units:create", { nome: "Z", cnpj: "34.028.316/0001-03", endereco: "Rua Z, 1, Cuiabá - MT" }, SEM_PERMISSAO);
+    await gerente.fail("units:create", { razaoSocial: "Z Comércio de Bebidas Ltda", nome: "Z", cnpj: "34.028.316/0001-03", endereco: "Rua Z, 1, Cuiabá - MT" }, SEM_PERMISSAO);
     await gerente.fail("audit:list", {}, SEM_PERMISSAO);
   });
 
@@ -168,7 +168,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     assert.deepEqual(me.permissoes, ["catalogo:editar", "funcionarios"]);
     await paula.ok("estilos:update", { id: ids.estiloPilsen, nome: "Pilsen Clássica" });
     assert.deepEqual((await paula.ok("units:list")).map((x) => x.id), [u.centro, u.pantanal]);
-    const audit = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "cargo_alterado"));
+    const audit = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "cargo_alterado").order("id"));
     assert.equal(audit.at(-1).detalhe, `paula@barrilfacil.test: Operador → Gerente, unidades ${u.centro}, ${u.pantanal}`);
 
     // gerente → administrador: vê todas as unidades e a lista de unidades sai
@@ -237,7 +237,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     const aud = await consulta(banco().from("auditoria").select("usuario_id, detalhe").like("detalhe", "%[usuário apagado: caio@barrilfacil.test]"));
     assert.ok(aud.length >= 2);
     assert.ok(aud.every((a) => a.usuario_id === null));
-    const meu = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "usuario_apagado"));
+    const meu = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "usuario_apagado").order("id"));
     assert.equal(meu.at(-1).detalhe, "caio@barrilfacil.test");
   });
 
@@ -280,7 +280,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     assert.equal(await conta("transferencias", (q) => q.eq("recebedor_id", destino)), 1);
     // a auditoria da conta errada (login, primeiro acesso...) agora é da outra conta
     assert.ok((await consulta(banco().from("auditoria").select("id").eq("usuario_id", destino).eq("acao", "primeiro_acesso"))).length === 2);
-    const aud = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "usuario_apagado"));
+    const aud = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "usuario_apagado").order("id"));
     assert.equal(aud.at(-1).detalhe, `paulo@errado.test, histórico passado para paulo@barrilfacil.test (${engates + movs + transf} registros)`);
     // o engate aparece no Histórico com o nome da outra conta
     const hist = (await admin.ok("history:list", { unitId: u.centro, q: "E1" })).filter((m) => m.codigo === "E1");

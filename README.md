@@ -139,7 +139,7 @@ o resto depende da permissão do cargo:
 | `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
 | `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
 | `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
-| `catalogo:editar`: editar, desativar e reativar chopes e estilos | ✓ | ✓ | |
+| `catalogo:editar`: editar, desativar, reativar e apagar chopes e estilos | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
@@ -154,7 +154,7 @@ o resto depende da permissão do cargo:
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
-- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras, apagar usuário e geração de senha temporária pedem confirmação antes de alterar os dados.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras, apagar usuário, estilo ou chope e geração de senha temporária pedem confirmação antes de alterar os dados.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
 - **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
@@ -166,9 +166,10 @@ o resto depende da permissão do cargo:
 
 ## Unidades e torneiras
 
-- Aba **Unidades** (administrador): cadastro com nome, CNPJ (numérico ou alfanumérico, com validação) e localização,
-  e o cadastro das torneiras de cada loja. As unidades que já existiam ficam marcadas como *A preencher* até alguém
-  informar o CNPJ e o endereço reais em *Editar*.
+- Aba **Unidades** (administrador): cadastro com razão social, nome fantasia, nome curto (opcional, aparece no seletor
+  de unidade), CNPJ (numérico ou alfanumérico, com validação) e endereço, e o cadastro das torneiras de cada loja.
+  O nome fantasia é o nome mostrado no app inteiro e não pode repetir. As unidades que já existiam ficam marcadas como
+  *A preencher* até alguém informar a razão social, o CNPJ e o endereço reais em *Editar*.
 - **Engate:** em *Barris > Engatar na torneira*, o funcionário escolhe uma torneira livre da unidade do barril.
   Sem torneira livre, o engate não é feito.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
@@ -223,6 +224,11 @@ o resto depende da permissão do cargo:
 - Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são do
   administrador e do gerente. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
   (os barris antigos continuam com ele).
+- **Apagar** (administrador e gerente), para o que foi cadastrado errado, sem perder histórico:
+  - Chope: só apaga se nenhum barril usa o chope. Se algum usa, o app avisa quantos e sugere desativar ou editar o nome.
+  - Estilo sem chopes: só confirma. Estilo com chopes (ativos ou não): escolha para qual estilo ativo os chopes vão.
+    Os barris desses chopes passam a mostrar o estilo novo, inclusive no histórico e no Relatório de barris.
+    Barris antigos cadastrados sem chope do catálogo não mudam.
 
 ## Usuários
 

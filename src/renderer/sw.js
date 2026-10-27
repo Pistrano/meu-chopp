@@ -1,6 +1,6 @@
 /* BarrilFacil — service worker: permite instalar o app e abrir as telas mesmo com a conexão lenta.
    Os DADOS nunca ficam guardados aqui: a API (/api) sempre vai ao servidor. */
-const CACHE = "barrilfacil-v6";
+const CACHE = "barrilfacil-v7";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => {

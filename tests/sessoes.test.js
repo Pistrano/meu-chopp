@@ -31,7 +31,7 @@ describe("sessões guardadas no banco", { skip: SEM_BANCO }, () => {
     await limparBanco();
     srv = await startServer();
     admin = await setupAdmin(srv.base);
-    unidadeId = (await admin.ok("units:create", { nome: "Loja Centro", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT" })).id;
+    unidadeId = (await admin.ok("units:create", { razaoSocial: "Loja Centro Comércio de Bebidas Ltda", nome: "Loja Centro", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT" })).id;
   });
   after(async () => { if (srv) await srv.stop(); });
 

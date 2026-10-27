@@ -362,3 +362,5 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .cargo-info li.is-sel { color: var(--mc-text); }
 .cargo-info li.is-sel::before { background: var(--mc-gold-dark); }
 .apagar-aviso { background: var(--mc-danger-soft); color: var(--mc-danger); border-radius: 8px; padding: .6rem .8rem; font-size: .88rem; font-weight: 600; }
+/* Chopes: lista do que muda de estilo ao apagar um estilo */
+.apagar-lista { margin: 0 0 .9rem; padding-left: 1.2rem; font-weight: 600; max-height: 12rem; overflow-y: auto; }

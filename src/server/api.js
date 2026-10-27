@@ -658,38 +658,42 @@ function registerHandlers() {
 
   /* Detalhes de uma unidade + suas torneiras (tela Unidades) */
   handle("units:details", async ({ id }) => {
-    const r = await supabase.from("unidades").select("id, nome, nome_curto, ativo, cnpj, endereco").eq("id", Number(id)).maybeSingle();
+    const r = await supabase.from("unidades").select("id, nome, nome_curto, razao_social, ativo, cnpj, endereco").eq("id", Number(id)).maybeSingle();
     dbError(r.error);
     if (!r.data) throw new AppError("Unidade não encontrada.");
     const u = r.data;
     return { ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj), torneiras: await tapsOfUnit(u.id) };
   }, { perm: "unidades" });
 
-  /* Nome, CNPJ e endereço são obrigatórios ao cadastrar e ao editar. */
+  /* Razão social, nome fantasia (coluna nome: o nome mostrado no app), CNPJ e endereço são obrigatórios
+     ao cadastrar e ao editar. */
   const likeEscape = (s) => s.replace(/[\\%_]/g, "\\$&");
-  const cleanUnitData = async ({ nome, nomeCurto, cnpj, endereco }, exceptId = 0) => {
+  const cleanUnitData = async ({ razaoSocial, nome, nomeCurto, cnpj, endereco }, exceptId = 0) => {
+    const razao = String(razaoSocial || "").trim().replace(/\s+/g, " ");
+    if (razao.length < 2) throw new AppError("Informe a razão social da unidade.");
+    if (razao.length > 120) throw new AppError("Razão social muito longa (máximo 120 caracteres).");
     const full = String(nome || "").trim();
     const short = String(nomeCurto || "").trim() || full;
-    if (full.length < 2) throw new AppError("Informe o nome da unidade.");
-    if (full.length > 60 || short.length > 30) throw new AppError("Nome muito longo (máximo 60 e 30 caracteres).");
+    if (full.length < 2) throw new AppError("Informe o nome fantasia da unidade.");
+    if (full.length > 60 || short.length > 30) throw new AppError("Nome fantasia ou nome curto muito longo (máximo 60 e 30 caracteres).");
     const mesmoNome = ok(await supabase.from("unidades").select("id").ilike("nome", likeEscape(full)).neq("id", exceptId).limit(1));
-    if (mesmoNome.length) throw new AppError(`Já existe uma unidade chamada "${full}".`);
+    if (mesmoNome.length) throw new AppError(`Já existe uma unidade com o nome fantasia "${full}".`);
     const doc = normalizeCnpj(cnpj);
     const outra = ok(await supabase.from("unidades").select("nome").eq("cnpj", doc).neq("id", exceptId).limit(1));
     if (outra.length) throw new AppError(`Este CNPJ já está cadastrado na unidade "${outra[0].nome}".`);
     const end = String(endereco || "").trim().replace(/\s+/g, " ");
-    if (end.length < 8) throw new AppError("Informe a localização completa da unidade (rua, número, bairro, cidade, estado e CEP).");
-    if (end.length > 300) throw new AppError("Localização muito longa (máximo 300 caracteres).");
-    return { full, short, doc, end };
+    if (end.length < 8) throw new AppError("Informe o endereço completo da unidade (rua, número, bairro, cidade, estado e CEP).");
+    if (end.length > 300) throw new AppError("Endereço muito longo (máximo 300 caracteres).");
+    return { razao, full, short, doc, end };
   };
 
   handle("units:create", async (p, ctx) => {
-    const { full, short, doc, end } = await cleanUnitData(p);
+    const { razao, full, short, doc, end } = await cleanUnitData(p);
     const row = ok(
-      await supabase.from("unidades").insert({ nome: full, nome_curto: short, cnpj: doc, endereco: end }).select("id").single(),
-      "Já existe uma unidade com esse nome ou CNPJ."
+      await supabase.from("unidades").insert({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end }).select("id").single(),
+      "Já existe uma unidade com esse nome fantasia ou CNPJ."
     );
-    await audit(ctx, "unidade_criada", `${full} (CNPJ ${formatCnpj(doc)})`);
+    await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})`);
     return { id: row.id };
   }, { perm: "unidades" });
 
@@ -697,12 +701,12 @@ function registerHandlers() {
     const id = Number(p.id);
     const ex = ok(await supabase.from("unidades").select("id").eq("id", id));
     if (!ex.length) throw new AppError("Unidade não encontrada.");
-    const { full, short, doc, end } = await cleanUnitData(p, id);
+    const { razao, full, short, doc, end } = await cleanUnitData(p, id);
     dbError(
-      (await supabase.from("unidades").update({ nome: full, nome_curto: short, cnpj: doc, endereco: end }).eq("id", id)).error,
-      "Já existe uma unidade com esse nome ou CNPJ."
+      (await supabase.from("unidades").update({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end }).eq("id", id)).error,
+      "Já existe uma unidade com esse nome fantasia ou CNPJ."
     );
-    await audit(ctx, "unidade_editada", `${full} (CNPJ ${formatCnpj(doc)})`);
+    await audit(ctx, "unidade_editada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})`);
     return true;
   }, { perm: "unidades" });
 
@@ -859,7 +863,8 @@ function registerHandlers() {
 
   /* ======== Catálogo de chopes e estilos ========
      Cadastrar: qualquer usuário logado (direto do cadastro de barril).
-     Editar e desativar: permissão catalogo:editar (administrador e gerente). Nada é apagado: barris antigos continuam apontando para o chope. */
+     Editar, desativar e apagar: permissão catalogo:editar (administrador e gerente). Apagar é só para o que foi
+     cadastrado errado: chope com barris não é apagado, e os chopes de um estilo apagado passam para outro estilo. */
   const cleanCatalogName = (value, tipo) => {
     const nome = String(value || "").trim().replace(/\s+/g, " ");
     if (nome.length < 2 || nome.length > 60) throw new AppError(`O nome do ${tipo} deve ter de 2 a 60 caracteres.`);
@@ -887,10 +892,14 @@ function registerHandlers() {
   };
   const wantsAll = (p, ctx) => !!p.todos && pode(ctx.session, "catalogo:editar");
 
+  // Para quem edita o catálogo, cada estilo vem com quantos chopes tem (ativos ou não): a tela usa ao apagar
   handle("estilos:list", async (p, ctx) => {
-    let query = supabase.from("estilos").select("id, nome, ativo").order("nome");
+    const editar = pode(ctx.session, "catalogo:editar");
+    let query = supabase.from("estilos").select(editar ? "id, nome, ativo, chopes(count)" : "id, nome, ativo").order("nome");
     if (!wantsAll(p, ctx)) query = query.eq("ativo", true);
-    return ok(await query).map((e) => ({ ...e, ativo: b2i(e.ativo) }));
+    return ok(await query).map(({ chopes, ...e }) => ({
+      ...e, ativo: b2i(e.ativo), ...(editar ? { chopes: chopes && chopes[0] ? chopes[0].count : 0 } : {}),
+    }));
   });
 
   handle("estilos:create", async ({ nome }, ctx) => {
@@ -919,6 +928,15 @@ function registerHandlers() {
     dbError((await supabase.from("estilos").update({ ativo: !e.ativo }).eq("id", e.id)).error);
     await audit(ctx, e.ativo ? "estilo_desativado" : "estilo_reativado", e.nome);
     return true;
+  }, { perm: "catalogo:editar" });
+
+  // Estilo com chopes: os chopes (e os barris deles) passam para o estilo destinoId. fn_estilo_apagar: tudo ou nada.
+  handle("estilos:delete", async ({ id, destinoId }, ctx) => {
+    const e = await loadEstilo(id);
+    const r = await rpc("fn_estilo_apagar", { p_estilo: e.id, p_destino: Number(destinoId) || null });
+    const extra = r.chopes ? `: ${r.chopes} chope(s) e ${r.barris} barril(is) passaram para o estilo ${r.destino}` : "";
+    await audit(ctx, "estilo_apagado", `${r.nome}${extra}`);
+    return r;
   }, { perm: "catalogo:editar" });
 
   handle("chopes:list", async (p, ctx) => {
@@ -964,6 +982,14 @@ function registerHandlers() {
     dbError((await supabase.from("chopes").update({ ativo: !c.ativo }).eq("id", c.id)).error);
     await audit(ctx, c.ativo ? "chope_desativado" : "chope_reativado", c.nome);
     return true;
+  }, { perm: "catalogo:editar" });
+
+  // Só chope sem barris (fn_chope_apagar); com barris, a mensagem do banco sugere desativar ou editar
+  handle("chopes:delete", async ({ id }, ctx) => {
+    const c = await loadChope(id);
+    const r = await rpc("fn_chope_apagar", { p_chope: c.id });
+    await audit(ctx, "chope_apagado", `${r.nome} (${r.estilo || "?"})`);
+    return r;
   }, { perm: "catalogo:editar" });
 
   /* ======== Dashboard ======== */
