@@ -5,7 +5,7 @@
   "main": "src/main/main.js",
   "scripts": {
     "server": "node --use-system-ca src/server/server.js",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "start": "electron .",
     "dist": "electron-builder",
     "dist:publicar": "electron-builder --publish always"

@@ -16,7 +16,6 @@ const crypto = require("crypto");
 const { supabase } = require("./supabase");
 
 const handlers = new Map();   // canal -> { fn, auth, admin }
-const sessions = new Map();   // token -> { user, lastActivity }
 
 const CARGO_LABEL = { admin: "Administrador", operador: "Operador" };
 
@@ -49,6 +48,8 @@ const inicioDoDia = (dia) => {
 };
 // Quem entrega os barris: aparece como origem das entradas no histórico (NOME_FORNECEDOR no .env)
 const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
+// APP_ENV=beta marca o ambiente de testes (as telas mostram a faixa amarela). Sem APP_ENV: servidor das lojas.
+const AMBIENTE = String(process.env.APP_ENV || "").trim().toLowerCase() || null;
 const b2i = (v) => (v ? 1 : 0);
 
 class AppError extends Error {
@@ -60,6 +61,7 @@ class AppError extends Error {
   }
 }
 
+/* auth: true exige sessão; false dispensa; "opcional" usa a sessão se houver uma válida (ex.: config:get na tela de login) */
 function handle(channel, fn, { auth = true, admin = false } = {}) {
   handlers.set(channel, { fn, auth, admin });
 }
@@ -104,31 +106,110 @@ async function audit(ctx, acao, detalhe, userId) {
   if (error) console.error("[auditoria]", error.message);
 }
 
+/* ---------- Sessões ----------
+   Cada login vira uma linha em public.sessoes com o hash SHA-256 do token (o token em si só existe no cookie
+   mc_session). Assim a sessão sobrevive a uma atualização do servidor, e desativar um usuário derruba a sessão dele.
+   Cache em memória: a sessão lida do banco vale 60 s. Depois disso é relida junto com os dados atuais do usuário,
+   então mudança de nome, cargo ou senha vale em até 60 s. ultima_atividade vai para o banco no máximo uma vez por minuto. */
+const CACHE_SESSAO_MS = 60 * 1000;
+const GRAVA_ATIVIDADE_MS = 60 * 1000;
+const sessionCache = new Map(); // hash do token -> { hash, usuarioId, ativo, user, ultimaAtividade, gravadaEm, lidaEm }
+const hashToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
+
+/* Sessão do token, do cache (lida há menos de 60 s) ou do banco. null = não existe.
+   Falha do banco sobe como erro técnico: a chamada nunca passa sem sessão. */
+async function buscarSessao(token) {
+  const hash = hashToken(token);
+  const agora = Date.now();
+  const c = sessionCache.get(hash);
+  if (c && agora - c.lidaEm < CACHE_SESSAO_MS) return c;
+  const r = await supabase.from("sessoes")
+    .select("ultima_atividade, usuarios(id, nome, email, usuario, cargo, ativo, trocar_senha)")
+    .eq("token_hash", hash).maybeSingle();
+  dbError(r.error);
+  if (!r.data || !r.data.usuarios) { sessionCache.delete(hash); return null; }
+  const u = r.data.usuarios;
+  const gravada = new Date(r.data.ultima_atividade).getTime();
+  const rec = {
+    hash, usuarioId: u.id, ativo: !!u.ativo, user: publicUser(u),
+    ultimaAtividade: Math.max(gravada, c ? c.ultimaAtividade : 0), // a memória pode estar até 1 min à frente do banco
+    gravadaEm: Math.max(gravada, c ? c.gravadaEm : 0),
+    lidaEm: agora,
+  };
+  sessionCache.set(hash, rec);
+  return rec;
+}
+
+async function criarSessao(user, ip) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const hash = hashToken(token);
+  dbError((await supabase.from("sessoes").insert({ token_hash: hash, usuario_id: user.id, ip: ip || null })).error);
+  const agora = Date.now();
+  sessionCache.set(hash, { hash, usuarioId: user.id, ativo: true, user, ultimaAtividade: agora, gravadaEm: agora, lidaEm: agora });
+  return token;
+}
+
+async function apagarSessao(hash) {
+  sessionCache.delete(hash);
+  dbError((await supabase.from("sessoes").delete().eq("token_hash", hash)).error);
+}
+
+async function marcarAtividade(rec) {
+  const agora = Date.now();
+  rec.ultimaAtividade = agora;
+  if (agora - rec.gravadaEm < GRAVA_ATIVIDADE_MS) return;
+  rec.gravadaEm = agora;
+  const { error } = await supabase.from("sessoes").update({ ultima_atividade: new Date(agora).toISOString() }).eq("token_hash", rec.hash);
+  if (error) console.error("[sessoes] atividade:", error.message);
+}
+
+/* Derruba as sessões do usuário, no banco e no cache. excetoToken: a sessão de quem fez a ação continua aberta. */
+async function encerrarSessoes(usuarioId, { excetoToken } = {}) {
+  const exceto = excetoToken ? hashToken(excetoToken) : null;
+  for (const [hash, rec] of sessionCache) if (rec.usuarioId === usuarioId && hash !== exceto) sessionCache.delete(hash);
+  let q = supabase.from("sessoes").delete().eq("usuario_id", usuarioId);
+  if (exceto) q = q.neq("token_hash", exceto);
+  dbError((await q).error);
+}
+
+/* Só esquece o cache do usuário: a próxima chamada dele busca os dados novos no banco */
+function recarregarSessoes(usuarioId) {
+  for (const [hash, rec] of sessionCache) if (rec.usuarioId === usuarioId) sessionCache.delete(hash);
+}
+
 /* Executa uma operação para o aparelho identificado por `token` (cookie de sessão).
    Retorna { body, setToken?, clearToken? }. */
 async function dispatch(channel, payload, token, meta = {}) {
   const entry = handlers.get(channel);
   if (!entry) return { body: { ok: false, error: "Operação desconhecida.", code: "NOT_FOUND" } };
   const { fn, auth, admin } = entry;
-  let rec = token ? sessions.get(token) : null;
-  const ctx = { session: rec ? rec.user : null, sessionAction: null, clientIp: meta.ip || "" };
+  const ctx = { session: null, sessionAction: null, clientIp: meta.ip || "", token: token || null };
 
   let body;
   try {
     if (channel === "auth:login" && ipBlocked(ctx.clientIp))
       throw new AppError("Muitas tentativas deste aparelho. Aguarde alguns minutos.");
-    if (auth) {
-      if (rec && Date.now() - rec.lastActivity > IDLE_MS) {
+    if (auth === "opcional") {
+      const rec = token ? await buscarSessao(token) : null;
+      if (rec && rec.ativo && Date.now() - rec.ultimaAtividade <= IDLE_MS) ctx.session = rec.user;
+    } else if (auth) {
+      const rec = token ? await buscarSessao(token) : null;
+      if (!rec) throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
+      if (!rec.ativo) {
+        await apagarSessao(rec.hash);
+        throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
+      }
+      if (Date.now() - rec.ultimaAtividade > IDLE_MS) {
+        ctx.session = rec.user; // a auditoria registra de quem era a sessão
         await audit(ctx, "sessao_expirada", "Encerrada por inatividade");
-        sessions.delete(token);
-        rec = null;
         ctx.session = null;
+        await apagarSessao(rec.hash);
         throw new AppError("Sua sessão expirou por inatividade. Entre novamente.", "SESSION");
       }
-      if (!rec) throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
+      ctx.session = rec.user;
       if (ctx.session.trocarSenha && !PERMITIDOS_TROCA.has(channel))
         throw new AppError("Defina sua senha para continuar.", "MUST_CHANGE");
-      rec.lastActivity = Date.now();
+      await marcarAtividade(rec);
     }
     if (admin && ctx.session.cargo !== "admin") throw new AppError("Apenas administradores podem executar esta ação.");
     const data = await fn(payload || {}, ctx);
@@ -148,13 +229,16 @@ async function dispatch(channel, payload, token, meta = {}) {
 
   const out = { body };
   if (ctx.sessionAction === "end") {
-    if (token) sessions.delete(token);
+    if (token) await apagarSessao(hashToken(token)).catch((err) => console.error("[sessoes] logout:", err.message));
     out.clearToken = true;
   } else if (ctx.sessionAction === "start" && body.ok) {
-    if (token) sessions.delete(token); // novo token a cada login (evita fixação de sessão)
-    const novo = crypto.randomBytes(32).toString("hex");
-    sessions.set(novo, { user: ctx.session, lastActivity: Date.now() });
-    out.setToken = novo;
+    try {
+      if (token) await apagarSessao(hashToken(token)); // novo token a cada login (evita fixação de sessão)
+      out.setToken = await criarSessao(ctx.session, ctx.clientIp);
+    } catch (err) {
+      console.error(`[erro] ${channel}: não foi possível criar a sessão:`, err);
+      out.body = { ok: false, error: "Erro inesperado. Tente novamente." };
+    }
   }
   if (channel === "auth:login") {
     if (body.ok) ipFails.delete(ctx.clientIp);
@@ -163,10 +247,18 @@ async function dispatch(channel, payload, token, meta = {}) {
   return out;
 }
 
-/* Limpa sessões esquecidas */
-setInterval(() => {
-  const limite = Date.now() - IDLE_MS;
-  for (const [t, r] of sessions) if (r.lastActivity < limite) sessions.delete(t);
+/* Limpa as sessões vencidas: as do banco (com 1 min de folga, porque ultima_atividade pode estar até
+   1 min atrás da memória) e as do cache */
+setInterval(async () => {
+  const agora = Date.now();
+  for (const [h, r] of sessionCache) if (agora - r.ultimaAtividade > IDLE_MS + GRAVA_ATIVIDADE_MS) sessionCache.delete(h);
+  try {
+    const { error } = await supabase.from("sessoes").delete()
+      .lt("ultima_atividade", new Date(agora - IDLE_MS - GRAVA_ATIVIDADE_MS).toISOString());
+    if (error) console.error("[sessoes] limpeza:", error.message);
+  } catch (err) {
+    console.error("[sessoes] limpeza:", err.message);
+  }
 }, 5 * 60 * 1000).unref();
 
 /* ---------- Segurança de senhas e e-mails ---------- */
@@ -497,8 +589,11 @@ function registerHandlers() {
 
   handle("auth:me", (_p, ctx) => ctx.session);
 
-  // Dados do servidor que as telas usam (carregados junto com o cabeçalho)
-  handle("config:get", () => ({ fornecedor: FORNECEDOR, hoje: hojeTZ() }));
+  // Dados do servidor que as telas usam (carregados junto com o cabeçalho).
+  // Sem login (telas de entrar, primeiro acesso e configuração) devolve só o ambiente, para a faixa de testes.
+  handle("config:get", (_p, ctx) =>
+    ctx.session ? { fornecedor: FORNECEDOR, hoje: hojeTZ(), ambiente: AMBIENTE } : { ambiente: AMBIENTE },
+  { auth: "opcional" });
   handle("auth:ping", () => true); // mantém a sessão viva enquanto o usuário está ativo
 
   /* Primeiro acesso / senha temporária: define e-mail (se faltar) e uma senha nova */
@@ -525,6 +620,7 @@ function registerHandlers() {
     checkPassword(nova, u.email);
     if (String(nova) === String(atual)) throw new AppError("A nova senha precisa ser diferente da atual.");
     dbError((await supabase.from("usuarios").update({ senha_hash: await hashPassword(nova) }).eq("id", u.id)).error);
+    await encerrarSessoes(u.id, { excetoToken: ctx.token }); // os outros aparelhos saem; este continua
     await audit(ctx, "senha_alterada", "Alterou a própria senha");
     return true;
   });
@@ -1353,6 +1449,7 @@ function registerHandlers() {
     dbError(
       (await supabase.from("usuario_unidades").delete().eq("usuario_id", u.id).not("unidade_id", "in", `(${units.join(",")})`)).error
     );
+    recarregarSessoes(u.id);
     await audit(ctx, "acesso_alterado", `${u.email || u.usuario}: unidades ${units.join(", ")}`);
     return true;
   }, { admin: true });
@@ -1364,6 +1461,7 @@ function registerHandlers() {
       (await supabase.from("usuarios")
         .update({ senha_hash: await hashPassword(senha), trocar_senha: true, falhas: 0, bloqueado_ate: null }).eq("id", u.id)).error
     );
+    await encerrarSessoes(u.id); // a pessoa sai de todos os aparelhos e entra de novo com a senha temporária
     await audit(ctx, "senha_temporaria_gerada", u.email || u.usuario);
     return { email: u.email || u.usuario, senha };
   }, { admin: true });
@@ -1379,6 +1477,7 @@ function registerHandlers() {
     if (Number(id) === ctx.session.id) throw new AppError("Você não pode desativar o seu próprio usuário.");
     const u = await loadUser(id);
     dbError((await supabase.from("usuarios").update({ ativo: !u.ativo }).eq("id", u.id)).error);
+    if (u.ativo) await encerrarSessoes(u.id); // desativado: a próxima ação dele leva ao login
     await audit(ctx, u.ativo ? "usuario_desativado" : "usuario_ativado", u.email || u.usuario);
     return true;
   }, { admin: true });
