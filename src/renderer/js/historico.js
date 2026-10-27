@@ -47,7 +47,7 @@
       .join("");
   }
 
-  document.getElementById("btnExport").addEventListener("click", async () => {
+  document.getElementById("btnExport")?.addEventListener("click", async () => {
     const r = await MC.run(() => MC.call("history:export", filters()));
     if (!r) return;
     // O servidor devolve o conteúdo; o próprio aparelho salva o arquivo (funciona em PC, tablet e celular)
@@ -59,7 +59,7 @@
     MC.toast(`Relatório gerado (${r.total} movimentações).`, "ok");
   });
 
-  if (ctx.user.cargo === "admin") {
+  if (MC.pode("auditoria")) {
     const tabs = document.getElementById("tabs");
     tabs.classList.remove("d-none");
     tabs.addEventListener("click", (e) => {

@@ -4,7 +4,7 @@
    ========================================================== */
 const MCLayout = (() => {
   /* principal: true = aba fixa no topo. O resto fica no botão "Mais" (toda tela nova entra lá por padrão).
-     short: rótulo da barra inferior no celular. admin: só o administrador vê. */
+     short: rótulo da barra inferior no celular. perm: só quem tem a permissão vê (e abre a tela). */
   const NAV = [
     { id: "dashboard", label: "Painel", href: "dashboard.html", principal: true },
     { id: "barris", label: "Barris", href: "barris.html", principal: true },
@@ -13,10 +13,9 @@ const MCLayout = (() => {
     { id: "catalogo", label: "Chopes", href: "catalogo.html" },
     { id: "relatorio", label: "Relatório de barris", href: "relatorio-barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
-    { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
-    { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
+    { id: "quiosques", label: "Unidades", href: "quiosques.html", perm: "unidades" },
+    { id: "usuarios", label: "Usuários", href: "usuarios.html", perm: "usuarios" },
   ];
-  const ADMIN_PAGES = ["usuarios", "quiosques"]; // telas que só o administrador abre
   const SEM_UNIDADE = ["usuarios", "quiosques", "catalogo"]; // telas que funcionam sem unidade liberada
 
   const ICON_PIN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.58 7-12A7 7 0 0 0 5 10c0 4.42 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
@@ -46,7 +45,7 @@ const MCLayout = (() => {
   }
 
   function buildNav(pageId) {
-    const itens = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin");
+    const itens = NAV.filter((n) => !n.perm || MC.pode(n.perm));
     const aba = (n) => `<a href="${n.href}" class="nav-tab${n.id === pageId ? " active" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
       (n.short ? `<span class="nav-full">${n.label}</span><span class="nav-short">${n.short}</span>` : n.label) + "</a>";
     const mais = itens.filter((n) => !n.principal);
@@ -218,7 +217,11 @@ const MCLayout = (() => {
     }
     if (!ctx.user) { window.location.href = "index.html"; return null; }
     if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
-    if (ADMIN_PAGES.includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
+    MC.setUser(ctx.user);
+    const tela = NAV.find((n) => n.id === pageId);
+    if (tela && tela.perm && !MC.pode(tela.perm)) { window.location.href = "dashboard.html"; return null; }
+    // Botões que dependem de permissão (ex.: data-perm="exportar") somem para quem não tem
+    document.querySelectorAll("[data-perm]").forEach((el) => { if (!MC.pode(el.dataset.perm)) el.remove(); });
 
     try {
       [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), lerConfig()]);
@@ -245,7 +248,7 @@ const MCLayout = (() => {
     if (!ctx.units.length && !SEM_UNIDADE.includes(pageId)) {
       const main = document.querySelector("main");
       main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhuma unidade liberada</h2>
-        <p class="t-muted mb-0">${ctx.user.cargo === "admin"
+        <p class="t-muted mb-0">${MC.pode("unidades")
           ? "Não há unidades ativas. Cadastre ou reative uma na aba Unidades."
           : "Você ainda não tem acesso a nenhuma unidade. Peça a um administrador para liberar o seu acesso."}</p></div>`;
       return null;

@@ -144,15 +144,16 @@ async function setupAdmin(base, { nome = "Eduardo", email = "eduardo@barrilfacil
   return admin;
 }
 
-/* Cria um operador pelo administrador e faz o primeiro acesso dele (senha final: SenhaForte123) */
-async function makeOperator(base, admin, { nome, email, unidadeIds }) {
-  const { senha } = await admin.ok("users:create", { nome, email, cargo: "operador", unidadeIds });
-  const op = client(base);
-  await op.ok("auth:login", { identifier: email, password: senha });
-  await op.ok("auth:completeProfile", { nova: "SenhaForte123" });
-  return op;
+/* Cria um usuário pelo administrador e faz o primeiro acesso dele (senha final: SenhaForte123) */
+async function makeUser(base, admin, { nome, email, cargo, unidadeIds }) {
+  const { senha } = await admin.ok("users:create", { nome, email, cargo, unidadeIds });
+  const c = client(base);
+  await c.ok("auth:login", { identifier: email, password: senha });
+  await c.ok("auth:completeProfile", { nova: "SenhaForte123" });
+  return c;
 }
+const makeOperator = (base, admin, dados) => makeUser(base, admin, { ...dados, cargo: "operador" });
 
 const hashToken = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
 
-module.exports = { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeOperator, hashToken };
+module.exports = { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeUser, makeOperator, hashToken };

@@ -60,7 +60,7 @@
 
   function render() {
     if (!taps.length) {
-      const link = ctx.user.cargo === "admin"
+      const link = MC.pode("unidades")
         ? ` <a href="quiosques.html?id=${ctx.unitId}">Cadastrar torneiras desta unidade</a>.`
         : "";
       board.innerHTML = `<div class="panel tap-empty"><h2 class="panel-title">Nenhuma torneira cadastrada</h2>

@@ -254,7 +254,7 @@
 
   document.getElementById("btnRecolher").addEventListener("click", recolher);
 
-  document.getElementById("btnExportStock").addEventListener("click", async () => {
+  document.getElementById("btnExportStock")?.addEventListener("click", async () => {
     const r = await MC.run(() => MC.call("barris:exportStock", { unitId: ctx.unitId }));
     if (!r) return;
     const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
