@@ -11,7 +11,7 @@
 
   MC.maskCnpj($("cnpj"));
 
-  const missing = (u) => !u.cnpj || !u.endereco;
+  const missing = (u) => !u.razao_social || !u.cnpj || !u.endereco;
   const pendente = '<span class="op-badge op-badge--primeiro">A preencher</span>';
 
   /* ---------- Lista de unidades ---------- */
@@ -24,11 +24,11 @@
     const note = $("pendingNote");
     note.classList.toggle("d-none", !faltando.length);
     note.textContent = faltando.length
-      ? `${faltando.map((u) => u.nome).join(", ")} ainda ${faltando.length > 1 ? "estão" : "está"} sem CNPJ ou localização. Use "Editar" para completar os dados.`
+      ? `${faltando.map((u) => u.nome).join(", ")} ainda ${faltando.length > 1 ? "estão" : "está"} sem razão social, CNPJ ou endereço. Use "Editar" para completar os dados.`
       : "";
 
     tbody.innerHTML = list.map((u) => `<tr class="${current && current.id === u.id ? "is-selected" : ""}">
-      <td><span class="t-strong">${MC.esc(u.nome)}</span><br><span class="t-muted">${MC.esc(u.nome_curto)}</span></td>
+      <td><span class="t-strong">${MC.esc(u.nome)}</span><br>${u.razao_social ? `<span class="t-muted">${MC.esc(u.razao_social)}</span>` : pendente}</td>
       <td class="cell-nowrap">${u.cnpjFormatado ? MC.esc(u.cnpjFormatado) : pendente}</td>
       <td class="cell-address">${u.endereco ? MC.esc(u.endereco) : pendente}</td>
       <td>${u.torneiras}${u.torneiras ? ` <span class="t-muted">· ${u.torneirasOcupadas} ocupada${u.torneirasOcupadas === 1 ? "" : "s"}</span>` : ""}</td>
@@ -45,7 +45,7 @@
   $("formUnit").addEventListener("submit", async (e) => {
     e.preventDefault();
     const r = await MC.run(
-      () => MC.call("units:create", { nome: $("nome").value, nomeCurto: $("curto").value, cnpj: $("cnpj").value, endereco: $("endereco").value }),
+      () => MC.call("units:create", { razaoSocial: $("razao").value, nome: $("nome").value, nomeCurto: $("curto").value, cnpj: $("cnpj").value, endereco: $("endereco").value }),
       "Unidade cadastrada. Agora cadastre as torneiras e libere o acesso na aba Usuários."
     );
     if (r) { e.target.reset(); await load(); openDetail(r.id); }
@@ -56,16 +56,21 @@
     const u = list.find((x) => x.id === id);
     const saved = await MC.dialog({
       title: "Editar unidade",
-      intro: missing(u) ? "Preencha o CNPJ e a localização reais desta unidade." : "",
+      intro: missing(u) ? "Preencha a razão social, o CNPJ e o endereço reais desta unidade." : "",
       fields: [
-        { id: "nome", label: "Nome da unidade", value: u.nome },
-        { id: "curto", label: "Nome curto", value: u.nome_curto },
+        { id: "razao", label: "Razão social", value: u.razao_social || "" },
+        { id: "nome", label: "Nome fantasia", value: u.nome },
+        { id: "curto", label: "Nome curto (opcional, aparece no seletor de unidade)", value: u.nome_curto },
         { id: "cnpj", label: "CNPJ", value: u.cnpjFormatado || "" },
-        { id: "endereco", label: "Localização (rua, número, bairro, cidade, estado e CEP)", value: u.endereco || "" },
+        { id: "endereco", label: "Endereço (rua, número, bairro, cidade, estado e CEP)", value: u.endereco || "" },
       ],
       submitLabel: "Salvar",
-      onOpen: (overlay) => MC.maskCnpj(overlay.querySelector("#mcf_cnpj")),
-      onSubmit: (v) => MC.call("units:update", { id, nome: v.nome, nomeCurto: v.curto, cnpj: v.cnpj, endereco: v.endereco }),
+      onOpen: (overlay) => {
+        MC.maskCnpj(overlay.querySelector("#mcf_cnpj"));
+        overlay.querySelector("#mcf_razao").placeholder = "Ex.: Bar do Centro Comércio de Bebidas Ltda";
+        overlay.querySelector("#mcf_nome").placeholder = "Ex.: Bar do Centro";
+      },
+      onSubmit: (v) => MC.call("units:update", { id, razaoSocial: v.razao, nome: v.nome, nomeCurto: v.curto, cnpj: v.cnpj, endereco: v.endereco }),
     });
     if (saved) {
       MC.toast("Dados da unidade atualizados.");
@@ -84,8 +89,9 @@
     $("detailSub").textContent = d.ativo ? "Unidade ativa" : "Unidade desativada";
     const ativas = d.torneiras.filter((t) => t.ativo);
     const facts = [
+      ["Razão social", d.razao_social || "A preencher"],
       ["CNPJ", d.cnpjFormatado || "A preencher"],
-      ["Localização", d.endereco || "A preencher"],
+      ["Endereço", d.endereco || "A preencher"],
       ["Torneiras ativas", String(ativas.length)],
       ["Ocupadas agora", String(ativas.filter((t) => t.ocupada).length)],
     ];
