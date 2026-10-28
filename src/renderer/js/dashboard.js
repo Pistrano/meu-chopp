@@ -62,6 +62,15 @@
       .join("");
   }
 
+  // Só para administrador e gerente: a unidade ainda não tem funcionários, então ninguém escolhe quem fez cada ação
+  function renderAvisoFuncionarios(unidade) {
+    const el = document.getElementById("avisoFuncionarios");
+    el.classList.toggle("d-none", !unidade);
+    el.innerHTML = unidade
+      ? `Cadastre os funcionários de ${MC.esc(unidade)} em <a href="funcionarios.html">Mais &gt; Funcionários</a> para saber quem fez cada ação.`
+      : "";
+  }
+
   async function load() {
     if (document.visibilityState === "hidden") return;
     if (loading) { reloadPending = true; return; }
@@ -75,6 +84,7 @@
         const data = await MC.call("dashboard:get", { unitId: ctx.unitId });
         renderStats(data.stats);
         renderMovements(data.movimentacoes);
+        renderAvisoFuncionarios(data.semFuncionarios);
       });
     } finally {
       loading = false;
