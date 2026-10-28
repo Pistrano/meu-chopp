@@ -4,7 +4,7 @@
    ========================================================== */
 const MCLayout = (() => {
   /* principal: true = aba fixa no topo. O resto fica no botão "Mais" (toda tela nova entra lá por padrão).
-     short: rótulo da barra inferior no celular. admin: só o administrador vê. */
+     short: rótulo da barra inferior no celular. perm: só quem tem a permissão vê (e abre a tela). */
   const NAV = [
     { id: "dashboard", label: "Painel", href: "dashboard.html", principal: true },
     { id: "barris", label: "Barris", href: "barris.html", principal: true },
@@ -13,10 +13,10 @@ const MCLayout = (() => {
     { id: "catalogo", label: "Chopes", href: "catalogo.html" },
     { id: "relatorio", label: "Relatório de barris", href: "relatorio-barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
-    { id: "quiosques", label: "Unidades", href: "quiosques.html", admin: true },
-    { id: "usuarios", label: "Usuários", href: "usuarios.html", admin: true },
+    { id: "funcionarios", label: "Funcionários", href: "funcionarios.html", perm: "funcionarios" },
+    { id: "quiosques", label: "Unidades", href: "quiosques.html", perm: "unidades" },
+    { id: "usuarios", label: "Usuários", href: "usuarios.html", perm: "usuarios" },
   ];
-  const ADMIN_PAGES = ["usuarios", "quiosques"]; // telas que só o administrador abre
   const SEM_UNIDADE = ["usuarios", "quiosques", "catalogo"]; // telas que funcionam sem unidade liberada
 
   const ICON_PIN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.58 7-12A7 7 0 0 0 5 10c0 4.42 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
@@ -27,26 +27,39 @@ const MCLayout = (() => {
   const ctx = { user: null, units: [], unitId: null, config: { fornecedor: "Fornecedor" }, onUnitChange: () => {} };
 
   /* Ambiente de testes (APP_ENV=beta no servidor): faixa amarela no topo e "[TESTE] " no título da aba.
-     Roda assim que o script carrega, também nas telas sem login (entrar, primeiro acesso, configuração inicial),
-     que carregam este arquivo só por causa disso. O init() reaproveita a mesma resposta. */
-  const pedidoConfig = window.api.invoke("config:get");
-  pedidoConfig.then((res) => {
-    if (!res || !res.ok || res.data.ambiente !== "beta" || document.querySelector(".faixa-teste")) return;
+     Nas telas com cabeçalho, a config vem no session:bootstrap (init). Nas telas sem login (entrar, primeiro acesso,
+     configuração inicial), que carregam este arquivo só por causa disso, pede a config assim que o script carrega. */
+  function mostrarFaixa(config) {
+    if (!config || config.ambiente !== "beta" || document.querySelector(".faixa-teste")) return;
     const faixa = document.createElement("div");
     faixa.className = "faixa-teste";
     faixa.setAttribute("role", "note");
     faixa.textContent = "AMBIENTE DE TESTES: os dados daqui não são das lojas";
     document.body.prepend(faixa);
     if (!document.title.startsWith("[TESTE] ")) document.title = `[TESTE] ${document.title}`;
-  });
-  // Com login, a resposta já traz fornecedor e "hoje"; se veio sem (sessão criada depois), pede de novo
-  async function lerConfig() {
-    const res = await pedidoConfig;
-    return res && res.ok && res.data.hoje ? res.data : MC.call("config:get");
+  }
+  if (!document.getElementById("appHeader")) {
+    window.api.invoke("config:get").then((res) => { if (res && res.ok) mostrarFaixa(res.data); });
   }
 
+  /* Usuário, unidades e config (session:bootstrap) guardados por 60 s nesta janela: a próxima aba desenha o topo na
+     hora com eles e confere com o servidor logo em seguida. Prefixo "bf:": some ao entrar, ao sair e com a sessão
+     expirada (MC.clearRemembered), então ninguém herda o topo de outra pessoa. */
+  const CACHE_SESSAO = "bf:sessao";
+  const CACHE_SESSAO_MS = 60 * 1000;
+  function lerCacheSessao() {
+    try {
+      const c = JSON.parse(sessionStorage.getItem(CACHE_SESSAO));
+      return c && c.dados && Date.now() - c.em < CACHE_SESSAO_MS ? c.dados : null;
+    } catch (_) { return null; }
+  }
+  const gravarCacheSessao = (dados) => { try { sessionStorage.setItem(CACHE_SESSAO, JSON.stringify({ em: Date.now(), dados })); } catch (_) { /* só não guarda */ } };
+  const apagarCacheSessao = () => { try { sessionStorage.removeItem(CACHE_SESSAO); } catch (_) { /* ignora */ } };
+  // O que, se mudar, pede a tela de novo: usuário (cargo, permissões, nome), unidades e config ("hoje" à parte)
+  const marcaSessao = (d) => JSON.stringify([d.user, d.units, { ...d.config, hoje: null }]);
+
   function buildNav(pageId) {
-    const itens = NAV.filter((n) => !n.admin || ctx.user.cargo === "admin");
+    const itens = NAV.filter((n) => !n.perm || MC.pode(n.perm));
     const aba = (n) => `<a href="${n.href}" class="nav-tab${n.id === pageId ? " active" : ""}"${n.id === pageId ? ' aria-current="page"' : ""}>` +
       (n.short ? `<span class="nav-full">${n.label}</span><span class="nav-short">${n.short}</span>` : n.label) + "</a>";
     const mais = itens.filter((n) => !n.principal);
@@ -135,9 +148,10 @@ const MCLayout = (() => {
     });
   }
 
-  /* Encerra a sessão após 15 min sem uso; enquanto há atividade, avisa o sistema (ping) */
-  const IDLE_MS = 15 * 60 * 1000;
+  /* Encerra a sessão depois do tempo sem uso que o servidor informa (15 min; 12 h na conta de operador do
+     celular do quiosque); enquanto há atividade, avisa o sistema (ping) */
   function watchInactivity() {
+    const IDLE_MS = ctx.user.inatividadeMs || 15 * 60 * 1000;
     let idleTimer, lastPing = Date.now();
     const arm = () => {
       clearTimeout(idleTimer);
@@ -209,29 +223,76 @@ const MCLayout = (() => {
     return null;
   }
 
-  async function init(pageId) {
-    try {
-      ctx.user = await MC.call("auth:me");
-    } catch (err) {
-      if (err.code === "OFFLINE") return showOffline();
-      ctx.user = null;
-    }
-    if (!ctx.user) { window.location.href = "index.html"; return null; }
-    if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
-    if (ADMIN_PAGES.includes(pageId) && ctx.user.cargo !== "admin") { window.location.href = "dashboard.html"; return null; }
+  /* Pré-carrega as abas do menu (Chrome e o app do Windows): ao passar o mouse ou começar a tocar num link do menu,
+     o navegador já busca a página. Só prefetch (a página não é executada antes da hora). */
+  function preCarregarAbas() {
+    if (!window.HTMLScriptElement || !HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
+    const regras = document.createElement("script");
+    regras.type = "speculationrules";
+    // a aba aberta (aria-current) fica de fora: o mouse costuma continuar em cima dela depois da troca
+    regras.textContent = JSON.stringify({ prefetch: [{ where: { selector_matches: "#appHeader .app-nav a[href]:not([aria-current])" }, eagerness: "moderate" }] });
+    document.head.appendChild(regras);
+  }
 
-    try {
-      [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), lerConfig()]);
-    } catch (err) {
-      if (err.code === "OFFLINE") return showOffline();
-      throw err;
+  /* Abre a tela. Com os dados guardados há menos de 60 s, desenha o topo na hora e confere com o servidor em seguida
+     (conferirSessao); sem eles, faz uma chamada só (session:bootstrap) antes de desenhar. */
+  async function init(pageId) {
+    let dados = lerCacheSessao();
+    const doCache = !!dados;
+    if (!dados) {
+      try {
+        dados = await MC.call("session:bootstrap");
+      } catch (err) {
+        if (err.code === "OFFLINE") return showOffline();
+        dados = null;
+      }
+      if (!dados || !dados.user) { window.location.href = "index.html"; return null; }
+      if (!dados.user.trocarSenha) gravarCacheSessao(dados);
     }
+    const pronto = montar(pageId, dados);
+    if (doCache && pronto !== undefined) conferirSessao(dados);
+    return pronto;
+  }
+
+  // Confere os dados guardados: sessão expirada vai para o login, senha a trocar para o primeiro acesso, e se o
+  // usuário ou as unidades mudaram (cargo, acesso liberado ou tirado) a tela abre de novo já com os dados novos
+  async function conferirSessao(antigos) {
+    let novos;
+    try {
+      novos = await MC.call("session:bootstrap");
+    } catch (err) {
+      if (err.code === "OFFLINE") { showOffline(); return; }
+      apagarCacheSessao();
+      window.location.href = "index.html";
+      return;
+    }
+    if (novos.user.trocarSenha) { apagarCacheSessao(); window.location.href = "primeiro-acesso.html"; return; }
+    gravarCacheSessao(novos);
+    if (marcaSessao(novos) !== marcaSessao(antigos)) { window.location.reload(); return; }
+    ctx.config = novos.config; // "hoje" pode ter virado
+  }
+
+  // Desenha o topo com { user, units, config }. Devolve ctx, ou null quando a tela não abre (outra tela, sem unidade);
+  // undefined quando já saiu para outra página (não precisa conferir nada).
+  function montar(pageId, dados) {
+    ctx.user = dados.user;
+    if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return undefined; }
+    MC.setUser(ctx.user);
+    mostrarFaixa(dados.config);
+    const tela = NAV.find((n) => n.id === pageId);
+    if (tela && tela.perm && !MC.pode(tela.perm)) { window.location.href = "dashboard.html"; return null; }
+    // Botões que dependem de permissão (ex.: data-perm="exportar") somem para quem não tem
+    document.querySelectorAll("[data-perm]").forEach((el) => { if (!MC.pode(el.dataset.perm)) el.remove(); });
+
+    ctx.units = dados.units;
+    ctx.config = dados.config;
     const saved = Number(localStorage.getItem("mc_unit"));
     ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units.length ? ctx.units[0].id : null;
 
     buildHeader(pageId);
     watchInactivity();
     renderUnitMenu();
+    preCarregarAbas();
 
     // Com um único quiosque não há o que escolher: o seletor vira só um rótulo
     if (ctx.units.length <= 1) {
@@ -245,7 +306,7 @@ const MCLayout = (() => {
     if (!ctx.units.length && !SEM_UNIDADE.includes(pageId)) {
       const main = document.querySelector("main");
       main.innerHTML = `<div class="panel text-center"><h2 class="panel-title">Nenhuma unidade liberada</h2>
-        <p class="t-muted mb-0">${ctx.user.cargo === "admin"
+        <p class="t-muted mb-0">${MC.pode("unidades")
           ? "Não há unidades ativas. Cadastre ou reative uma na aba Unidades."
           : "Você ainda não tem acesso a nenhuma unidade. Peça a um administrador para liberar o seu acesso."}</p></div>`;
       return null;

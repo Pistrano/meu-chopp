@@ -5,6 +5,13 @@ const MC = (() => {
   const STATUS_LABELS = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Vazio", recolhido: "Recolhido" };
   const TRANSFER_LABELS = { pendente: "Pendente", confirmada: "Confirmada", cancelada: "Cancelada" };
 
+  /* Permissões de quem está logado (vêm do servidor em auth:me; o MCLayout.init guarda aqui).
+     MC.pode("exportar") no lugar de comparar cargos. O servidor confere de novo em cada ação. */
+  let permissoes = [];
+  let cargo = null;
+  const setUser = (user) => { permissoes = (user && user.permissoes) || []; cargo = (user && user.cargo) || null; };
+  const pode = (perm) => permissoes.includes(perm);
+
   /* Chama o sistema (processo principal). Lança erro com a mensagem amigável. */
   async function call(channel, payload) {
     const res = await window.api.invoke(channel, payload);
@@ -104,21 +111,25 @@ const MC = (() => {
 
   /* fields: [{id,label,type,autocomplete,hidden}]. onSubmit(values) pode lançar erro: ele aparece no diálogo.
      type "radios": options [{value,label,hint,disabled,checked}] — escolha única (ex.: torneira).
+       hintTexto: true = a dica é uma explicação (cinza), não uma situação (verde).
      type "select": options [{value,label}] + value (opção já escolhida).
      hidden: o campo começa escondido (o onOpen mostra quando precisar, pelo [data-field="id"]).
-     onOpen(overlay): chamado depois que o diálogo aparece (ex.: aplicar máscara de CNPJ). */
-  function dialog({ title, intro, fields = [], submitLabel = "Confirmar", rules = false, onSubmit, onOpen }) {
+     html: conteúdo extra (já escapado) entre a introdução e os campos. type "err": título em vermelho.
+     onOpen(overlay): chamado depois que o diálogo aparece (ex.: aplicar máscara de CNPJ).
+     funcionario: a escolha de MC.escolherFuncionario (ou null). A grade de nomes vai antes dos botões e o confirmar
+       só habilita depois que a pessoa toca num nome. */
+  function dialog({ title, intro, html = "", type = "", fields = [], submitLabel = "Confirmar", rules = false, onSubmit, onOpen, funcionario = null }) {
     return new Promise((resolve) => {
       const radios = (f) => `<fieldset class="mb-3"><legend class="form-label">${esc(f.label)}</legend>
           <div class="radio-list" id="mcf_${f.id}">${f.options
             .map((o) => `<label class="radio-item${o.disabled ? " is-disabled" : ""}">
               <input type="radio" name="mcf_${f.id}" value="${esc(o.value)}" ${o.disabled ? "disabled" : ""} ${o.checked ? "checked" : ""}>
-              <span class="radio-main">${esc(o.label)}</span>${o.hint ? `<span class="radio-hint">${esc(o.hint)}</span>` : ""}</label>`)
+              <span class="radio-main">${esc(o.label)}</span>${o.hint ? `<span class="radio-hint${f.hintTexto ? " radio-hint--texto" : ""}">${esc(o.hint)}</span>` : ""}</label>`)
             .join("")}</div></fieldset>`;
       const inputs = fields
         .map((f) =>
           f.type === "radios" ? radios(f) : f.type === "checks"
-            ? `<div class="mb-3"><div class="form-label">${esc(f.label)}</div><div class="check-list" id="mcf_${f.id}">${f.options
+            ? `<div class="mb-3${f.hidden ? " d-none" : ""}" data-field="${f.id}"><div class="form-label">${esc(f.label)}</div><div class="check-list" id="mcf_${f.id}">${f.options
                 .map((o) => `<label class="check-item"><input type="checkbox" value="${esc(o.value)}" ${o.checked ? "checked" : ""}><span>${esc(o.label)}</span></label>`)
                 .join("")}</div></div>`
             : f.type === "select"
@@ -130,8 +141,8 @@ const MC = (() => {
           <input class="form-control" id="mcf_${f.id}" type="${f.type || "text"}" autocomplete="${f.autocomplete || "off"}" value="${esc(f.value || "")}"></div>`
         )
         .join("");
-      const overlay = openOverlay(`<h2>${esc(title)}</h2>${intro ? `<p class="mc-modal-intro">${esc(intro)}</p>` : ""}
-        <form novalidate>${inputs}${rules ? '<ul class="pw-rules" id="mcRules"></ul>' : ""}
+      const overlay = openOverlay(`<h2${type ? ` class="notice-title notice-title--${type}"` : ""}>${esc(title)}</h2>${intro ? `<p class="mc-modal-intro">${esc(intro)}</p>` : ""}${html}
+        <form novalidate>${inputs}${funcionario ? funcionario.html : ""}${rules ? '<ul class="pw-rules" id="mcRules"></ul>' : ""}
         <div class="field-error" id="mcErr" aria-live="polite"></div>
         <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
         <button type="submit" class="btn btn-mc btn-mc-sm">${esc(submitLabel)}</button></div></form>`);
@@ -144,8 +155,14 @@ const MC = (() => {
 
       overlay.querySelector("[data-cancel]").addEventListener("click", () => close(false));
       overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") close(false); });
+      if (funcionario) {
+        const btn = form.querySelector('[type="submit"]');
+        btn.disabled = true;
+        funcionario.ligar(overlay, () => { btn.disabled = false; errEl.textContent = ""; });
+      }
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
+        if (funcionario && !funcionario.id) { errEl.textContent = "Toque no seu nome em \"Quem está fazendo?\"."; return; }
         const values = {};
         fields.forEach((f) => {
           const el = overlay.querySelector(`#mcf_${f.id}`);
@@ -158,6 +175,7 @@ const MC = (() => {
         errEl.textContent = "";
         try {
           const result = await onSubmit(values);
+          if (funcionario) funcionario.lembrar();
           close(result === undefined ? true : result);
         } catch (err) {
           errEl.textContent = err.message;
@@ -185,19 +203,73 @@ const MC = (() => {
     });
   }
 
-  /* Pergunta com dois botões. Resolve true se a pessoa confirmar. */
-  function confirm({ title, text, confirmLabel = "Confirmar", cancelLabel = "Cancelar", type = "plain" }) {
+  /* Pergunta com dois botões. Resolve true se a pessoa confirmar.
+     funcionario: a escolha de MC.escolherFuncionario (ou null); o confirmar só habilita depois da escolha
+     e quem chamou lê o escolhido em funcionario.id. */
+  function confirm({ title, text, confirmLabel = "Confirmar", cancelLabel = "Cancelar", type = "plain", funcionario = null }) {
     return new Promise((resolve) => {
       const overlay = openOverlay(`<h2 class="notice-title notice-title--${type}">${esc(title)}</h2>
-        ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}
+        ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}${funcionario ? funcionario.html : ""}
         <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>${esc(cancelLabel)}</button>
-        <button type="button" class="btn btn-mc btn-mc-sm" data-ok>${esc(confirmLabel)}</button></div>`);
+        <button type="button" class="btn btn-mc btn-mc-sm" data-ok${funcionario ? " disabled" : ""}>${esc(confirmLabel)}</button></div>`);
       const close = (v) => { overlay.remove(); resolve(v); };
+      const okBtn = overlay.querySelector("[data-ok]");
+      if (funcionario) funcionario.ligar(overlay, () => { okBtn.disabled = false; });
       overlay.querySelector("[data-cancel]").addEventListener("click", () => close(false));
-      overlay.querySelector("[data-ok]").addEventListener("click", () => close(true));
+      okBtn.addEventListener("click", () => {
+        if (funcionario && !funcionario.id) return;
+        if (funcionario) funcionario.lembrar();
+        close(true);
+      });
       overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") close(false); });
       overlay.querySelector("[data-cancel]").focus();
     });
+  }
+
+  /* ---------- Quem está fazendo? ----------
+     O celular de cada loja fica logado numa conta de operador compartilhada. Antes de salvar uma ação com barril
+     (cadastrar, engatar, retirar, recolher e as transferências), a pessoa toca no próprio nome, dentro da confirmação.
+     Administrador e gerente usam conta pessoal e não escolhem: a ação fica no nome da conta.
+     Unidade sem funcionários ativos: não pergunta, para não travar a loja (o servidor confere de novo).
+     Retorna null quando não há escolha. Senão, um objeto para pôr na confirmação (MC.dialog e MC.confirm aceitam
+     { funcionario } e fazem tudo; nas janelas próprias, use direto):
+       html                        a grade de nomes, em ordem alfabética
+       ligar(overlay, aoEscolher)  liga os botões; aoEscolher() avisa a janela para habilitar o confirmar
+       id                          o funcionário escolhido (null até a pessoa tocar num nome)
+       lembrar()                   guarda neste aparelho quem fez: nos próximos 30 min o nome aparece primeiro,
+                                   destacado, mas ainda precisa ser tocado */
+  const ULTIMO_FUNC = "bf:ultimoFuncionario";
+  const ULTIMO_FUNC_MS = 30 * 60 * 1000;
+  async function escolherFuncionario(unitId) {
+    if (cargo !== "operador") return null;
+    let lista;
+    try { lista = await call("funcionarios:list", { unitId }); } catch (_) { return null; } // sem a lista, o servidor decide
+    if (!lista || !lista.length) return null;
+    let ultimo = null;
+    try { ultimo = JSON.parse(localStorage.getItem(ULTIMO_FUNC)); } catch (_) { /* sem armazenamento: sem destaque */ }
+    const recente = ultimo && Date.now() - ultimo.em < ULTIMO_FUNC_MS ? lista.find((f) => f.id === ultimo.id) : null;
+    const nomes = [...lista].sort((a, b) => collator.compare(a.nome, b.nome));
+    const ordem = recente ? [recente, ...nomes.filter((f) => f !== recente)] : nomes;
+    const escolha = {
+      id: null,
+      html: `<fieldset class="func-pick"><legend class="form-label">Quem está fazendo?</legend>
+        <div class="func-grid" role="radiogroup" aria-label="Quem está fazendo?">${ordem.map((f) => `
+          <button type="button" class="func-btn${f === recente ? " func-btn--ultimo" : ""}" role="radio" aria-checked="false" data-func="${f.id}">
+            <span class="func-nome">${esc(f.nome)}</span>${f === recente ? '<span class="func-tag">Último a usar</span>' : ""}</button>`).join("")}</div></fieldset>`,
+      ligar(overlay, aoEscolher) {
+        const botoes = [...overlay.querySelectorAll(".func-btn")];
+        botoes.forEach((b) => b.addEventListener("click", () => {
+          botoes.forEach((x) => { x.classList.toggle("is-selected", x === b); x.setAttribute("aria-checked", String(x === b)); });
+          escolha.id = Number(b.dataset.func);
+          if (aoEscolher) aoEscolher(escolha.id);
+        }));
+      },
+      lembrar() {
+        if (!escolha.id) return;
+        try { localStorage.setItem(ULTIMO_FUNC, JSON.stringify({ id: escolha.id, em: Date.now() })); } catch (_) { /* só não lembra */ }
+      },
+    };
+    return escolha;
   }
 
   /* Máscara de CNPJ (numérico ou alfanumérico): 00.000.000/0000-00. A validação final é no servidor. */
@@ -336,8 +408,8 @@ const MC = (() => {
   else watchTables();
 
   return {
-    OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, call, esc, chopeLabel, fmtDate, fmtDia, validadeBadge, toast, run,
-    bindPasswordRules, dialog, showSecret, notice, confirm, openOverlay, maskCnpj,
+    OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, setUser, pode, call, esc, chopeLabel, fmtDate, fmtDia, validadeBadge, toast, run,
+    bindPasswordRules, dialog, showSecret, notice, confirm, openOverlay, maskCnpj, escolherFuncionario,
     rememberFields, sortable, clearRemembered,
   };
 })();

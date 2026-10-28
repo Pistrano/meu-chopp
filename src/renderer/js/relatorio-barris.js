@@ -122,6 +122,11 @@
     const lista = await MC.run(() => MC.call("reports:barrelsDetail", { ...rel.filtros, ...c.chave }));
     if (!lista) return;
     const todas = rel.filtros.unidadeId === null;
+    // Quem engatou e, se foi outra pessoa, quem retirou (o funcionário escolhido ou o usuário da conta)
+    const funcionario = (b) => !b.engatado_por ? '<span class="t-muted">—</span>'
+      : b.retirado_por && b.retirado_por !== b.engatado_por
+        ? `${MC.esc(b.engatado_por)} <span class="t-muted">(engate)</span><br>${MC.esc(b.retirado_por)} <span class="t-muted">(retirada)</span>`
+        : MC.esc(b.engatado_por);
     const linhas = lista.map((b) => `<tr>
         <td data-label="Barril" class="t-strong">#${MC.esc(b.codigo)}</td>
         <td data-label="Tamanho">${MC.esc(b.tamanho_l)} L</td>
@@ -129,10 +134,11 @@
         <td data-label="Engatado em">${diaHora(b.engatado_em)}</td>
         <td data-label="Retirado em">${b.retirado_em ? diaHora(b.retirado_em) : '<span class="op-badge op-badge--em_uso">ainda engatado</span>'}</td>
         <td data-label="Torneira">${b.torneira ? `Torneira ${MC.esc(b.torneira)}` : '<span class="t-muted">—</span>'}</td>
-        ${todas ? `<td data-label="Unidade">${MC.esc(b.unidade || "")}</td>` : ""}</tr>`).join("");
+        ${todas ? `<td data-label="Unidade">${MC.esc(b.unidade || "")}</td>` : ""}
+        <td data-label="Funcionário">${funcionario(b)}</td></tr>`).join("");
     const html = lista.length
       ? `<div class="table-card rel-detalhe"><table>
-          <thead><tr><th>Barril</th><th>Tamanho</th><th>Validade</th><th>Engatado em</th><th>Retirado em</th><th>Torneira</th>${todas ? "<th>Unidade</th>" : ""}</tr></thead>
+          <thead><tr><th>Barril</th><th>Tamanho</th><th>Validade</th><th>Engatado em</th><th>Retirado em</th><th>Torneira</th>${todas ? "<th>Unidade</th>" : ""}<th>Funcionário</th></tr></thead>
           <tbody>${linhas}</tbody></table></div>`
       : '<p class="t-muted mb-0">Nenhum barril deste chope foi engatado pela primeira vez neste período.</p>';
     const total = lista.length === 1 ? "1 barril utilizado" : `${lista.length} barris utilizados`;
@@ -152,7 +158,7 @@
   fAte.addEventListener("change", carregar);
   ctx.onUnitChange = (id) => { fUnidade.value = String(id); carregar(); };
 
-  document.getElementById("btnCsv").addEventListener("click", async () => {
+  document.getElementById("btnCsv")?.addEventListener("click", async () => {
     if (!rel) return;
     const r = await MC.run(() => MC.call("reports:barrelsExport", rel.filtros));
     if (!r) return;

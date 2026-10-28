@@ -1,5 +1,5 @@
 /* ==========================================================
-   BarrilFacil — testes: unidades (CNPJ/localização), torneiras, engate e retirada
+   BarrilFacil — testes: unidades (razão social/CNPJ/endereço), torneiras, engate e retirada
    Rodar:  npm test   (precisa do Supabase local; veja "Rodar os testes" no README)
    ========================================================== */
 const { describe, test, before, after } = require("node:test");
@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeOperator } = require("./helpers");
 
 const SEM_TORNEIRA = /Não há torneiras disponíveis nesta unidade/;
-const SO_ADMIN = /Apenas administradores/;
+const SO_ADMIN = /Você não tem permissão para esta ação/;
 const SEM_ACESSO = /não tem acesso a esta unidade/;
 
 const somaDias = (dia, n) => {
@@ -39,8 +39,8 @@ describe("unidades, torneiras, engate e retirada", { skip: SEM_BANCO }, () => {
     await limparBanco();
     srv = await startServer();
     admin = await setupAdmin(srv.base);
-    u.centro = (await admin.ok("units:create", { nome: "Louvada Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, 100, Cuiabá - MT" })).id;
-    u.pantanal = (await admin.ok("units:create", { nome: "Louvada Pantanal", cnpj: "11.444.777/0001-61", endereco: "Av. do Pantanal, 200, Cuiabá - MT" })).id;
+    u.centro = (await admin.ok("units:create", { razaoSocial: "Louvada Estação Cuiabá Comércio de Bebidas Ltda", nome: "Louvada Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, 100, Cuiabá - MT" })).id;
+    u.pantanal = (await admin.ok("units:create", { razaoSocial: "Louvada Pantanal Comércio de Bebidas Ltda", nome: "Louvada Pantanal", cnpj: "11.444.777/0001-61", endereco: "Av. do Pantanal, 200, Cuiabá - MT" })).id;
     maria = await makeOperator(srv.base, admin, { nome: "Maria", email: "maria@barrilfacil.test", unidadeIds: [u.centro] });
     joao = await makeOperator(srv.base, admin, { nome: "João", email: "joao@barrilfacil.test", unidadeIds: [u.pantanal] });
     ids.maria = (await linhas("usuarios", "id", (q) => q.eq("email", "maria@barrilfacil.test")))[0].id;
@@ -54,8 +54,8 @@ describe("unidades, torneiras, engate e retirada", { skip: SEM_BANCO }, () => {
 
   /* ---------------- Cadastro de unidades ---------------- */
   test("cadastra unidade com dados válidos (CNPJ numérico e alfanumérico)", async () => {
-    const a = await admin.ok("units:create", { nome: "Louvada Teste", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT, 78000-000" });
-    const b = await admin.ok("units:create", { nome: "Louvada Nova", cnpj: "12.abc.345/01de-35", endereco: "Rua das Flores, 50, Jardim, Várzea Grande - MT" });
+    const a = await admin.ok("units:create", { razaoSocial: "Louvada Teste Comércio de Bebidas Ltda", nome: "Louvada Teste", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT, 78000-000" });
+    const b = await admin.ok("units:create", { razaoSocial: "Louvada Nova Comércio de Bebidas Ltda", nome: "Louvada Nova", cnpj: "12.abc.345/01de-35", endereco: "Rua das Flores, 50, Jardim, Várzea Grande - MT" });
     u.teste = a.id;
     u.nova = b.id;
     const list = await admin.ok("units:adminList");
@@ -65,36 +65,50 @@ describe("unidades, torneiras, engate e retirada", { skip: SEM_BANCO }, () => {
     assert.equal(list.find((x) => x.id === b.id).cnpjFormatado, "12.ABC.345/01DE-35");
   });
 
-  test("impede cadastro sem nome, sem CNPJ ou sem localização", async () => {
-    const ok = { nome: "Loja X", cnpj: "34.028.316/0001-03", endereco: "Rua A, 1, Centro, Cuiabá - MT" };
-    await admin.fail("units:create", { ...ok, nome: "" }, /nome da unidade/);
+  test("impede cadastro sem razão social, nome fantasia, CNPJ ou endereço", async () => {
+    const ok = { razaoSocial: "Loja X Bebidas Ltda", nome: "Loja X", cnpj: "34.028.316/0001-03", endereco: "Rua A, 1, Centro, Cuiabá - MT" };
+    await admin.fail("units:create", { ...ok, razaoSocial: " " }, /Informe a razão social/);
+    await admin.fail("units:create", { ...ok, razaoSocial: "X".repeat(121) }, /Razão social muito longa/);
+    await admin.fail("units:create", { ...ok, nome: "" }, /Informe o nome fantasia/);
     await admin.fail("units:create", { ...ok, cnpj: "" }, /Informe o CNPJ/);
-    await admin.fail("units:create", { ...ok, endereco: "  " }, /localização/);
+    await admin.fail("units:create", { ...ok, endereco: "  " }, /Informe o endereço completo/);
+    await admin.fail("units:create", { ...ok, nome: "louvada pantanal" }, /Já existe uma unidade com o nome fantasia "louvada pantanal"/);
+    assert.equal((await admin.ok("units:adminList")).some((x) => x.nome === "Loja X"), false);
   });
 
   test("valida o CNPJ (formato e dígitos verificadores)", async () => {
-    const base = { nome: "Loja Y", endereco: "Rua B, 2, Centro, Cuiabá - MT" };
+    const base = { razaoSocial: "Loja Y Bebidas Ltda", nome: "Loja Y", endereco: "Rua B, 2, Centro, Cuiabá - MT" };
     await admin.fail("units:create", { ...base, cnpj: "11.222.333/0001-82" }, /dígitos verificadores/);
     await admin.fail("units:create", { ...base, cnpj: "11.111.111/1111-11" }, /CNPJ inválido/);
     await admin.fail("units:create", { ...base, cnpj: "123" }, /14 caracteres/);
   });
 
   test("impede CNPJ duplicado, mesmo digitado com outra pontuação", async () => {
-    await admin.fail("units:create", { nome: "Outra loja", cnpj: "11222333000181", endereco: "Rua C, 3, Centro, Cuiabá - MT" }, /já está cadastrado na unidade "Louvada Teste"/);
+    await admin.fail("units:create", { razaoSocial: "Outra loja Comércio de Bebidas Ltda", nome: "Outra loja", cnpj: "11222333000181", endereco: "Rua C, 3, Centro, Cuiabá - MT" }, /já está cadastrado na unidade "Louvada Teste"/);
     assert.equal((await admin.ok("units:adminList")).length, 4);
   });
 
   test("edita os dados de uma unidade existente mantendo o id", async () => {
-    await admin.ok("units:update", { id: u.centro, nome: "Louvada Estação Cuiabá", nomeCurto: "Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, s/n, Cuiabá - MT" });
+    await admin.ok("units:update", { id: u.centro, razaoSocial: "Louvada Estação Cuiabá Comércio de Bebidas Ltda", nome: "Louvada Estação Cuiabá", nomeCurto: "Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, s/n, Cuiabá - MT" });
     const x = (await admin.ok("units:adminList")).find((y) => y.id === u.centro);
     assert.equal(x.nome_curto, "Estação Cuiabá");
     assert.equal(x.cnpjFormatado, "45.723.174/0001-10");
+    assert.equal(x.razao_social, "Louvada Estação Cuiabá Comércio de Bebidas Ltda");
+    assert.equal((await admin.ok("units:details", { id: u.centro })).razao_social, "Louvada Estação Cuiabá Comércio de Bebidas Ltda");
+    // unidade antiga, sem razão social (como as que já existem no banco): só salva com a razão social
+    await banco().from("unidades").update({ razao_social: null }).eq("id", u.centro);
+    assert.equal((await admin.ok("units:adminList")).find((y) => y.id === u.centro).razao_social, null);
+    await admin.fail("units:update", { id: u.centro, nome: "Louvada Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, s/n, Cuiabá - MT" }, /Informe a razão social/);
+    await admin.ok("units:update", { id: u.centro, razaoSocial: "  Louvada   Bebidas Ltda ", nome: "Louvada Estação Cuiabá", nomeCurto: "Estação Cuiabá", cnpj: "45.723.174/0001-10", endereco: "Av. Historiador Rubens de Mendonça, s/n, Cuiabá - MT" });
+    assert.equal((await admin.ok("units:details", { id: u.centro })).razao_social, "Louvada Bebidas Ltda");
+    const aud = await linhas("auditoria", "detalhe", (q) => q.eq("acao", "unidade_editada").order("id", { ascending: false }).limit(1));
+    assert.equal(aud[0].detalhe, "Louvada Estação Cuiabá, razão social Louvada Bebidas Ltda (CNPJ 45.723.174/0001-10)");
     // edição não pode reaproveitar o CNPJ de outra unidade
-    await admin.fail("units:update", { id: u.pantanal, nome: "Louvada Pantanal", cnpj: "45723174000110", endereco: "Av. X, 1, Cuiabá - MT" }, /já está cadastrado/);
+    await admin.fail("units:update", { id: u.pantanal, razaoSocial: "Louvada Pantanal Comércio de Bebidas Ltda", nome: "Louvada Pantanal", cnpj: "45723174000110", endereco: "Av. X, 1, Cuiabá - MT" }, /já está cadastrado/);
   });
 
   test("operador não administra unidades nem torneiras", async () => {
-    await maria.fail("units:create", { nome: "Z", cnpj: "34.028.316/0001-03", endereco: "Rua Z, 1, Cuiabá - MT" }, SO_ADMIN);
+    await maria.fail("units:create", { razaoSocial: "Z Comércio de Bebidas Ltda", nome: "Z", cnpj: "34.028.316/0001-03", endereco: "Rua Z, 1, Cuiabá - MT" }, SO_ADMIN);
     await maria.fail("units:details", { id: u.centro }, SO_ADMIN);
     await maria.fail("taps:create", { unitId: u.centro, quantidade: 2 }, SO_ADMIN);
     await maria.fail("units:adminList", {}, SO_ADMIN);

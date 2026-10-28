@@ -146,6 +146,7 @@
       return;
     }
 
+    const funcionario = await MC.escolherFuncionario(unidade.id);
     const result = await MC.dialog({
       title: `Engatar barril #${barril.codigo}`,
       intro: `Unidade: ${unidade.nome}. Escolha a torneira em que o barril (${MC.chopeLabel(barril)}) será engatado.`,
@@ -162,10 +163,11 @@
         })),
       }],
       submitLabel: "Confirmar engate",
+      funcionario,
       // Engate e confirmação de barril vencido ficam em acoes-barril.js (os mesmos da aba Torneiras)
       onSubmit: (v) => {
         if (!v.torneira) throw new Error("Selecione uma torneira livre para continuar.");
-        return MCBarril.engatar({ barrilId: id, torneiraId: Number(v.torneira), unitId: ctx.unitId });
+        return MCBarril.engatar({ barrilId: id, torneiraId: Number(v.torneira), unitId: ctx.unitId, funcionario });
       },
     });
     if (result && result.torneira) load();
@@ -175,7 +177,7 @@
   async function retirar(id) {
     const b = rows.find((r) => r.id === id);
     const unit = ctx.units.find((u) => u.id === ctx.unitId);
-    await MCBarril.retirar({ barril: b, unidade: unit.nome, aoRetirar: () => load() });
+    await MCBarril.retirar({ barril: b, unidade: unit.nome, unitId: ctx.unitId, aoRetirar: () => load() });
   }
 
   /* ---------- Recolhimento: a fábrica leva os vasilhames vazios (usado em pé, no tablet) ---------- */
@@ -189,6 +191,7 @@
       await MC.notice({ title: "Nenhum barril vazio", type: "plain", text: `Não há barris vazios aguardando recolhimento em ${unit.nome}.` });
       return;
     }
+    const funcionario = await MC.escolherFuncionario(ctx.unitId);
     const overlay = MC.openOverlay(`<h2>Registrar recolhimento</h2>
       <p class="mc-modal-intro">Marque os barris vazios que a fábrica está levando de ${MC.esc(unit.nome)}.</p>
       <label class="collect-item collect-all"><input type="checkbox" id="colTodos"><span class="collect-main">Marcar todos (${vazios.length})</span></label>
@@ -196,6 +199,7 @@
           <input type="checkbox" value="${b.id}">
           <span class="collect-main">#${MC.esc(b.codigo)} <span class="collect-chope">${MC.esc(MC.chopeLabel(b))}</span></span>
           <span class="collect-hint">${b.tamanho_l} L · ${diasVazio(b.dias)}</span></label>`).join("")}</div>
+      ${funcionario ? funcionario.html : ""}
       <div class="field-error" id="colErr" aria-live="polite"></div>
       <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
       <button type="button" class="btn btn-mc btn-mc-sm" id="colOk" disabled>Marque os barris recolhidos</button></div>`);
@@ -210,10 +214,11 @@
       const n = marcados().length;
       todos.checked = n === caixas.length;
       todos.indeterminate = n > 0 && n < caixas.length;
-      okBtn.disabled = n === 0;
+      okBtn.disabled = n === 0 || !!(funcionario && !funcionario.id); // só depois de marcar e escolher quem está fazendo
       okBtn.textContent = n ? `Confirmar recolhimento de ${n} barri${n === 1 ? "l" : "s"}` : "Marque os barris recolhidos";
       errEl.textContent = "";
     };
+    if (funcionario) funcionario.ligar(overlay, atualizar);
     todos.addEventListener("change", () => { caixas.forEach((c) => { c.checked = todos.checked; }); atualizar(); });
     caixas.forEach((c) => c.addEventListener("change", atualizar));
     const fechar = () => overlay.remove();
@@ -230,7 +235,8 @@
       })) return;
       okBtn.disabled = true;
       try {
-        const r = await MC.call("barris:collect", { ids, unitId: ctx.unitId });
+        const r = await MC.call("barris:collect", { ids, unitId: ctx.unitId, funcionarioId: funcionario ? funcionario.id : undefined });
+        if (funcionario) funcionario.lembrar();
         fechar();
         const n = r.codigos.length;
         MC.toast(`Recolhimento registrado: ${n} barri${n === 1 ? "l" : "s"} (#${r.codigos.join(", #")}).`);
@@ -254,7 +260,7 @@
 
   document.getElementById("btnRecolher").addEventListener("click", recolher);
 
-  document.getElementById("btnExportStock").addEventListener("click", async () => {
+  document.getElementById("btnExportStock")?.addEventListener("click", async () => {
     const r = await MC.run(() => MC.call("barris:exportStock", { unitId: ctx.unitId }));
     if (!r) return;
     const url = URL.createObjectURL(new Blob([r.csv], { type: "text/csv;charset=utf-8" }));
@@ -270,10 +276,18 @@
     const codigo = document.getElementById("codigo");
     if (!selChope.value || selChope.value === NOVO) return MC.toast("Escolha o chope do barril.", "err");
     if (!validade.value) { validade.focus(); return MC.toast("Informe a data de validade que está no barril.", "err"); }
+    // Celular do quiosque (conta de operador): confirma o cadastro escolhendo quem está fazendo. Sem escolha, salva direto.
+    const funcionario = await MC.escolherFuncionario(ctx.unitId);
+    if (funcionario) {
+      if (!codigo.value.replace("#", "").trim()) { codigo.focus(); return MC.toast("Preencha código, chope e tamanho do barril.", "err"); }
+      const resumo = [`#${codigo.value.replace("#", "").trim().toUpperCase()}`, selChope.selectedOptions[0].textContent,
+        document.getElementById("tamanho").selectedOptions[0].textContent, `validade ${MC.fmtDia(validade.value)}`];
+      if (!await MC.confirm({ title: "Cadastrar barril", text: resumo.join(" · "), confirmLabel: "Cadastrar barril", funcionario })) return;
+    }
     const ok = await MC.run(
       () => MC.call("barris:create", {
         codigo: codigo.value, chopeId: Number(selChope.value), tamanho: document.getElementById("tamanho").value,
-        validade: validade.value, unitId: ctx.unitId,
+        validade: validade.value, unitId: ctx.unitId, funcionarioId: funcionario ? funcionario.id : undefined,
       }),
       "Barril cadastrado."
     );

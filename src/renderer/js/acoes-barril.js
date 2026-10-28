@@ -3,13 +3,17 @@
    Engatar numa torneira (com a confirmação de barril vencido) e retirar da torneira.
    Fica num lugar só: mudanças no fluxo (ex.: perguntar se o barril retirado ainda tem chope)
    valem para as duas abas. Depende de common.js (MC) e layout.js (MCLayout).
+   Quem está fazendo: a escolha (MC.escolherFuncionario) vai na confirmação. Na retirada, a janela é daqui;
+   no engate, cada aba tem a própria janela de escolha (torneira ou barril) e passa a escolha em `funcionario`.
    ========================================================== */
 const MCBarril = (() => {
   /* Engate: barris:use. Barril vencido só gera aviso: a pessoa confirma e o engate fica na auditoria.
      Retorna o resultado do servidor ({ codigo, torneira, ... }) ou false se a pessoa desistiu do vencido.
-     Erros do servidor (torneira ocupada, barril já usado em outro aparelho...) sobem para quem chamou. */
-  async function engatar({ barrilId, torneiraId, unitId }) {
-    const pedido = { id: barrilId, torneiraId, unitId };
+     Erros do servidor (torneira ocupada, barril já usado em outro aparelho...) sobem para quem chamou.
+     funcionario: a escolha de MC.escolherFuncionario feita na janela do engate (null = conta pessoal ou loja sem funcionários). */
+  async function engatar({ barrilId, torneiraId, unitId, funcionario = null }) {
+    if (funcionario && !funcionario.id) throw new Error("Toque no seu nome em \"Quem está fazendo?\".");
+    const pedido = { id: barrilId, torneiraId, unitId, funcionarioId: funcionario ? funcionario.id : undefined };
     let result;
     try {
       result = await MC.call("barris:use", pedido);
@@ -25,26 +29,30 @@ const MCBarril = (() => {
       if (!sim) return false;
       result = await MC.call("barris:use", { ...pedido, confirmarVencido: true });
     }
+    if (funcionario) funcionario.lembrar();
     MC.toast(`Barril #${result.codigo} engatado na Torneira ${result.torneira}.`);
     MCLayout.refreshAlerts();
     return result;
   }
 
   /* Retirada: confirmação, barris:empty e o aviso de sucesso. O barril fica "Vazio" e a torneira é liberada.
-     barril: { id, codigo, torneira_numero }. aoRetirar(result): a tela se recarrega por trás do aviso.
+     barril: { id, codigo, torneira_numero }. unitId: unidade do barril (para a lista de quem está fazendo).
+     aoRetirar(result): a tela se recarrega por trás do aviso.
      fecharNoErro: em vez de mostrar o erro dentro da janela, fecha e repassa o erro (a aba Torneiras
      mostra a mensagem e recarrega o quadro). Retorna o resultado, ou null se a pessoa cancelou. */
-  async function retirar({ barril, unidade, aoRetirar, fecharNoErro = false }) {
+  async function retirar({ barril, unidade, unitId, aoRetirar, fecharNoErro = false }) {
     let falha = null;
+    const funcionario = await MC.escolherFuncionario(unitId);
     const result = await MC.dialog({
       title: `Retirar barril #${barril.codigo}`,
       intro: barril.torneira_numero
         ? `Unidade: ${unidade}. O barril está na Torneira ${barril.torneira_numero}, que será liberada. Ao ser retirado, o barril fica "Vazio" até a fábrica recolher.`
         : `Unidade: ${unidade}. Este barril não tem torneira registrada (foi engatado antes do controle de torneiras), então nenhuma torneira será liberada. O barril fica "Vazio" até a fábrica recolher.`,
       submitLabel: "Confirmar retirada",
+      funcionario,
       onSubmit: async () => {
         try {
-          return await MC.call("barris:empty", { id: barril.id });
+          return await MC.call("barris:empty", { id: barril.id, funcionarioId: funcionario ? funcionario.id : undefined });
         } catch (err) {
           if (!fecharNoErro) throw err;
           falha = err;

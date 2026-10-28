@@ -60,12 +60,16 @@
     if (!selBarril.value) return MC.toast("Não há barril disponível para transferir.", "err");
     const barril = selBarril.selectedOptions[0].textContent;
     const destino = selDestino.selectedOptions[0] && selDestino.selectedOptions[0].textContent;
+    const funcionario = await MC.escolherFuncionario(ctx.unitId); // quem envia, na unidade de origem
     if (!await MC.confirm({
       title: "Confirmar transferência",
       text: `Enviar ${barril} para ${destino}? O barril ficará aguardando a confirmação de recebimento na unidade de destino.`,
       confirmLabel: "Enviar barril",
+      funcionario,
     })) return;
-    const ok = await MC.run(() => MC.call("transfer:create", { barrilId: Number(selBarril.value), destinoId: Number(selDestino.value) }), "Transferência iniciada. O destino precisa confirmar o recebimento.");
+    const ok = await MC.run(() => MC.call("transfer:create", {
+      barrilId: Number(selBarril.value), destinoId: Number(selDestino.value), funcionarioId: funcionario ? funcionario.id : undefined,
+    }), "Transferência iniciada. O destino precisa confirmar o recebimento.");
     if (ok) reload();
   });
 
@@ -75,6 +79,8 @@
     const transfer = transfers.find((t) => t.id === Number(btn.dataset.id));
     if (!transfer) return loadTable();
     const isReceive = btn.dataset.act === "confirm";
+    // Quem recebe (destino) ou quem cancela (origem): nos dois casos, a unidade aberta na tela
+    const funcionario = await MC.escolherFuncionario(ctx.unitId);
     const confirmed = await MC.confirm({
       title: isReceive ? "Confirmar recebimento" : "Cancelar transferência",
       text: isReceive
@@ -82,10 +88,13 @@
         : `Cancelar o envio do barril #${transfer.codigo}? Ele voltará a ficar disponível na unidade de origem.`,
       confirmLabel: isReceive ? "Confirmar recebimento" : "Cancelar transferência",
       type: isReceive ? "plain" : "err",
+      funcionario,
     });
     if (!confirmed) return;
     const msg = btn.dataset.act === "confirm" ? "Recebimento confirmado." : "Transferência cancelada.";
-    const ok = await MC.run(() => MC.call(`transfer:${btn.dataset.act}`, { id: Number(btn.dataset.id) }), msg);
+    const ok = await MC.run(() => MC.call(`transfer:${btn.dataset.act}`, {
+      id: Number(btn.dataset.id), funcionarioId: funcionario ? funcionario.id : undefined,
+    }), msg);
     if (ok) reload();
   });
 

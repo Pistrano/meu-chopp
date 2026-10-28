@@ -11,7 +11,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Histórico | BarrilFacil</title>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
@@ -24,7 +23,7 @@
   <main class="dashboard-main">
     <div class="page-head">
       <div><h1>Histórico</h1><p id="subtitle">Quem fez cada operação, com data e hora.</p></div>
-      <button id="btnExport" class="btn btn-mc btn-mc-sm" type="button">Exportar relatório (CSV)</button>
+      <button id="btnExport" class="btn btn-mc btn-mc-sm" type="button" data-perm="exportar">Exportar relatório (CSV)</button>
     </div>
 
     <div id="tabs" class="tabs d-none">
@@ -39,10 +38,13 @@
           <option value="">Todas as operações</option><option value="entrada">Entrada</option>
           <option value="transferencia">Transferência</option><option value="utilizacao">Utilização</option><option value="esgotado">Vazio</option><option value="recolhimento">Recolhimento</option>
         </select>
+        <select id="funcionario" class="form-select" aria-label="Filtrar por funcionário">
+          <option value="">Todos os funcionários</option>
+        </select>
       </div>
       <div class="table-card">
         <table>
-          <thead><tr><th>Data</th><th>Barril</th><th>Operação</th><th>Rota</th><th>Torneira</th><th>Responsável</th><th>Observação</th></tr></thead>
+          <thead><tr><th>Data</th><th>Barril</th><th>Operação</th><th>Rota</th><th>Torneira</th><th>Quem fez</th><th>Observação</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>

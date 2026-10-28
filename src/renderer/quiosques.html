@@ -11,7 +11,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Unidades | BarrilFacil</title>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
@@ -31,17 +30,19 @@
     <section class="panel">
       <h2 class="panel-title">Nova unidade</h2>
       <form id="formUnit" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="nome">Nome da unidade</label><input id="nome" class="form-control" placeholder="Ex.: Bar do Centro" maxlength="60" required></div>
-        <div class="col-md-3"><label class="form-label" for="curto">Nome curto <span class="t-muted fw-normal">(opcional)</span></label><input id="curto" class="form-control" placeholder="Ex.: Estação Cuiabá" maxlength="30"></div>
-        <div class="col-md-4"><label class="form-label" for="cnpj">CNPJ</label><input id="cnpj" class="form-control" placeholder="00.000.000/0000-00" inputmode="text" autocomplete="off" required></div>
-        <div class="col-md-9"><label class="form-label" for="endereco">Localização</label><input id="endereco" class="form-control" placeholder="Rua, número, bairro, cidade, estado e CEP" maxlength="300" required></div>
+        <div class="col-md-5"><label class="form-label" for="razao">Razão social</label><input id="razao" class="form-control" placeholder="Ex.: Bar do Centro Comércio de Bebidas Ltda" maxlength="120" required></div>
+        <div class="col-md-4"><label class="form-label" for="nome">Nome fantasia</label><input id="nome" class="form-control" placeholder="Ex.: Bar do Centro" maxlength="60" required></div>
+        <div class="col-md-3"><label class="form-label" for="curto">Nome curto <span class="t-muted fw-normal">(opcional)</span></label><input id="curto" class="form-control" placeholder="Ex.: Estação Cuiabá" maxlength="30" aria-describedby="curtoAjuda">
+          <div id="curtoAjuda" class="t-muted small-note mt-1">Aparece no seletor de unidade.</div></div>
+        <div class="col-md-3"><label class="form-label" for="cnpj">CNPJ</label><input id="cnpj" class="form-control" placeholder="00.000.000/0000-00" inputmode="text" autocomplete="off" required></div>
+        <div class="col-md-6"><label class="form-label" for="endereco">Endereço</label><input id="endereco" class="form-control" placeholder="Rua, número, bairro, cidade, estado e CEP" maxlength="300" required></div>
         <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar unidade</button></div>
       </form>
     </section>
 
     <div class="table-card">
       <table>
-        <thead><tr><th>Unidade</th><th>CNPJ</th><th>Localização</th><th>Torneiras</th><th>Barris</th><th>Pessoas com acesso</th><th>Situação</th><th></th></tr></thead>
+        <thead><tr><th>Unidade</th><th>CNPJ</th><th>Endereço</th><th>Torneiras</th><th>Barris</th><th>Pessoas com acesso</th><th>Situação</th><th></th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>

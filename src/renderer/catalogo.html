@@ -11,7 +11,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Chopes e estilos | BarrilFacil</title>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet">
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
@@ -46,9 +45,10 @@
     <section class="panel">
       <h2 class="panel-title">Novo estilo</h2>
       <form id="formEstilo" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="estiloNome">Nome do estilo</label><input id="estiloNome" class="form-control" placeholder="Ex.: Pilsen" maxlength="60" required></div>
+        <div class="col-md-5"><label class="form-label" for="estiloNome">Nome do estilo</label><input id="estiloNome" class="form-control" placeholder="Ex.: American Lager" maxlength="60" required aria-describedby="estiloAjuda"></div>
         <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar estilo</button></div>
       </form>
+      <p id="estiloAjuda" class="t-muted small-note mt-2 mb-0">Estilo é a família da cerveja (American Lager, IPA, Weiss). O nome que aparece na torneira vai no cadastro do chope.</p>
     </section>
 
     <h2 class="section-title">Estilos</h2>

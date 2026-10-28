@@ -92,7 +92,7 @@ Não coloque na internet sem HTTPS.
 ### Atualização automática do aplicativo Windows
 
 As telas vêm do servidor, então **mudanças nas telas chegam sozinhas** a todos os aparelhos assim que o servidor é atualizado
-(basta recarregar). A atualização automática do aplicativo serve só para o "casco" do Windows (janela, menu, ícone, tela de conexão).
+(basta recarregar; veja *Velocidade e cache*). A atualização automática do aplicativo serve só para o "casco" do Windows (janela, menu, ícone, tela de conexão).
 
 O aplicativo instalado procura versão nova 10 segundos depois de abrir e a cada 6 horas, baixa em segundo plano e **avisa**
 ("Reiniciar agora" / "Depois"). Se a pessoa escolher *Depois*, instala quando o aplicativo for fechado. Nunca reinicia sozinho
@@ -122,11 +122,32 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências e, para o administrador, Unidades e Usuários.
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Funcionários (administrador e gerente) e,
+  para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
 - No celular e no tablet, o menu fica numa barra embaixo e o Mais vira ☰.
+
+## Cargos e permissões
+
+Três cargos. O dia a dia (barris, engates e retiradas, transferências, histórico e Relatório de barris) é de todos;
+o resto depende da permissão do cargo:
+
+| Permissão | Administrador | Gerente | Operador |
+|---|:-:|:-:|:-:|
+| `usuarios`: criar, trocar cargo, desativar e apagar usuários | ✓ | | |
+| `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
+| `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
+| `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
+| `catalogo:editar`: editar, desativar, reativar e apagar chopes e estilos | ✓ | ✓ | |
+| `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
+| Unidades que vê | todas | as liberadas | as liberadas |
+
+- A tabela fica num lugar só: `PERMISSOES` em `src/server/api.js`. As rotas pedem uma permissão com
+  `handle(canal, fn, { perm: "exportar" })` e respondem *Você não tem permissão para esta ação.* para quem não tem.
+- As telas perguntam com `MC.pode("exportar")` (a lista vem do servidor no login). Botão com `data-perm="exportar"`
+  some sozinho para quem não tem; item do menu com `perm` também, e a tela manda de volta para o Painel.
 
 ## Conforto de uso
 
@@ -134,9 +155,9 @@ registrado está no banco.
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
-- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras e geração de senha temporária pedem confirmação antes de alterar os dados.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras/funcionários, apagar usuário, estilo ou chope e geração de senha temporária pedem confirmação antes de alterar os dados. No celular do quiosque, o cadastro de barril também pede confirmação, junto com a escolha de quem está fazendo.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
-- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
+- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade, torneira e o funcionário da última ação.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.
@@ -144,11 +165,36 @@ registrado está no banco.
   Ficam só enquanto a janela estiver aberta e são apagados ao entrar e ao sair do sistema. Para usar em outra tela, chame
   `MC.rememberFields("nome-da-tela", { q, status })` antes da primeira carga e `MC.sortable(tabela, colunas, opções)` ao desenhar a lista.
 
+## Velocidade e cache
+
+A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página separada, mas:
+
+- **Arquivos versionados:** ao iniciar, o servidor calcula uma versão curta (hash do conteúdo de `src/renderer/js`, `css`,
+  `vendor` e `assets`) e, ao entregar um `.html`, acrescenta `?v=<versão>` aos `<script src>` e `<link href>` locais.
+  Ninguém escreve versão à mão. Arquivo pedido com a versão atual vai com cache de 1 ano (`immutable`); sem versão, com
+  versão antiga e as páginas `.html` continuam `no-cache`, com ETag e resposta 304 quando não mudou. Como a versão só é
+  calculada ao iniciar, **depois de mudar arquivos das telas, reinicie o servidor** (o deploy já reinicia).
+- **Service worker** (`src/renderer/sw.js`): arquivo com `?v=` e as fontes saem do cache primeiro; páginas vão à rede
+  primeiro, com a cópia guardada como reserva; `/api/*` e `/healthz` sempre na rede. Na instalação ele já guarda o que toda
+  tela usa. O servidor põe a versão no `sw.js` (`__VERSAO__`): cada versão tem o próprio cache e o anterior é apagado.
+- **Fontes locais:** Manrope e Sora em `src/renderer/assets/fonts/` (woff2, `font-display: swap`), sem Google Fonts.
+- **Topo numa chamada só:** `session:bootstrap` devolve usuário, unidades e config de uma vez (`auth:me`, `units:list` e
+  `config:get` continuam). O `layout.js` guarda o resultado por 60 s na janela (`sessionStorage`), desenha o topo na hora
+  com ele e confere com o servidor em seguida: se o cargo ou as unidades mudaram, a tela abre de novo com os dados novos;
+  sessão encerrada vai para o login. Os alertas carregam em paralelo.
+- **Servidor:** as unidades liberadas de cada sessão ficam em memória com a sessão (60 s; trocar acesso, cargo ou
+  ativar/desativar/criar unidade limpa na hora). Os alertas consultam em paralelo e as torneiras trazem só o engate em andamento.
+- **Transição e pré-carregamento** (Chrome e o app do Windows): a troca de página não pisca em branco (`@view-transition`)
+  e as abas do menu são pré-carregadas (`speculationrules`, prefetch) quando o mouse passa ou o dedo encosta no link.
+- **Medir:** toda resposta de `/api/*` traz `Server-Timing: app;dur=<ms>` (DevTools > Network > Timing) e chamadas acima
+  de 300 ms vão para o log do servidor (`[lento] canal 412 ms`; na VM: `journalctl -u barrilfacil | grep lento`).
+
 ## Unidades e torneiras
 
-- Aba **Unidades** (administrador): cadastro com nome, CNPJ (numérico ou alfanumérico, com validação) e localização,
-  e o cadastro das torneiras de cada loja. As unidades que já existiam ficam marcadas como *A preencher* até alguém
-  informar o CNPJ e o endereço reais em *Editar*.
+- Aba **Unidades** (administrador): cadastro com razão social, nome fantasia, nome curto (opcional, aparece no seletor
+  de unidade), CNPJ (numérico ou alfanumérico, com validação) e endereço, e o cadastro das torneiras de cada loja.
+  O nome fantasia é o nome mostrado no app inteiro e não pode repetir. As unidades que já existiam ficam marcadas como
+  *A preencher* até alguém informar a razão social, o CNPJ e o endereço reais em *Editar*.
 - **Engate:** em *Barris > Engatar na torneira*, o funcionário escolhe uma torneira livre da unidade do barril.
   Sem torneira livre, o engate não é feito.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
@@ -192,7 +238,9 @@ registrado está no banco.
   - **Esvaziados** e **Recolhidos:** retiradas e recolhimentos feitos no período.
   - **Situação agora:** em estoque, engatados, vazios aguardando recolhimento e em transferência, com a hora da consulta.
 - Tudo é contado por barril (cada cadastro é um ciclo), nunca pelo código, que se repete quando o vasilhame volta.
-- Clicar no nome do chope mostra os barris utilizados no período. *Exportar CSV* e *Imprimir* saem com o período e a unidade.
+- Clicar no nome do chope mostra os barris utilizados no período, com quem engatou e quem retirou (coluna *Funcionário*).
+  *Exportar CSV* e *Imprimir* saem com o período e a unidade; o CSV termina com o bloco *Barris utilizados no período*,
+  um barril por linha, com o funcionário do engate e o da retirada.
 - As contas ficam no banco, nas funções `fn_relatorio_barris` e `fn_relatorio_barris_detalhe`
   (`supabase/migrations/20261023000000_relatorio_barris.sql`).
 
@@ -200,9 +248,52 @@ registrado está no banco.
 
 - O barril é cadastrado escolhendo um **chope** do catálogo (ex.: *German Pilsen · Pilsen*). Se o chope ainda não existe,
   a opção *+ Cadastrar novo chope…* cria o chope (e, se precisar, o estilo) sem sair da tela.
-- Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são só do
-  administrador. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
+- Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são do
+  administrador e do gerente. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
   (os barris antigos continuam com ele).
+- **Apagar** (administrador e gerente), para o que foi cadastrado errado, sem perder histórico:
+  - Chope: só apaga se nenhum barril usa o chope. Se algum usa, o app avisa quantos e sugere desativar ou editar o nome.
+  - Estilo sem chopes: só confirma. Estilo com chopes (ativos ou não): escolha para qual estilo ativo os chopes vão.
+    Os barris desses chopes passam a mostrar o estilo novo, inclusive no histórico e no Relatório de barris.
+    Barris antigos cadastrados sem chope do catálogo não mudam.
+
+## Usuários
+
+- Aba **Usuários** (administrador): cria a conta com uma senha temporária, escolhe o cargo e as unidades de gerentes e operadores.
+- **Cargo:** troca o cargo de outra pessoa (ninguém troca o próprio). Gerente e operador precisam de ao menos uma unidade.
+  Vale na próxima ação da pessoa, sem precisar sair; o menu novo aparece na próxima tela que ela abrir.
+- **Apagar:** para contas criadas por engano (por exemplo, com e-mail errado). Sem histórico, só confirma. Com histórico
+  (engates, movimentações ou transferências), o histórico passa para a outra conta da mesma pessoa, escolhida na hora; o
+  Histórico passa a mostrar o nome dela. Quem saiu da empresa deve ser **desativado**, não apagado. Tudo é feito de uma vez
+  pela função `fn_usuario_apagar` (`supabase/migrations/20261027100000_cargo_gerente_apagar_usuario.sql`).
+- O sistema nunca fica sem administrador ativo: o último não pode ser apagado, desativado nem perder o cargo.
+
+## Funcionários do quiosque
+
+Em cada loja o app fica num celular do quiosque, logado numa conta de **operador** compartilhada. Para saber quem fez
+cada ação sem dar login a cada pessoa, a loja cadastra os funcionários e a pessoa toca no próprio nome antes de salvar.
+
+- Tela **Mais > Funcionários** (administrador e gerente): lista da unidade aberta no cabeçalho, cadastro (nome e
+  unidades onde trabalha), editar, desativar e reativar. O gerente só vê e cadastra nas unidades liberadas para ele.
+  Funcionário não é apagado, só desativado: o histórico dele continua guardado. O nome não pode repetir (use o sobrenome).
+- **"Quem está fazendo?"**: no cadastro de barril, engatar, retirar, recolher vazios e criar, confirmar ou cancelar
+  transferência, a confirmação mostra uma grade de botões grandes com os funcionários ativos da unidade, em ordem
+  alfabética. O último nome usado naquele aparelho nos últimos 30 minutos vem primeiro, destacado, mas ainda precisa ser
+  tocado. O botão de confirmar só habilita depois da escolha. O componente é um só, `MC.escolherFuncionario(unitId)` em
+  `src/renderer/js/common.js` (`MC.dialog` e `MC.confirm` aceitam `{ funcionario }`).
+- Só contas de **operador** escolhem. Administrador e gerente usam conta pessoal: a ação fica no nome da conta, sem perguntar.
+- Unidade **sem funcionário ativo**: a escolha não aparece (a loja não trava) e o Painel avisa o administrador e o gerente:
+  *Cadastre os funcionários de &lt;unidade&gt; em Mais > Funcionários para saber quem fez cada ação.*
+- O servidor confere de novo: operador numa unidade com funcionários ativos precisa mandar um funcionário ativo e
+  cadastrado na unidade da ação (no recebimento de transferência, a unidade de destino).
+- **Onde aparece:** a coluna *Quem fez* do Histórico, as movimentações recentes do Painel, o cartão e o histórico de
+  cada torneira (*por …*, *Retirado em … por …*) e as transferências mostram o funcionário; sem funcionário, o nome da
+  conta, como antes. O Histórico tem filtro por funcionário (quem cadastra vê também os desativados).
+- **CSV:** o do Histórico mantém *Responsável* (a conta logada) e ganha a coluna *Funcionário*; o do estoque traz o
+  funcionário da última ação; o do Relatório de barris, o do engate e o da retirada.
+- Banco: tabelas `funcionarios` e `funcionario_unidades` e as colunas `funcionario_id` (movimentações),
+  `engatado_func_id`/`retirado_func_id` (engates) e `solicitante_func_id`/`recebedor_func_id` (transferências), em
+  `supabase/migrations/20261028000000_funcionarios_quem_fez.sql`.
 
 ## Rodar os testes
 
@@ -233,13 +324,17 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 
 - Entrada com e-mail e senha forte (8+ caracteres, letras e números); sem senha padrão.
 - 5 tentativas erradas bloqueiam a conta por 15 minutos; também há limite de tentativas por aparelho.
-- A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no
-  banco (tabela `sessoes`, só com o hash do token), então atualizar o servidor não desloga ninguém. Desativar um usuário
-  ou gerar uma senha temporária derruba as sessões dele; trocar a própria senha derruba as dos outros aparelhos.
+- A sessão expira após 15 minutos sem uso para administrador e gerente, e após 12 horas para o operador (o celular do
+  quiosque fica o dia todo aberto). Os dois valores são `IDLE_MS` e `IDLE_OPERADOR_MS`, no topo de `src/server/api.js`.
+  Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no banco (tabela `sessoes`, só com o hash do
+  token), então atualizar o servidor não desloga ninguém. Desativar um usuário ou gerar uma senha temporária derruba as
+  sessões dele (apagar também); trocar a própria senha derruba as dos outros aparelhos.
 - Cada unidade é isolada: o servidor confere a permissão a cada ação. Tentativas indevidas ficam na *Auditoria*.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.
 - Proteções do servidor: cabeçalhos de segurança, bloqueio de pedidos vindos de outros sites e de acesso a arquivos internos.
+  A Content-Security-Policy só permite arquivos do próprio servidor (as fontes também); o único script inline aceito são
+  as regras de pré-carregamento (`'inline-speculation-rules'`).
 - Esqueceu a senha? O administrador gera uma senha temporária em *Usuários*.
 
 ## Estrutura
