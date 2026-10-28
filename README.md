@@ -92,7 +92,7 @@ Não coloque na internet sem HTTPS.
 ### Atualização automática do aplicativo Windows
 
 As telas vêm do servidor, então **mudanças nas telas chegam sozinhas** a todos os aparelhos assim que o servidor é atualizado
-(basta recarregar). A atualização automática do aplicativo serve só para o "casco" do Windows (janela, menu, ícone, tela de conexão).
+(basta recarregar; veja *Velocidade e cache*). A atualização automática do aplicativo serve só para o "casco" do Windows (janela, menu, ícone, tela de conexão).
 
 O aplicativo instalado procura versão nova 10 segundos depois de abrir e a cada 6 horas, baixa em segundo plano e **avisa**
 ("Reiniciar agora" / "Depois"). Se a pessoa escolher *Depois*, instala quando o aplicativo for fechado. Nunca reinicia sozinho
@@ -164,6 +164,30 @@ o resto depende da permissão do cargo:
 - **Filtros lembrados:** a busca e o filtro de Barris e do Histórico, e a ordem escolhida, continuam ao trocar de aba e voltar.
   Ficam só enquanto a janela estiver aberta e são apagados ao entrar e ao sair do sistema. Para usar em outra tela, chame
   `MC.rememberFields("nome-da-tela", { q, status })` antes da primeira carga e `MC.sortable(tabela, colunas, opções)` ao desenhar a lista.
+
+## Velocidade e cache
+
+A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página separada, mas:
+
+- **Arquivos versionados:** ao iniciar, o servidor calcula uma versão curta (hash do conteúdo de `src/renderer/js`, `css`,
+  `vendor` e `assets`) e, ao entregar um `.html`, acrescenta `?v=<versão>` aos `<script src>` e `<link href>` locais.
+  Ninguém escreve versão à mão. Arquivo pedido com a versão atual vai com cache de 1 ano (`immutable`); sem versão, com
+  versão antiga e as páginas `.html` continuam `no-cache`, com ETag e resposta 304 quando não mudou. Como a versão só é
+  calculada ao iniciar, **depois de mudar arquivos das telas, reinicie o servidor** (o deploy já reinicia).
+- **Service worker** (`src/renderer/sw.js`): arquivo com `?v=` e as fontes saem do cache primeiro; páginas vão à rede
+  primeiro, com a cópia guardada como reserva; `/api/*` e `/healthz` sempre na rede. Na instalação ele já guarda o que toda
+  tela usa. O servidor põe a versão no `sw.js` (`__VERSAO__`): cada versão tem o próprio cache e o anterior é apagado.
+- **Fontes locais:** Manrope e Sora em `src/renderer/assets/fonts/` (woff2, `font-display: swap`), sem Google Fonts.
+- **Topo numa chamada só:** `session:bootstrap` devolve usuário, unidades e config de uma vez (`auth:me`, `units:list` e
+  `config:get` continuam). O `layout.js` guarda o resultado por 60 s na janela (`sessionStorage`), desenha o topo na hora
+  com ele e confere com o servidor em seguida: se o cargo ou as unidades mudaram, a tela abre de novo com os dados novos;
+  sessão encerrada vai para o login. Os alertas carregam em paralelo.
+- **Servidor:** as unidades liberadas de cada sessão ficam em memória com a sessão (60 s; trocar acesso, cargo ou
+  ativar/desativar/criar unidade limpa na hora). Os alertas consultam em paralelo e as torneiras trazem só o engate em andamento.
+- **Transição e pré-carregamento** (Chrome e o app do Windows): a troca de página não pisca em branco (`@view-transition`)
+  e as abas do menu são pré-carregadas (`speculationrules`, prefetch) quando o mouse passa ou o dedo encosta no link.
+- **Medir:** toda resposta de `/api/*` traz `Server-Timing: app;dur=<ms>` (DevTools > Network > Timing) e chamadas acima
+  de 300 ms vão para o log do servidor (`[lento] canal 412 ms`; na VM: `journalctl -u barrilfacil | grep lento`).
 
 ## Unidades e torneiras
 
@@ -309,6 +333,8 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.
 - Proteções do servidor: cabeçalhos de segurança, bloqueio de pedidos vindos de outros sites e de acesso a arquivos internos.
+  A Content-Security-Policy só permite arquivos do próprio servidor (as fontes também); o único script inline aceito são
+  as regras de pré-carregamento (`'inline-speculation-rules'`).
 - Esqueceu a senha? O administrador gera uma senha temporária em *Usuários*.
 
 ## Estrutura

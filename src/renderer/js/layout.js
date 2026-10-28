@@ -27,23 +27,36 @@ const MCLayout = (() => {
   const ctx = { user: null, units: [], unitId: null, config: { fornecedor: "Fornecedor" }, onUnitChange: () => {} };
 
   /* Ambiente de testes (APP_ENV=beta no servidor): faixa amarela no topo e "[TESTE] " no título da aba.
-     Roda assim que o script carrega, também nas telas sem login (entrar, primeiro acesso, configuração inicial),
-     que carregam este arquivo só por causa disso. O init() reaproveita a mesma resposta. */
-  const pedidoConfig = window.api.invoke("config:get");
-  pedidoConfig.then((res) => {
-    if (!res || !res.ok || res.data.ambiente !== "beta" || document.querySelector(".faixa-teste")) return;
+     Nas telas com cabeçalho, a config vem no session:bootstrap (init). Nas telas sem login (entrar, primeiro acesso,
+     configuração inicial), que carregam este arquivo só por causa disso, pede a config assim que o script carrega. */
+  function mostrarFaixa(config) {
+    if (!config || config.ambiente !== "beta" || document.querySelector(".faixa-teste")) return;
     const faixa = document.createElement("div");
     faixa.className = "faixa-teste";
     faixa.setAttribute("role", "note");
     faixa.textContent = "AMBIENTE DE TESTES: os dados daqui não são das lojas";
     document.body.prepend(faixa);
     if (!document.title.startsWith("[TESTE] ")) document.title = `[TESTE] ${document.title}`;
-  });
-  // Com login, a resposta já traz fornecedor e "hoje"; se veio sem (sessão criada depois), pede de novo
-  async function lerConfig() {
-    const res = await pedidoConfig;
-    return res && res.ok && res.data.hoje ? res.data : MC.call("config:get");
   }
+  if (!document.getElementById("appHeader")) {
+    window.api.invoke("config:get").then((res) => { if (res && res.ok) mostrarFaixa(res.data); });
+  }
+
+  /* Usuário, unidades e config (session:bootstrap) guardados por 60 s nesta janela: a próxima aba desenha o topo na
+     hora com eles e confere com o servidor logo em seguida. Prefixo "bf:": some ao entrar, ao sair e com a sessão
+     expirada (MC.clearRemembered), então ninguém herda o topo de outra pessoa. */
+  const CACHE_SESSAO = "bf:sessao";
+  const CACHE_SESSAO_MS = 60 * 1000;
+  function lerCacheSessao() {
+    try {
+      const c = JSON.parse(sessionStorage.getItem(CACHE_SESSAO));
+      return c && c.dados && Date.now() - c.em < CACHE_SESSAO_MS ? c.dados : null;
+    } catch (_) { return null; }
+  }
+  const gravarCacheSessao = (dados) => { try { sessionStorage.setItem(CACHE_SESSAO, JSON.stringify({ em: Date.now(), dados })); } catch (_) { /* só não guarda */ } };
+  const apagarCacheSessao = () => { try { sessionStorage.removeItem(CACHE_SESSAO); } catch (_) { /* ignora */ } };
+  // O que, se mudar, pede a tela de novo: usuário (cargo, permissões, nome), unidades e config ("hoje" à parte)
+  const marcaSessao = (d) => JSON.stringify([d.user, d.units, { ...d.config, hoje: null }]);
 
   function buildNav(pageId) {
     const itens = NAV.filter((n) => !n.perm || MC.pode(n.perm));
@@ -210,33 +223,76 @@ const MCLayout = (() => {
     return null;
   }
 
+  /* Pré-carrega as abas do menu (Chrome e o app do Windows): ao passar o mouse ou começar a tocar num link do menu,
+     o navegador já busca a página. Só prefetch (a página não é executada antes da hora). */
+  function preCarregarAbas() {
+    if (!window.HTMLScriptElement || !HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
+    const regras = document.createElement("script");
+    regras.type = "speculationrules";
+    // a aba aberta (aria-current) fica de fora: o mouse costuma continuar em cima dela depois da troca
+    regras.textContent = JSON.stringify({ prefetch: [{ where: { selector_matches: "#appHeader .app-nav a[href]:not([aria-current])" }, eagerness: "moderate" }] });
+    document.head.appendChild(regras);
+  }
+
+  /* Abre a tela. Com os dados guardados há menos de 60 s, desenha o topo na hora e confere com o servidor em seguida
+     (conferirSessao); sem eles, faz uma chamada só (session:bootstrap) antes de desenhar. */
   async function init(pageId) {
-    try {
-      ctx.user = await MC.call("auth:me");
-    } catch (err) {
-      if (err.code === "OFFLINE") return showOffline();
-      ctx.user = null;
+    let dados = lerCacheSessao();
+    const doCache = !!dados;
+    if (!dados) {
+      try {
+        dados = await MC.call("session:bootstrap");
+      } catch (err) {
+        if (err.code === "OFFLINE") return showOffline();
+        dados = null;
+      }
+      if (!dados || !dados.user) { window.location.href = "index.html"; return null; }
+      if (!dados.user.trocarSenha) gravarCacheSessao(dados);
     }
-    if (!ctx.user) { window.location.href = "index.html"; return null; }
-    if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return null; }
+    const pronto = montar(pageId, dados);
+    if (doCache && pronto !== undefined) conferirSessao(dados);
+    return pronto;
+  }
+
+  // Confere os dados guardados: sessão expirada vai para o login, senha a trocar para o primeiro acesso, e se o
+  // usuário ou as unidades mudaram (cargo, acesso liberado ou tirado) a tela abre de novo já com os dados novos
+  async function conferirSessao(antigos) {
+    let novos;
+    try {
+      novos = await MC.call("session:bootstrap");
+    } catch (err) {
+      if (err.code === "OFFLINE") { showOffline(); return; }
+      apagarCacheSessao();
+      window.location.href = "index.html";
+      return;
+    }
+    if (novos.user.trocarSenha) { apagarCacheSessao(); window.location.href = "primeiro-acesso.html"; return; }
+    gravarCacheSessao(novos);
+    if (marcaSessao(novos) !== marcaSessao(antigos)) { window.location.reload(); return; }
+    ctx.config = novos.config; // "hoje" pode ter virado
+  }
+
+  // Desenha o topo com { user, units, config }. Devolve ctx, ou null quando a tela não abre (outra tela, sem unidade);
+  // undefined quando já saiu para outra página (não precisa conferir nada).
+  function montar(pageId, dados) {
+    ctx.user = dados.user;
+    if (ctx.user.trocarSenha) { window.location.href = "primeiro-acesso.html"; return undefined; }
     MC.setUser(ctx.user);
+    mostrarFaixa(dados.config);
     const tela = NAV.find((n) => n.id === pageId);
     if (tela && tela.perm && !MC.pode(tela.perm)) { window.location.href = "dashboard.html"; return null; }
     // Botões que dependem de permissão (ex.: data-perm="exportar") somem para quem não tem
     document.querySelectorAll("[data-perm]").forEach((el) => { if (!MC.pode(el.dataset.perm)) el.remove(); });
 
-    try {
-      [ctx.units, ctx.config] = await Promise.all([MC.call("units:list"), lerConfig()]);
-    } catch (err) {
-      if (err.code === "OFFLINE") return showOffline();
-      throw err;
-    }
+    ctx.units = dados.units;
+    ctx.config = dados.config;
     const saved = Number(localStorage.getItem("mc_unit"));
     ctx.unitId = ctx.units.some((u) => u.id === saved) ? saved : ctx.units.length ? ctx.units[0].id : null;
 
     buildHeader(pageId);
     watchInactivity();
     renderUnitMenu();
+    preCarregarAbas();
 
     // Com um único quiosque não há o que escolher: o seletor vira só um rótulo
     if (ctx.units.length <= 1) {
