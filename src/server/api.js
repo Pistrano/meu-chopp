@@ -38,7 +38,7 @@ const IDLE_OPERADOR_MS = 12 * 60 * 60 * 1000;
 const idleDe = (user) => (user && user.cargo === "operador" ? IDLE_OPERADOR_MS : IDLE_MS);
 const MAX_FALHAS = 5;                     // tentativas erradas antes de bloquear
 const BLOQUEIO_MS = 15 * 60 * 1000;       // duração do bloqueio
-const PERMITIDOS_TROCA = new Set(["auth:me", "auth:logout", "auth:ping", "auth:completeProfile"]);
+const PERMITIDOS_TROCA = new Set(["auth:me", "session:bootstrap", "auth:logout", "auth:ping", "auth:completeProfile"]);
 
 // Fuso da operação, usado para mostrar datas (APP_TZ no .env; APP_TIMEZONE é o nome antigo e continua aceito)
 const TZ = process.env.APP_TZ || process.env.APP_TIMEZONE || "America/Cuiaba";
@@ -193,6 +193,12 @@ function recarregarSessoes(usuarioId) {
   for (const [hash, rec] of sessionCache) if (rec.usuarioId === usuarioId) sessionCache.delete(hash);
 }
 
+/* Esquece as unidades liberadas guardadas em todas as sessões (ver allowedUnitIds): uma unidade foi criada, ativada
+   ou desativada, e isso muda o que cada um vê */
+function esquecerUnidadesDasSessoes() {
+  for (const rec of sessionCache.values()) delete rec.unidades;
+}
+
 /* Executa uma operação para o aparelho identificado por `token` (cookie de sessão).
    Retorna { body, setToken?, clearToken? }. */
 async function dispatch(channel, payload, token, meta = {}) {
@@ -207,7 +213,7 @@ async function dispatch(channel, payload, token, meta = {}) {
       throw new AppError("Muitas tentativas deste aparelho. Aguarde alguns minutos.");
     if (auth === "opcional") {
       const rec = token ? await buscarSessao(token) : null;
-      if (rec && rec.ativo && Date.now() - rec.ultimaAtividade <= idleDe(rec.user)) ctx.session = rec.user;
+      if (rec && rec.ativo && Date.now() - rec.ultimaAtividade <= idleDe(rec.user)) { ctx.session = rec.user; ctx.sessao = rec; }
     } else if (auth) {
       const rec = token ? await buscarSessao(token) : null;
       if (!rec) throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
@@ -223,6 +229,7 @@ async function dispatch(channel, payload, token, meta = {}) {
         throw new AppError("Sua sessão expirou por inatividade. Entre novamente.", "SESSION");
       }
       ctx.session = rec.user;
+      ctx.sessao = rec; // a sessão em memória (allowedUnitIds guarda nela as unidades liberadas)
       if (ctx.session.trocarSenha && !PERMITIDOS_TROCA.has(channel))
         throw new AppError("Defina sua senha para continuar.", "MUST_CHANGE");
       await marcarAtividade(rec);
@@ -380,12 +387,13 @@ async function getUserById(id) {
 /* ---------- Torneiras ----------
    A situação (livre/ocupada) nunca é gravada na torneira: ela é derivada do engate ativo
    (engates.retirado_em IS NULL). */
+// "ativos": só o engate em andamento de cada torneira (filtro retirado_em nulo em tapsOfUnit), não o histórico inteiro
 const TAPS_SELECT =
-  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status)," +
+  "id, unidade_id, numero, ativo, ativos:engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status)," +
   " usuarios!engatado_por(nome), funcionarios!engatado_func_id(nome))";
 
 function tapRow(t) {
-  const e = (t.engates || []).find((x) => x.retirado_em === null) || null;
+  const e = (t.ativos || []).find((x) => x.retirado_em === null) || null;
   return {
     id: t.id,
     unidade_id: t.unidade_id,
@@ -402,14 +410,17 @@ function tapRow(t) {
     tamanho_l: e && e.barris ? e.barris.tamanho_l : null,
     validade: e && e.barris ? e.barris.validade : null,
     situacao_validade: e && e.barris ? situacaoValidade(e.barris.validade, e.barris.status) : null,
-    usos: (t.engates || []).length,
+    ...(t.usos ? { usos: t.usos[0] ? t.usos[0].count : 0 } : {}),
     ocupada: !!e,
   };
 }
 
-async function tapsOfUnit(unitId) {
+/* Torneiras da unidade com o engate em andamento. usos (quantos engates a torneira já teve) só quando pedido:
+   é uma contagem no banco, usada só nos detalhes da unidade (tela Unidades). */
+async function tapsOfUnit(unitId, { usos = false } = {}) {
   const rows = ok(
-    await supabase.from("torneiras").select(TAPS_SELECT).eq("unidade_id", unitId)
+    await supabase.from("torneiras").select(usos ? `${TAPS_SELECT}, usos:engates(count)` : TAPS_SELECT)
+      .eq("unidade_id", unitId).is("ativos.retirado_em", null)
       .order("ativo", { ascending: false }).order("numero", { ascending: true })
   );
   return rows.map(tapRow);
@@ -424,16 +435,25 @@ async function activeEngateOfTap(torneiraId) {
 
 /* ---------- Acesso por quiosque ----------
    Administrador: todos os quiosques ativos.
-   Gerente e operador: somente os quiosques que um administrador liberou para eles. */
+   Gerente e operador: somente os quiosques que um administrador liberou para eles.
+   O resultado fica guardado junto da sessão em memória e vale o mesmo que ela: até 60 s, ou até
+   recarregarSessoes/encerrarSessoes (trocar unidades, cargo, desativar) ou esquecerUnidadesDasSessoes
+   (unidade criada, ativada ou desativada). */
 async function allowedUnitIds(ctx) {
+  const rec = ctx.sessao && ctx.sessao.user === ctx.session ? ctx.sessao : null;
+  if (rec && rec.unidades) return rec.unidades.slice();
+  let ids;
   if (ctx.session.cargo === "admin") {
-    return ok(await supabase.from("unidades").select("id").eq("ativo", true).order("id")).map((r) => r.id);
+    ids = ok(await supabase.from("unidades").select("id").eq("ativo", true).order("id")).map((r) => r.id);
+  } else {
+    const rows = ok(
+      await supabase.from("usuario_unidades").select("unidade_id, unidades!inner(ativo)")
+        .eq("usuario_id", ctx.session.id).eq("unidades.ativo", true)
+    );
+    ids = rows.map((r) => r.unidade_id).sort((a, b) => a - b);
   }
-  const rows = ok(
-    await supabase.from("usuario_unidades").select("unidade_id, unidades!inner(ativo)")
-      .eq("usuario_id", ctx.session.id).eq("unidades.ativo", true)
-  );
-  return rows.map((r) => r.unidade_id).sort((a, b) => a - b);
+  if (rec) rec.unidades = ids;
+  return ids.slice();
 }
 
 async function assertUnit(ctx, unitId) {
@@ -644,9 +664,17 @@ function registerHandlers() {
 
   // Dados do servidor que as telas usam (carregados junto com o cabeçalho).
   // Sem login (telas de entrar, primeiro acesso e configuração) devolve só o ambiente, para a faixa de testes.
-  handle("config:get", (_p, ctx) =>
-    ctx.session ? { fornecedor: FORNECEDOR, hoje: hojeTZ(), ambiente: AMBIENTE } : { ambiente: AMBIENTE },
-  { auth: "opcional" });
+  const configDe = (ctx) => (ctx.session ? { fornecedor: FORNECEDOR, hoje: hojeTZ(), ambiente: AMBIENTE } : { ambiente: AMBIENTE });
+  handle("config:get", (_p, ctx) => configDe(ctx), { auth: "opcional" });
+
+  /* Tudo o que o cabeçalho das telas precisa numa ida só: o usuário (como auth:me), as unidades liberadas (como
+     units:list) e a config (como config:get). Quem ainda precisa trocar a senha recebe as unidades vazias e a tela
+     leva ao primeiro acesso. */
+  handle("session:bootstrap", async (_p, ctx) => ({
+    user: ctx.session,
+    units: ctx.session.trocarSenha ? [] : await unidadesDoUsuario(ctx),
+    config: configDe(ctx),
+  }));
   handle("auth:ping", () => true); // mantém a sessão viva enquanto o usuário está ativo
 
   /* Primeiro acesso / senha temporária: define e-mail (se faltar) e uma senha nova */
@@ -680,11 +708,12 @@ function registerHandlers() {
 
   /* ======== Quiosques ======== */
   // Quiosques que o usuário pode acessar (alimenta o seletor do cabeçalho)
-  handle("units:list", async (_p, ctx) => {
+  async function unidadesDoUsuario(ctx) {
     const ids = await allowedUnitIds(ctx);
     if (!ids.length) return [];
     return ok(await supabase.from("unidades").select("id, nome, nome_curto").in("id", ids).order("id"));
-  });
+  }
+  handle("units:list", (_p, ctx) => unidadesDoUsuario(ctx));
 
   // Destinos possíveis de uma transferência: só nomes dos quiosques ativos
   handle("units:all", async () =>
@@ -702,7 +731,7 @@ function registerHandlers() {
     dbError(r.error);
     if (!r.data) throw new AppError("Unidade não encontrada.");
     const u = r.data;
-    return { ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj), torneiras: await tapsOfUnit(u.id) };
+    return { ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj), torneiras: await tapsOfUnit(u.id, { usos: true }) };
   }, { perm: "unidades" });
 
   /* Razão social, nome fantasia (coluna nome: o nome mostrado no app), CNPJ e endereço são obrigatórios
@@ -733,6 +762,7 @@ function registerHandlers() {
       await supabase.from("unidades").insert({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end }).select("id").single(),
       "Já existe uma unidade com esse nome fantasia ou CNPJ."
     );
+    esquecerUnidadesDasSessoes(); // o administrador vê todas as unidades ativas: a nova aparece já
     await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})`);
     return { id: row.id };
   }, { perm: "unidades" });
@@ -766,6 +796,7 @@ function registerHandlers() {
         );
     }
     dbError((await supabase.from("unidades").update({ ativo: !u.ativo }).eq("id", u.id)).error);
+    esquecerUnidadesDasSessoes();
     await audit(ctx, u.ativo ? "unidade_desativada" : "unidade_reativada", u.nome);
     return true;
   }, { perm: "unidades" });
@@ -1055,8 +1086,24 @@ function registerHandlers() {
     const unit = await resolveUnit(ctx, unitId);
     const alerts = [];
 
+    // As quatro consultas saem juntas; os alertas são montados depois, na mesma ordem de antes
     const hoje = hojeTZ();
-    const validade = await rpc("fn_alertas_validade", { p_unit: unit, p_hoje: hoje });
+    const [validade, pend, vazios, estoque] = await Promise.all([
+      rpc("fn_alertas_validade", { p_unit: unit, p_hoje: hoje }),
+      supabase.from("transferencias")
+        .select("id, origem_id, destino_id, barris(codigo), origem:unidades!origem_id(nome), destino:unidades!destino_id(nome)")
+        .eq("status", "pendente")
+        .or(`origem_id.eq.${unit},destino_id.eq.${unit}`)
+        .then((r) => ok(r)),
+      rpc("fn_alertas_vazios", { p_unit: unit }),
+      // Estoque baixo por chope (considera apenas tipos já presentes na unidade).
+      supabase.from("barris")
+        .select("chope_id, chope_nome, estilo, status")
+        .eq("unidade_id", unit)
+        .neq("status", "recolhido")
+        .limit(5000)
+        .then((r) => ok(r)),
+    ]);
     validade.forEach((b) => {
       const quem = `Barril #${b.codigo}${b.chope ? ` (${b.chope})` : ""}`;
       if (b.validade < hoje)
@@ -1065,12 +1112,6 @@ function registerHandlers() {
       else alerts.push({ texto: `${quem} vence amanhã (${diaMes(b.validade)}).` });
     });
 
-    const pend = ok(
-      await supabase.from("transferencias")
-        .select("id, origem_id, destino_id, barris(codigo), origem:unidades!origem_id(nome), destino:unidades!destino_id(nome)")
-        .eq("status", "pendente")
-        .or(`origem_id.eq.${unit},destino_id.eq.${unit}`)
-    );
     pend.forEach((t) => {
       const codigo = t.barris ? t.barris.codigo : "?";
       alerts.push({
@@ -1081,15 +1122,8 @@ function registerHandlers() {
       });
     });
 
-    const vazios = await rpc("fn_alertas_vazios", { p_unit: unit });
     vazios.forEach((v) => alerts.push({ texto: `Barril #${v.codigo} vazio aguardando recolhimento há ${v.dias} dias` }));
 
-    // Estoque baixo por chope (considera apenas tipos já presentes na unidade).
-    const estoque = ok(await supabase.from("barris")
-      .select("chope_id, chope_nome, estilo, status")
-      .eq("unidade_id", unit)
-      .neq("status", "recolhido")
-      .limit(5000));
     const porChope = new Map();
     estoque.forEach((b) => {
       const chave = b.chope_id || `${b.chope_nome || ""}|${b.estilo || ""}`;
