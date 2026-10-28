@@ -13,6 +13,7 @@ const MCLayout = (() => {
     { id: "catalogo", label: "Chopes", href: "catalogo.html" },
     { id: "relatorio", label: "Relatório de barris", href: "relatorio-barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
+    { id: "funcionarios", label: "Funcionários", href: "funcionarios.html", perm: "funcionarios" },
     { id: "quiosques", label: "Unidades", href: "quiosques.html", perm: "unidades" },
     { id: "usuarios", label: "Usuários", href: "usuarios.html", perm: "usuarios" },
   ];
@@ -134,9 +135,10 @@ const MCLayout = (() => {
     });
   }
 
-  /* Encerra a sessão após 15 min sem uso; enquanto há atividade, avisa o sistema (ping) */
-  const IDLE_MS = 15 * 60 * 1000;
+  /* Encerra a sessão depois do tempo sem uso que o servidor informa (15 min; 12 h na conta de operador do
+     celular do quiosque); enquanto há atividade, avisa o sistema (ping) */
   function watchInactivity() {
+    const IDLE_MS = ctx.user.inatividadeMs || 15 * 60 * 1000;
     let idleTimer, lastPing = Date.now();
     const arm = () => {
       clearTimeout(idleTimer);

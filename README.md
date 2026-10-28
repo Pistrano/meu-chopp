@@ -122,7 +122,8 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências e, para o administrador, Unidades e Usuários.
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Funcionários (administrador e gerente) e,
+  para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
@@ -154,9 +155,9 @@ o resto depende da permissão do cargo:
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
-- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras, apagar usuário, estilo ou chope e geração de senha temporária pedem confirmação antes de alterar os dados.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras/funcionários, apagar usuário, estilo ou chope e geração de senha temporária pedem confirmação antes de alterar os dados. No celular do quiosque, o cadastro de barril também pede confirmação, junto com a escolha de quem está fazendo.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
-- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade e torneira.
+- **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade, torneira e o funcionário da última ação.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
   para as linhas carregadas (até 300), não para o banco inteiro.
@@ -213,7 +214,9 @@ o resto depende da permissão do cargo:
   - **Esvaziados** e **Recolhidos:** retiradas e recolhimentos feitos no período.
   - **Situação agora:** em estoque, engatados, vazios aguardando recolhimento e em transferência, com a hora da consulta.
 - Tudo é contado por barril (cada cadastro é um ciclo), nunca pelo código, que se repete quando o vasilhame volta.
-- Clicar no nome do chope mostra os barris utilizados no período. *Exportar CSV* e *Imprimir* saem com o período e a unidade.
+- Clicar no nome do chope mostra os barris utilizados no período, com quem engatou e quem retirou (coluna *Funcionário*).
+  *Exportar CSV* e *Imprimir* saem com o período e a unidade; o CSV termina com o bloco *Barris utilizados no período*,
+  um barril por linha, com o funcionário do engate e o da retirada.
 - As contas ficam no banco, nas funções `fn_relatorio_barris` e `fn_relatorio_barris_detalhe`
   (`supabase/migrations/20261023000000_relatorio_barris.sql`).
 
@@ -240,6 +243,33 @@ o resto depende da permissão do cargo:
   Histórico passa a mostrar o nome dela. Quem saiu da empresa deve ser **desativado**, não apagado. Tudo é feito de uma vez
   pela função `fn_usuario_apagar` (`supabase/migrations/20261027100000_cargo_gerente_apagar_usuario.sql`).
 - O sistema nunca fica sem administrador ativo: o último não pode ser apagado, desativado nem perder o cargo.
+
+## Funcionários do quiosque
+
+Em cada loja o app fica num celular do quiosque, logado numa conta de **operador** compartilhada. Para saber quem fez
+cada ação sem dar login a cada pessoa, a loja cadastra os funcionários e a pessoa toca no próprio nome antes de salvar.
+
+- Tela **Mais > Funcionários** (administrador e gerente): lista da unidade aberta no cabeçalho, cadastro (nome e
+  unidades onde trabalha), editar, desativar e reativar. O gerente só vê e cadastra nas unidades liberadas para ele.
+  Funcionário não é apagado, só desativado: o histórico dele continua guardado. O nome não pode repetir (use o sobrenome).
+- **"Quem está fazendo?"**: no cadastro de barril, engatar, retirar, recolher vazios e criar, confirmar ou cancelar
+  transferência, a confirmação mostra uma grade de botões grandes com os funcionários ativos da unidade, em ordem
+  alfabética. O último nome usado naquele aparelho nos últimos 30 minutos vem primeiro, destacado, mas ainda precisa ser
+  tocado. O botão de confirmar só habilita depois da escolha. O componente é um só, `MC.escolherFuncionario(unitId)` em
+  `src/renderer/js/common.js` (`MC.dialog` e `MC.confirm` aceitam `{ funcionario }`).
+- Só contas de **operador** escolhem. Administrador e gerente usam conta pessoal: a ação fica no nome da conta, sem perguntar.
+- Unidade **sem funcionário ativo**: a escolha não aparece (a loja não trava) e o Painel avisa o administrador e o gerente:
+  *Cadastre os funcionários de &lt;unidade&gt; em Mais > Funcionários para saber quem fez cada ação.*
+- O servidor confere de novo: operador numa unidade com funcionários ativos precisa mandar um funcionário ativo e
+  cadastrado na unidade da ação (no recebimento de transferência, a unidade de destino).
+- **Onde aparece:** a coluna *Quem fez* do Histórico, as movimentações recentes do Painel, o cartão e o histórico de
+  cada torneira (*por …*, *Retirado em … por …*) e as transferências mostram o funcionário; sem funcionário, o nome da
+  conta, como antes. O Histórico tem filtro por funcionário (quem cadastra vê também os desativados).
+- **CSV:** o do Histórico mantém *Responsável* (a conta logada) e ganha a coluna *Funcionário*; o do estoque traz o
+  funcionário da última ação; o do Relatório de barris, o do engate e o da retirada.
+- Banco: tabelas `funcionarios` e `funcionario_unidades` e as colunas `funcionario_id` (movimentações),
+  `engatado_func_id`/`retirado_func_id` (engates) e `solicitante_func_id`/`recebedor_func_id` (transferências), em
+  `supabase/migrations/20261028000000_funcionarios_quem_fez.sql`.
 
 ## Rodar os testes
 
@@ -270,9 +300,11 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 
 - Entrada com e-mail e senha forte (8+ caracteres, letras e números); sem senha padrão.
 - 5 tentativas erradas bloqueiam a conta por 15 minutos; também há limite de tentativas por aparelho.
-- A sessão expira após 15 minutos sem uso. Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no
-  banco (tabela `sessoes`, só com o hash do token), então atualizar o servidor não desloga ninguém. Desativar um usuário
-  ou gerar uma senha temporária derruba as sessões dele (apagar também); trocar a própria senha derruba as dos outros aparelhos.
+- A sessão expira após 15 minutos sem uso para administrador e gerente, e após 12 horas para o operador (o celular do
+  quiosque fica o dia todo aberto). Os dois valores são `IDLE_MS` e `IDLE_OPERADOR_MS`, no topo de `src/server/api.js`.
+  Cada aparelho tem a própria sessão (cookie protegido). As sessões ficam no banco (tabela `sessoes`, só com o hash do
+  token), então atualizar o servidor não desloga ninguém. Desativar um usuário ou gerar uma senha temporária derruba as
+  sessões dele (apagar também); trocar a própria senha derruba as dos outros aparelhos.
 - Cada unidade é isolada: o servidor confere a permissão a cada ação. Tentativas indevidas ficam na *Auditoria*.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.

@@ -6,10 +6,20 @@
   const tbody = document.getElementById("tbody");
   const q = document.getElementById("q");
   const operacao = document.getElementById("operacao");
+  const funcionario = document.getElementById("funcionario");
 
-  const filters = () => ({ unitId: ctx.unitId, q: q.value, operacao: operacao.value });
+  const filters = () => ({ unitId: ctx.unitId, q: q.value, operacao: operacao.value, funcionarioId: Number(funcionario.value) || undefined });
 
-  // Busca e filtro lembrados ao trocar de aba; colunas ordenam ao clicar no título (sobre as linhas carregadas)
+  /* Filtro por funcionário: os da unidade aberta (quem cadastra vê também os desativados, que continuam no histórico) */
+  async function loadFuncionarios() {
+    const atual = funcionario.value;
+    const lista = (await MC.run(() => MC.call("funcionarios:list", { unitId: ctx.unitId }))) || [];
+    funcionario.innerHTML = `<option value="">Todos os funcionários</option>` +
+      lista.map((f) => `<option value="${f.id}">${MC.esc(f.nome)}${f.ativo === 0 ? " (desativado)" : ""}</option>`).join("");
+    funcionario.value = lista.some((f) => String(f.id) === atual) ? atual : "";
+  }
+
+  // Busca e filtros lembrados ao trocar de aba; colunas ordenam ao clicar no título (sobre as linhas carregadas)
   MC.rememberFields("historico", { q, operacao });
   let movs = [];
   const sorter = MC.sortable(document.querySelector("#tabMov table"), {
@@ -76,6 +86,8 @@
   let t;
   q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 250); });
   operacao.addEventListener("change", load);
-  ctx.onUnitChange = load;
+  funcionario.addEventListener("change", load);
+  ctx.onUnitChange = async () => { await loadFuncionarios(); load(); };
+  await loadFuncionarios();
   load();
 })();

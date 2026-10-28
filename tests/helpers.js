@@ -46,8 +46,8 @@ function banco() {
 /* Apaga tudo, na ordem certa (quem aponta para outra tabela sai antes dela). Roda antes de cada arquivo de teste. */
 const TABELAS = [
   ["sessoes", "token_hash"], ["auditoria", "id"], ["movimentacoes", "id"], ["transferencias", "id"], ["engates", "id"],
-  ["barris", "id"], ["torneiras", "id"], ["usuario_unidades", "usuario_id"], ["chopes", "id"], ["estilos", "id"],
-  ["usuarios", "id"], ["unidades", "id"],
+  ["barris", "id"], ["torneiras", "id"], ["usuario_unidades", "usuario_id"], ["funcionario_unidades", "funcionario_id"],
+  ["funcionarios", "id"], ["chopes", "id"], ["estilos", "id"], ["usuarios", "id"], ["unidades", "id"],
 ];
 async function limparBanco() {
   for (const [tabela, coluna] of TABELAS) {

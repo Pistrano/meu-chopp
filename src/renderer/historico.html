@@ -39,10 +39,13 @@
           <option value="">Todas as operações</option><option value="entrada">Entrada</option>
           <option value="transferencia">Transferência</option><option value="utilizacao">Utilização</option><option value="esgotado">Vazio</option><option value="recolhimento">Recolhimento</option>
         </select>
+        <select id="funcionario" class="form-select" aria-label="Filtrar por funcionário">
+          <option value="">Todos os funcionários</option>
+        </select>
       </div>
       <div class="table-card">
         <table>
-          <thead><tr><th>Data</th><th>Barril</th><th>Operação</th><th>Rota</th><th>Torneira</th><th>Responsável</th><th>Observação</th></tr></thead>
+          <thead><tr><th>Data</th><th>Barril</th><th>Operação</th><th>Rota</th><th>Torneira</th><th>Quem fez</th><th>Observação</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>

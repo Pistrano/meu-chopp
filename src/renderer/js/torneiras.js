@@ -103,7 +103,7 @@
           <div class="th-title">#${MC.esc(e.codigo)} <span class="th-chope">${MC.esc(chope)}</span></div>
           <div class="th-line">Engatado em ${diaHora(e.engatado_em)}${e.engatado_por ? ` por ${MC.esc(e.engatado_por)}` : ""}</div>
           <div class="th-line">${e.retirado_em
-            ? `Retirado em ${diaHora(e.retirado_em)} · ficou ${dur}`
+            ? `Retirado em ${diaHora(e.retirado_em)}${e.retirado_por ? ` por ${MC.esc(e.retirado_por)}` : ""} · ficou ${dur}`
             : `<strong>Engatado agora</strong> · há ${dur}`}</div>
         </li>`;
     });
@@ -146,6 +146,7 @@
     const barris = [...lista].sort((a, b) =>
       (a.validade || "9999-99-99").localeCompare(b.validade || "9999-99-99") || String(a.codigo).localeCompare(String(b.codigo), "pt-BR", { numeric: true }));
     const unit = ctx.units.find((u) => u.id === ctx.unitId);
+    const funcionario = await MC.escolherFuncionario(ctx.unitId);
     const overlay = MC.openOverlay(`<h2>Engatar na Torneira ${t.numero}</h2>
       <p class="mc-modal-intro">Unidade: ${MC.esc(unit.nome)}. Escolha o barril que vai ser engatado nesta torneira.</p>
       <input type="search" class="form-control mb-3" id="engBusca" placeholder="Buscar por código, chope ou estilo" aria-label="Buscar barril por código, chope ou estilo" autocomplete="off">
@@ -157,14 +158,16 @@
           <span class="eng-validade">${b.validade ? `Validade ${MC.fmtDia(b.validade)}` : "Sem validade informada"} ${MC.validadeBadge(b.situacao_validade)}</span>
         </label>`).join("")}</div>
       <p class="t-muted small-note eng-nada d-none" id="engNada">Nenhum barril encontrado com essa busca.</p>
+      ${funcionario ? `<div class="mt-3">${funcionario.html}</div>` : ""}
       <div class="field-error" id="engErr" aria-live="polite"></div>
       <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
-        <button type="button" class="btn btn-mc btn-mc-sm" data-ok>Engatar barril</button></div>`);
+        <button type="button" class="btn btn-mc btn-mc-sm" data-ok${funcionario ? " disabled" : ""}>Engatar barril</button></div>`);
     overlay.querySelector(".mc-modal").classList.add("mc-modal--engate");
     const busca = overlay.querySelector("#engBusca");
     const itens = [...overlay.querySelectorAll(".eng-item")];
     const erro = overlay.querySelector("#engErr");
     const okBtn = overlay.querySelector("[data-ok]");
+    if (funcionario) funcionario.ligar(overlay, () => { okBtn.disabled = false; erro.textContent = ""; });
 
     await new Promise((resolve) => {
       const fechar = () => { overlay.remove(); resolve(); };
@@ -187,7 +190,7 @@
         erro.textContent = "";
         okBtn.disabled = true;
         try {
-          const r = await MCBarril.engatar({ barrilId: Number(marcado.value), torneiraId: t.id, unitId: ctx.unitId });
+          const r = await MCBarril.engatar({ barrilId: Number(marcado.value), torneiraId: t.id, unitId: ctx.unitId, funcionario });
           if (r === false) { okBtn.disabled = false; return; } // desistiu do barril vencido: escolhe outro
           fechar();
           load();
@@ -207,6 +210,7 @@
       await MCBarril.retirar({
         barril: { id: t.barril_id, codigo: t.codigo, torneira_numero: t.numero },
         unidade: unit.nome,
+        unitId: ctx.unitId,
         aoRetirar: () => load(),
         fecharNoErro: true,
       });

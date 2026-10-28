@@ -4,7 +4,7 @@
    ========================================================== */
 const { describe, test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeOperator, hashToken } = require("./helpers");
+const { SEM_BANCO, banco, limparBanco, startServer, client, setupAdmin, makeOperator, makeUser, hashToken } = require("./helpers");
 
 const ADMIN = { identifier: "eduardo@barrilfacil.test", password: "Administrador1" };
 
@@ -135,17 +135,34 @@ describe("sessões guardadas no banco", { skip: SEM_BANCO }, () => {
     assert.equal((await caio.ok("auth:me")).nome, "Caio S.");
   });
 
-  test("sessão parada há mais de 15 minutos expira, com aviso e auditoria, mesmo depois de reiniciar", async () => {
+  test("administrador e gerente saem com 15 min sem uso; o operador (celular do quiosque) só com 12 h, mesmo depois de reiniciar", async () => {
+    const MIN = 60 * 1000;
     const dani = await operador("Dani", "dani@barrilfacil.test");
-    const daniId = await idDe("dani@barrilfacil.test");
-    const vinteMinAtras = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-    await consulta(banco().from("sessoes").update({ ultima_atividade: vinteMinAtras }).eq("usuario_id", daniId));
+    const gil = await makeUser(srv.base, admin, { nome: "Gil", email: "gil@barrilfacil.test", cargo: "gerente", unidadeIds: [unidadeId] });
+    const ana = await makeUser(srv.base, admin, { nome: "Ana", email: "ana@barrilfacil.test", cargo: "admin" });
+    const [daniId, gilId, anaId] = await Promise.all(["dani", "gil", "ana"].map((n) => idDe(`${n}@barrilfacil.test`)));
+    // a tela encerra a sessão com o mesmo prazo do servidor
+    assert.equal((await dani.ok("auth:me")).inatividadeMs, 12 * 60 * MIN);
+    assert.equal((await gil.ok("auth:me")).inatividadeMs, 15 * MIN);
+    assert.equal((await ana.ok("auth:me")).inatividadeMs, 15 * MIN);
+    const parada = (id, ms) => consulta(banco().from("sessoes").update({ ultima_atividade: new Date(Date.now() - ms).toISOString() }).eq("usuario_id", id));
+    const expirou = async (c, id) => {
+      const r = await esperaSessaoEncerrada(c, "barris:list", { unitId: unidadeId });
+      assert.match(r.error, /expirou por inatividade/);
+      assert.equal((await sessoesDe(id)).length, 0);
+      const aud = await consulta(banco().from("auditoria").select("acao").eq("usuario_id", id).eq("acao", "sessao_expirada"));
+      assert.equal(aud.length, 1);
+    };
+
+    for (const id of [daniId, gilId, anaId]) await parada(id, 20 * MIN);
     await reiniciar(); // servidor novo: a única informação é a do banco
-    const r = await esperaSessaoEncerrada(dani, "barris:list", { unitId: unidadeId });
-    assert.match(r.error, /expirou por inatividade/);
-    assert.equal((await sessoesDe(daniId)).length, 0);
-    const aud = await consulta(banco().from("auditoria").select("acao").eq("usuario_id", daniId).eq("acao", "sessao_expirada"));
-    assert.equal(aud.length, 1);
+    await dani.ok("barris:list", { unitId: unidadeId }); // 20 min parado: o operador continua logado
+    await expirou(gil, gilId);
+    await expirou(ana, anaId);
+
+    await parada(daniId, 12 * 60 * MIN + 5 * MIN);
+    await reiniciar();
+    await expirou(dani, daniId);
   });
 
   test("usuário desativado direto no banco também perde a sessão", async () => {

@@ -31,7 +31,11 @@ const PERMISSOES = {
 const pode = (user, perm) => !!user && (PERMISSOES[user.cargo] || []).includes(perm);
 
 /* ---------- Infraestrutura ---------- */
-const IDLE_MS = 15 * 60 * 1000;          // sessão expira após 15 min sem atividade
+// Sessão sem uso: administrador e gerente (contas pessoais) saem após 15 min. Operador é a conta compartilhada do
+// celular do quiosque, que fica parado boa parte do dia: sai após 12 h (quem fez cada ação é escolhido na própria ação).
+const IDLE_MS = 15 * 60 * 1000;
+const IDLE_OPERADOR_MS = 12 * 60 * 60 * 1000;
+const idleDe = (user) => (user && user.cargo === "operador" ? IDLE_OPERADOR_MS : IDLE_MS);
 const MAX_FALHAS = 5;                     // tentativas erradas antes de bloquear
 const BLOQUEIO_MS = 15 * 60 * 1000;       // duração do bloqueio
 const PERMITIDOS_TROCA = new Set(["auth:me", "auth:logout", "auth:ping", "auth:completeProfile"]);
@@ -203,7 +207,7 @@ async function dispatch(channel, payload, token, meta = {}) {
       throw new AppError("Muitas tentativas deste aparelho. Aguarde alguns minutos.");
     if (auth === "opcional") {
       const rec = token ? await buscarSessao(token) : null;
-      if (rec && rec.ativo && Date.now() - rec.ultimaAtividade <= IDLE_MS) ctx.session = rec.user;
+      if (rec && rec.ativo && Date.now() - rec.ultimaAtividade <= idleDe(rec.user)) ctx.session = rec.user;
     } else if (auth) {
       const rec = token ? await buscarSessao(token) : null;
       if (!rec) throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
@@ -211,7 +215,7 @@ async function dispatch(channel, payload, token, meta = {}) {
         await apagarSessao(rec.hash);
         throw new AppError("Sessão expirada. Faça login novamente.", "SESSION");
       }
-      if (Date.now() - rec.ultimaAtividade > IDLE_MS) {
+      if (Date.now() - rec.ultimaAtividade > idleDe(rec.user)) {
         ctx.session = rec.user; // a auditoria registra de quem era a sessão
         await audit(ctx, "sessao_expirada", "Encerrada por inatividade");
         ctx.session = null;
@@ -260,13 +264,19 @@ async function dispatch(channel, payload, token, meta = {}) {
 }
 
 /* Limpa as sessões vencidas: as do banco (com 1 min de folga, porque ultima_atividade pode estar até
-   1 min atrás da memória) e as do cache */
+   1 min atrás da memória) e as do cache. No banco: paradas há mais de 12 h (o maior prazo) e, das contas
+   de administrador e gerente, paradas há mais de 15 min. */
 setInterval(async () => {
   const agora = Date.now();
-  for (const [h, r] of sessionCache) if (agora - r.ultimaAtividade > IDLE_MS + GRAVA_ATIVIDADE_MS) sessionCache.delete(h);
+  const antes = (ms) => new Date(agora - ms - GRAVA_ATIVIDADE_MS).toISOString();
+  for (const [h, r] of sessionCache) if (agora - r.ultimaAtividade > idleDe(r.user) + GRAVA_ATIVIDADE_MS) sessionCache.delete(h);
   try {
-    const { error } = await supabase.from("sessoes").delete()
-      .lt("ultima_atividade", new Date(agora - IDLE_MS - GRAVA_ATIVIDADE_MS).toISOString());
+    let { error } = await supabase.from("sessoes").delete().lt("ultima_atividade", antes(IDLE_OPERADOR_MS));
+    if (error) return console.error("[sessoes] limpeza:", error.message);
+    const pessoais = await supabase.from("usuarios").select("id").neq("cargo", "operador");
+    if (pessoais.error) return console.error("[sessoes] limpeza:", pessoais.error.message);
+    if (!pessoais.data.length) return;
+    ({ error } = await supabase.from("sessoes").delete().in("usuario_id", pessoais.data.map((u) => u.id)).lt("ultima_atividade", antes(IDLE_MS)));
     if (error) console.error("[sessoes] limpeza:", error.message);
   } catch (err) {
     console.error("[sessoes] limpeza:", err.message);
@@ -371,7 +381,8 @@ async function getUserById(id) {
    A situação (livre/ocupada) nunca é gravada na torneira: ela é derivada do engate ativo
    (engates.retirado_em IS NULL). */
 const TAPS_SELECT =
-  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status), usuarios!engatado_por(nome))";
+  "id, unidade_id, numero, ativo, engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status)," +
+  " usuarios!engatado_por(nome), funcionarios!engatado_func_id(nome))";
 
 function tapRow(t) {
   const e = (t.engates || []).find((x) => x.retirado_em === null) || null;
@@ -383,7 +394,7 @@ function tapRow(t) {
     engate_id: e ? e.id : null,
     engatado_em: e ? fmtTs(e.engatado_em) : null,
     engatado_em_iso: e ? e.engatado_em : null,
-    engatado_por: e && e.usuarios ? e.usuarios.nome : null,
+    engatado_por: e ? quemFez(e.funcionarios, e.usuarios) : null,
     barril_id: e ? e.barril_id : null,
     codigo: e && e.barris ? e.barris.codigo : null,
     estilo: e && e.barris ? e.barris.estilo : null,
@@ -450,6 +461,31 @@ async function loadBarril(ctx, id) {
   return r.data;
 }
 
+/* ---------- Quem fez a ação ----------
+   O celular de cada loja fica logado numa conta de operador compartilhada. Antes de salvar uma ação com barril,
+   a pessoa escolhe o próprio nome (funcionarioId): se a unidade da ação tem funcionários ativos, ele é obrigatório,
+   precisa estar ativo e cadastrado nessa unidade. Unidade sem funcionários: a ação passa sem (a loja não trava).
+   Administrador e gerente usam conta pessoal: a ação fica no nome da conta e o funcionarioId é ignorado.
+   Devolve o id para gravar (p_funcionario) ou null. */
+async function funcionarioDaAcao(ctx, unitId, funcionarioId) {
+  if (ctx.session.cargo !== "operador") return null;
+  const ativos = ok(
+    await supabase.from("funcionario_unidades").select("funcionario_id, funcionarios!inner(ativo)")
+      .eq("unidade_id", Number(unitId)).eq("funcionarios.ativo", true)
+  );
+  if (!ativos.length) return null;
+  const id = Number(funcionarioId) || 0;
+  if (!id) throw new AppError("Escolha quem está fazendo antes de salvar.", "FUNCIONARIO");
+  if (ativos.some((a) => a.funcionario_id === id)) return id;
+  const r = await supabase.from("funcionarios").select("nome, ativo").eq("id", id).maybeSingle();
+  dbError(r.error);
+  if (!r.data) throw new AppError("Funcionário não encontrado. Feche a janela e escolha de novo.", "FUNCIONARIO");
+  if (!r.data.ativo) throw new AppError(`${r.data.nome} está desativado. Escolha outro nome.`, "FUNCIONARIO");
+  throw new AppError(`${r.data.nome} não está cadastrado nesta unidade. Escolha outro nome.`, "FUNCIONARIO");
+}
+// Nome de quem fez: o funcionário escolhido ou, sem funcionário, o usuário da conta (como antes)
+const quemFez = (func, usuario) => (func && func.nome) || (usuario && usuario.nome) || null;
+
 function publicUser(u) {
   return {
     id: u.id,
@@ -459,18 +495,19 @@ function publicUser(u) {
     cargo: u.cargo,
     cargoLabel: CARGO_LABEL[u.cargo],
     permissoes: PERMISSOES[u.cargo] || [],
+    inatividadeMs: idleDe(u), // a tela encerra a sessão depois desse tempo sem uso (o servidor confere de novo)
     iniciais: u.nome.trim().charAt(0).toUpperCase(),
     trocarSenha: !!u.trocar_senha || !u.email,
   };
 }
 
 /* ---------- Consulta de movimentações (usada em dashboard, histórico e CSV) ---------- */
-async function queryMovements({ unitId, q, operacao, limit }) {
+async function queryMovements({ unitId, q, operacao, funcionarioId, limit }) {
   const unit = Number(unitId);
   let query = supabase
     .from("movimentacoes")
     .select(
-      "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome)," +
+      "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome), funcionarios(nome)," +
       " origem:unidades!origem_unidade_id(nome), destino:unidades!destino_unidade_id(nome)"
     )
     .or(`origem_unidade_id.eq.${unit},destino_unidade_id.eq.${unit}`)
@@ -479,6 +516,7 @@ async function queryMovements({ unitId, q, operacao, limit }) {
   const termo = cleanTerm(q);
   if (termo) query = query.ilike("barris.codigo", `%${termo}%`);
   if (operacao) query = query.eq("operacao", String(operacao));
+  if (Number(funcionarioId)) query = query.eq("funcionario_id", Number(funcionarioId));
   const rows = ok(await query);
   return rows.map((m) => ({
     id: m.id,
@@ -489,7 +527,9 @@ async function queryMovements({ unitId, q, operacao, limit }) {
     codigo: m.barris ? m.barris.codigo : null,
     estilo: m.barris ? m.barris.estilo : null,
     chope_nome: m.barris ? m.barris.chope_nome : null,
-    responsavel: m.usuarios ? m.usuarios.nome : null,
+    responsavel: quemFez(m.funcionarios, m.usuarios), // coluna "Quem fez"
+    usuario: m.usuarios ? m.usuarios.nome : null,
+    funcionario: m.funcionarios ? m.funcionarios.nome : null,
     origem: m.origem ? m.origem.nome : null,
     destino: m.destino ? m.destino.nome : null,
   }));
@@ -839,7 +879,8 @@ function registerHandlers() {
     await assertUnit(ctx, t.unidade_id);
     const rows = ok(
       await supabase.from("engates")
-        .select("id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome), usuarios!engatado_por(nome)")
+        .select("id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome), usuarios!engatado_por(nome)," +
+          " retirou:usuarios!retirado_por(nome), funcionarios!engatado_func_id(nome), func_retirou:funcionarios!retirado_func_id(nome)")
         .eq("torneira_id", t.id)
         .order("engatado_em", { ascending: false })
         .order("id", { ascending: false })
@@ -856,7 +897,8 @@ function registerHandlers() {
         engatado_em_iso: e.engatado_em,
         retirado_em: fmtTs(e.retirado_em),
         retirado_em_iso: e.retirado_em || null,
-        engatado_por: e.usuarios ? e.usuarios.nome : null,
+        engatado_por: quemFez(e.funcionarios, e.usuarios),
+        retirado_por: e.retirado_em ? quemFez(e.func_retirou, e.retirou) : null,
       })),
     };
   });
@@ -993,10 +1035,18 @@ function registerHandlers() {
   }, { perm: "catalogo:editar" });
 
   /* ======== Dashboard ======== */
+  /* semFuncionarios (só para quem cadastra funcionários): nome da unidade que ainda não tem nenhum funcionário ativo.
+     O Painel mostra o aviso para cadastrar, senão ninguém escolhe quem fez cada ação. */
   handle("dashboard:get", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const stats = await rpc("fn_dashboard_stats_v2", { p_unit: unit });
-    return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8 }) };
+    let semFuncionarios = null;
+    if (pode(ctx.session, "funcionarios")) {
+      const ativos = ok(await supabase.from("funcionario_unidades").select("funcionario_id, funcionarios!inner(ativo)")
+        .eq("unidade_id", unit).eq("funcionarios.ativo", true).limit(1));
+      if (!ativos.length) semFuncionarios = ok(await supabase.from("unidades").select("nome").eq("id", unit).single()).nome;
+    }
+    return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8 }), semFuncionarios };
   });
 
   /* Ordem: validade (vencidos primeiro), transferências pendentes, vazios aguardando recolhimento.
@@ -1090,7 +1140,8 @@ function registerHandlers() {
   handle("barris:exportStock", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const rows = ok(await supabase.from("barris")
-      .select("codigo, chope_nome, estilo, tamanho_l, validade, status, unidades(nome_curto), engates(retirado_em, torneiras(numero))")
+      .select("codigo, chope_nome, estilo, tamanho_l, validade, status, unidades(nome_curto), engates(retirado_em, torneiras(numero))," +
+        " movimentacoes(id, usuarios(nome), funcionarios(nome))")
       .eq("unidade_id", unit)
       .neq("status", "recolhido")
       .order("codigo", { ascending: true })
@@ -1101,11 +1152,14 @@ function registerHandlers() {
       if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
       return `"${t.replace(/"/g, '""')}"`;
     };
-    const header = ["Barril", "Chope", "Estilo", "Tamanho (L)", "Situação", "Validade", "Unidade", "Torneira"];
+    // Funcionário: quem fez a última ação do barril (a que o deixou na situação atual: recebeu, engatou, retirou ou enviou)
+    const header = ["Barril", "Chope", "Estilo", "Tamanho (L)", "Situação", "Validade", "Unidade", "Torneira", "Funcionário"];
     const lines = rows.map((b) => {
       const engate = (b.engates || []).find((e) => e.retirado_em === null);
+      const ultima = (b.movimentacoes || []).reduce((a, m) => (!a || m.id > a.id ? m : a), null);
       return ["#" + b.codigo, b.chope_nome, b.estilo, b.tamanho_l, labels[b.status] || b.status, b.validade,
-        b.unidades ? b.unidades.nome_curto : "", engate && engate.torneiras ? `Torneira ${engate.torneiras.numero}` : ""]
+        b.unidades ? b.unidades.nome_curto : "", engate && engate.torneiras ? `Torneira ${engate.torneiras.numero}` : "",
+        ultima ? quemFez(ultima.funcionarios, ultima.usuarios) : ""]
         .map(esc).join(";");
     });
     await audit(ctx, "relatorio_estoque_exportado", `${rows.length} barris`);
@@ -1122,7 +1176,7 @@ function registerHandlers() {
   const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
   const diaValido = (v) => DIA_RE.test(v) && new Date(`${v}T12:00:00Z`).toISOString().slice(0, 10) === v;
 
-  handle("barris:create", async ({ codigo, chopeId, tamanho, validade, unitId }, ctx) => {
+  handle("barris:create", async ({ codigo, chopeId, tamanho, validade, unitId, funcionarioId }, ctx) => {
     const cod = String(codigo || "").replace("#", "").trim().toUpperCase();
     const tam = Number(tamanho);
     if (!cod || !Number(chopeId) || !(tam > 0)) throw new AppError("Preencha código, chope e tamanho do barril.");
@@ -1132,8 +1186,10 @@ function registerHandlers() {
     if (val < hojeTZ()) throw new AppError("A validade não pode estar no passado");
     const unit = await resolveUnit(ctx, unitId);
     await assertUnit(ctx, unit);
+    const func = await funcionarioDaAcao(ctx, unit, funcionarioId);
     const id = await rpc("fn_barril_entrada", {
       p_codigo: cod, p_chope: Number(chopeId), p_tamanho: tam, p_validade: val, p_unidade: unit, p_usuario: ctx.session.id,
+      p_funcionario: func,
     });
     return { id: Number(id) };
   });
@@ -1142,10 +1198,11 @@ function registerHandlers() {
      A função SQL faz todas as verificações e gravações numa única transação. */
   /* Barril vencido: não engata sem confirmação (BARRIL_VENCIDO). Com confirmarVencido, engata e registra
      na auditoria. Nunca bloqueia: quem decide é a gerência. */
-  handle("barris:use", async ({ id, torneiraId, unitId, confirmarVencido }, ctx) => {
+  handle("barris:use", async ({ id, torneiraId, unitId, confirmarVencido, funcionarioId }, ctx) => {
     const b = await loadBarril(ctx, id); // barril existe + usuário tem acesso à unidade dele
     if (unitId && Number(unitId) !== b.unidade_id)
       throw new AppError(`O barril #${b.codigo} não pertence à unidade selecionada.`);
+    const func = await funcionarioDaAcao(ctx, b.unidade_id, funcionarioId);
     const vencido = b.status === "disponivel" && situacaoValidade(b.validade, b.status) === "vencido";
     if (vencido && torneiraId && confirmarVencido !== true)
       throw new AppError(
@@ -1159,7 +1216,9 @@ function registerHandlers() {
       const livres = (await tapsOfUnit(b.unidade_id)).filter((t) => t.ativo && !t.ocupada).length;
       throw new AppError(livres ? "Selecione a torneira em que o barril será engatado." : MSG_SEM_TORNEIRA);
     }
-    const r = await rpc("fn_barril_engatar", { p_barril: b.id, p_torneira: Number(torneiraId), p_usuario: ctx.session.id });
+    const r = await rpc("fn_barril_engatar", {
+      p_barril: b.id, p_torneira: Number(torneiraId), p_usuario: ctx.session.id, p_funcionario: func,
+    });
     if (vencido) {
       const [ano, mes, dia] = b.validade.split("-");
       await audit(ctx, "engate_barril_vencido",
@@ -1170,9 +1229,10 @@ function registerHandlers() {
 
   /* Retirada (o barril sai da torneira quando o chopp acaba): em uso → vazio (status esgotado).
      A torneira vem do engate registrado — nunca é escolhida pelo usuário — e é liberada aqui. */
-  handle("barris:empty", async ({ id }, ctx) => {
+  handle("barris:empty", async ({ id, funcionarioId }, ctx) => {
     const b = await loadBarril(ctx, id);
-    return rpc("fn_barril_esgotar", { p_barril: b.id, p_usuario: ctx.session.id });
+    const func = await funcionarioDaAcao(ctx, b.unidade_id, funcionarioId);
+    return rpc("fn_barril_esgotar", { p_barril: b.id, p_usuario: ctx.session.id, p_funcionario: func });
   });
 
   /* Barris vazios da unidade para o recolhimento, com há quantos dias cada um está vazio */
@@ -1194,13 +1254,14 @@ function registerHandlers() {
 
   /* Recolhimento: a fábrica leva os vasilhames vazios. Vários de uma vez, tudo ou nada (fn_barris_recolher).
      Se o mesmo vasilhame voltar, é um cadastro novo com o mesmo código. */
-  handle("barris:collect", async ({ ids, unitId }, ctx) => {
+  handle("barris:collect", async ({ ids, unitId, funcionarioId }, ctx) => {
     const lista = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
     if (!lista.length) throw new AppError("Marque ao menos um barril para registrar o recolhimento.");
     if (lista.length > 500) throw new AppError("Recolhimento grande demais de uma vez. Divida em partes.");
     const unit = await resolveUnit(ctx, unitId);
     await assertUnit(ctx, unit);
-    const codigos = await rpc("fn_barris_recolher", { p_barris: lista, p_unidade: unit, p_usuario: ctx.session.id });
+    const func = await funcionarioDaAcao(ctx, unit, funcionarioId);
+    const codigos = await rpc("fn_barris_recolher", { p_barris: lista, p_unidade: unit, p_usuario: ctx.session.id, p_funcionario: func });
     return { codigos };
   });
 
@@ -1211,13 +1272,14 @@ function registerHandlers() {
       await supabase.from("transferencias")
         .select(
           "*, barris(codigo, estilo, chope_nome), origem:unidades!origem_id(nome_curto), destino:unidades!destino_id(nome_curto)," +
-          " solicitante:usuarios!solicitante_id(nome), recebedor:usuarios!recebedor_id(nome)"
+          " solicitante:usuarios!solicitante_id(nome), recebedor:usuarios!recebedor_id(nome)," +
+          " func_solicitante:funcionarios!solicitante_func_id(nome), func_recebedor:funcionarios!recebedor_func_id(nome)"
         )
         .or(`origem_id.eq.${unit},destino_id.eq.${unit}`)
         .order("id", { ascending: false })
         .limit(100)
     );
-    return rows.map(({ barris, origem, destino, solicitante, recebedor, ...t }) => ({
+    return rows.map(({ barris, origem, destino, solicitante, recebedor, func_solicitante, func_recebedor, ...t }) => ({
       ...t,
       criado_em: fmtTs(t.criado_em),
       resolvido_em: fmtTs(t.resolvido_em),
@@ -1226,14 +1288,17 @@ function registerHandlers() {
       chope_nome: barris ? barris.chope_nome : null,
       origem: origem ? origem.nome_curto : null,
       destino: destino ? destino.nome_curto : null,
-      solicitante: solicitante ? solicitante.nome : null,
-      recebedor: recebedor ? recebedor.nome : null,
+      solicitante: quemFez(func_solicitante, solicitante),
+      recebedor: quemFez(func_recebedor, recebedor),
     }));
   });
 
-  handle("transfer:create", async ({ barrilId, destinoId }, ctx) => {
+  handle("transfer:create", async ({ barrilId, destinoId, funcionarioId }, ctx) => {
     const b = await loadBarril(ctx, barrilId);
-    return rpc("fn_transferencia_criar", { p_barril: b.id, p_destino: Number(destinoId) || null, p_usuario: ctx.session.id });
+    const func = await funcionarioDaAcao(ctx, b.unidade_id, funcionarioId); // quem envia, na unidade de origem
+    return rpc("fn_transferencia_criar", {
+      p_barril: b.id, p_destino: Number(destinoId) || null, p_usuario: ctx.session.id, p_funcionario: func,
+    });
   });
 
   const loadTransfer = async (id) => {
@@ -1243,25 +1308,27 @@ function registerHandlers() {
     return r.data;
   };
 
-  handle("transfer:confirm", async ({ id }, ctx) => {
+  handle("transfer:confirm", async ({ id, funcionarioId }, ctx) => {
     const t = await loadTransfer(id);
     await assertUnit(ctx, t.destino_id); // quem recebe é quem confirma
-    return rpc("fn_transferencia_confirmar", { p_id: t.id, p_usuario: ctx.session.id });
+    const func = await funcionarioDaAcao(ctx, t.destino_id, funcionarioId);
+    return rpc("fn_transferencia_confirmar", { p_id: t.id, p_usuario: ctx.session.id, p_funcionario: func });
   });
 
-  handle("transfer:cancel", async ({ id }, ctx) => {
+  handle("transfer:cancel", async ({ id, funcionarioId }, ctx) => {
     const t = await loadTransfer(id);
     await assertUnit(ctx, t.origem_id); // quem enviou é quem cancela
-    return rpc("fn_transferencia_cancelar", { p_id: t.id, p_usuario: ctx.session.id });
+    const func = await funcionarioDaAcao(ctx, t.origem_id, funcionarioId);
+    return rpc("fn_transferencia_cancelar", { p_id: t.id, p_usuario: ctx.session.id, p_funcionario: func });
   });
 
   /* ======== Histórico e relatórios ======== */
-  handle("history:list", async ({ unitId, q, operacao }, ctx) =>
-    queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao, limit: 300 })
+  handle("history:list", async ({ unitId, q, operacao, funcionarioId }, ctx) =>
+    queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao, funcionarioId, limit: 300 })
   );
 
-  handle("history:export", async ({ unitId, q, operacao }, ctx) => {
-    const rows = await queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao });
+  handle("history:export", async ({ unitId, q, operacao, funcionarioId }, ctx) => {
+    const rows = await queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao, funcionarioId });
     const labels = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento" };
     // Células que começam com = + - @ viram texto (evita que o Excel execute fórmulas digitadas por usuários)
     const esc = (v) => {
@@ -1269,10 +1336,11 @@ function registerHandlers() {
       if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
       return `"${t.replace(/"/g, '""')}"`;
     };
-    const header = ["Data/Hora", "Barril", "Chope", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Observação"];
+    // Responsável = conta que estava logada; Funcionário = quem o operador escolheu na ação (vazio se ninguém foi escolhido)
+    const header = ["Data/Hora", "Barril", "Chope", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Funcionário", "Observação"];
     const lines = rows.map((r) =>
       [r.criado_em, "#" + r.codigo, r.chope_nome || "", r.estilo, labels[r.operacao], r.origem || FORNECEDOR, r.destino || "",
-       r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.responsavel, r.observacao]
+       r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.usuario, r.funcionario || "", r.observacao]
         .map(esc)
         .join(";")
     );
@@ -1358,10 +1426,8 @@ function registerHandlers() {
     return rel;
   });
 
-  handle("reports:barrelsDetail", async (p, ctx) => {
-    const { unidadeId, chopeId, estilo, chope, de, ate } = p || {};
-    const periodo = reportPeriod(de, ate);
-    const unidade = await reportUnits(ctx, unidadeId);
+  // Barris do chope que tiveram o primeiro engate no período. engatado_por/retirado_por: o funcionário (ou o usuário).
+  async function detalheBarris(unidade, periodo, { chopeId, estilo, chope }) {
     const id = Number(chopeId) || null;
     const rows = await rpcRelatorio("fn_relatorio_barris_detalhe", {
       p_unidades: unidade.ids, p_de: periodo.inicio, p_ate: periodo.fim,
@@ -1371,11 +1437,24 @@ function registerHandlers() {
       id: b.id, codigo: b.codigo, tamanho_l: b.tamanho_l, validade: b.validade,
       engatado_em: fmtTs(b.engatado_em), retirado_em: fmtTs(b.retirado_em),
       torneira: b.torneira, unidade: b.unidade,
+      engatado_por: b.engatado_por || null, retirado_por: b.retirado_por || null,
     }));
+  }
+
+  handle("reports:barrelsDetail", async (p, ctx) => {
+    const { unidadeId, de, ate } = p || {};
+    const periodo = reportPeriod(de, ate);
+    const unidade = await reportUnits(ctx, unidadeId);
+    return detalheBarris(unidade, periodo, p || {});
   });
 
   handle("reports:barrelsExport", async (p, ctx) => {
     const rel = await relatorioBarris(ctx, p || {});
+    // Depois do resumo, os barris utilizados no período (os mesmos do detalhe de cada chope), com quem engatou e quem retirou
+    const periodo = reportPeriod(rel.de, rel.ate);
+    const unidade = await reportUnits(ctx, (p || {}).unidadeId);
+    const detalhes = await Promise.all(rel.grupos.flatMap((g) => g.chopes.filter((c) => c.utilizados > 0).map(async (c) =>
+      (await detalheBarris(unidade, periodo, c.chave)).map((b) => ({ ...b, estilo: g.estilo, chope: c.chope })))));
     const esc = (v) => {
       let t = String(v ?? "");
       if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
@@ -1397,6 +1476,16 @@ function registerHandlers() {
       ["Unidade", rel.unidade].map(esc).join(";"),
       ["Situação agora em", rel.geradoEm ? `${br(rel.geradoEm.slice(0, 10))} ${rel.geradoEm.slice(11, 16)}` : ""].map(esc).join(";"),
       esc("Utilizado = barril engatado pela primeira vez dentro do período."));
+    const barris = detalhes.flat();
+    if (barris.length) {
+      const hora = (ts) => (ts ? `${br(ts.slice(0, 10))} ${ts.slice(11, 16)}` : "");
+      lines.push("", esc("Barris utilizados no período"),
+        ["Estilo", "Chope", "Barril", "Tamanho (L)", "Validade", "Engatado em", "Retirado em", "Torneira", "Unidade",
+          "Funcionário (engate)", "Funcionário (retirada)"].map(esc).join(";"),
+        ...barris.map((b) => [b.estilo, b.chope, "#" + b.codigo, num(b.tamanho_l), b.validade ? br(b.validade) : "",
+          hora(b.engatado_em), hora(b.retirado_em), b.torneira ? `Torneira ${b.torneira}` : "", b.unidade || "",
+          b.engatado_por || "", b.retirado_por || ""].map(esc).join(";")));
+    }
     await audit(ctx, "relatorio_barris_exportado", `${rel.unidade}, ${br(rel.de)} a ${br(rel.ate)}`);
     return {
       filename: `relatorio-barris-${rel.slug}-${rel.de}-a-${rel.ate}.csv`,
@@ -1413,6 +1502,110 @@ function registerHandlers() {
       id: a.id, acao: a.acao, detalhe: a.detalhe, criado_em: fmtTs(a.criado_em), usuario: a.usuarios ? a.usuarios.nome : "—",
     }));
   }, { perm: "auditoria" });
+
+  /* ======== Funcionários do quiosque ========
+     Quem trabalha em cada unidade. No celular da loja (conta de operador compartilhada), a pessoa toca no próprio
+     nome antes de salvar cada ação (funcionarioDaAcao). Cadastro: permissão "funcionarios" (administrador e gerente);
+     o gerente só vê e mexe nas unidades liberadas para ele. Funcionário não é apagado, só desativado. */
+  const cleanFuncNome = (value) => {
+    const nome = String(value || "").trim().replace(/\s+/g, " ");
+    if (nome.length < 2 || nome.length > 60) throw new AppError("O nome do funcionário deve ter de 2 a 60 caracteres.");
+    return nome;
+  };
+  // Nome repetido, sem diferenciar maiúsculas (o índice único em lower(nome) garante no banco)
+  const funcNomeTaken = async (nome, exceptId = 0) => {
+    const rows = ok(await supabase.from("funcionarios").select("nome, ativo").ilike("nome", likeEscape(nome)).neq("id", exceptId).limit(10));
+    const igual = rows.find((r) => r.nome.toLowerCase() === nome.toLowerCase());
+    if (igual) throw new AppError(`Já existe um funcionário chamado "${igual.nome}"${igual.ativo ? "" : " (desativado)"}. Use outro nome, por exemplo com o sobrenome.`);
+  };
+  // Unidades escolhidas: ao menos uma, todas ativas e liberadas para quem está cadastrando
+  const cleanFuncUnidades = async (ctx, ids) => {
+    const list = [...new Set((Array.isArray(ids) ? ids : [ids]).map(Number).filter(Boolean))];
+    if (!list.length) throw new AppError("Escolha ao menos uma unidade para o funcionário.");
+    const permitidas = await allowedUnitIds(ctx);
+    const fora = list.find((id) => !permitidas.includes(id));
+    if (fora) throw new AppError("Você não tem acesso a esta unidade.", "FORBIDDEN", `unidade ${fora}`);
+    return list;
+  };
+  // Funcionário com as unidades dele. Gerente só mexe em quem trabalha em alguma unidade liberada para ele.
+  const loadFuncionario = async (ctx, id) => {
+    const r = await supabase.from("funcionarios").select("id, nome, ativo, funcionario_unidades(unidade_id)").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Funcionário não encontrado.");
+    const unidadeIds = (r.data.funcionario_unidades || []).map((x) => x.unidade_id);
+    const permitidas = await allowedUnitIds(ctx);
+    if (!unidadeIds.some((u) => permitidas.includes(u)))
+      throw new AppError("Você não tem acesso a este funcionário.", "FORBIDDEN", `funcionário ${r.data.id}`);
+    return { id: r.data.id, nome: r.data.nome, ativo: r.data.ativo, unidadeIds, permitidas };
+  };
+  const nomesUnidades = async (ids) =>
+    ids.length ? ok(await supabase.from("unidades").select("id, nome_curto").in("id", ids).order("id")).map((u) => u.nome_curto) : [];
+
+  /* Funcionários da unidade, em ordem alfabética. Quem cadastra vê todos (ativos e desativados) com as unidades
+     liberadas para ele. Operador recebe só id e nome dos ativos (a lista de "Quem está fazendo?"). */
+  handle("funcionarios:list", async ({ unitId }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    const ids = ok(await supabase.from("funcionario_unidades").select("funcionario_id").eq("unidade_id", unit)).map((x) => x.funcionario_id);
+    if (!ids.length) return [];
+    if (!pode(ctx.session, "funcionarios")) {
+      const ativos = ok(await supabase.from("funcionarios").select("id, nome").in("id", ids).eq("ativo", true));
+      return ativos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+    }
+    const [rows, permitidas, unidades] = await Promise.all([
+      supabase.from("funcionarios").select("id, nome, ativo, funcionario_unidades(unidade_id)").in("id", ids).then((r) => ok(r)),
+      allowedUnitIds(ctx),
+      supabase.from("unidades").select("id, nome_curto").order("id").then((r) => ok(r)),
+    ]);
+    return rows
+      .map((f) => {
+        const minhas = (f.funcionario_unidades || []).map((x) => x.unidade_id).filter((u) => permitidas.includes(u)).sort((a, b) => a - b);
+        return {
+          id: f.id, nome: f.nome, ativo: b2i(f.ativo), unidadeIds: minhas,
+          unidades: minhas.map((u) => (unidades.find((x) => x.id === u) || { nome_curto: `Unidade ${u}` }).nome_curto),
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+  });
+
+  handle("funcionarios:create", async ({ nome, unidadeIds }, ctx) => {
+    const n = cleanFuncNome(nome);
+    const units = await cleanFuncUnidades(ctx, unidadeIds);
+    await funcNomeTaken(n);
+    const row = ok(await supabase.from("funcionarios").insert({ nome: n }).select("id").single(), `Já existe um funcionário chamado "${n}".`);
+    const r = await supabase.from("funcionario_unidades").insert(units.map((u) => ({ funcionario_id: row.id, unidade_id: u })));
+    if (r.error) {
+      await supabase.from("funcionarios").delete().eq("id", row.id); // desfaz: não deixa funcionário sem unidade
+      dbError(r.error);
+    }
+    await audit(ctx, "funcionario_criado", `${n} (${(await nomesUnidades(units)).join(", ")})`);
+    return { id: row.id, nome: n };
+  }, { perm: "funcionarios" });
+
+  /* Nome e unidades. O gerente só troca as unidades liberadas para ele: as outras unidades do funcionário continuam. */
+  handle("funcionarios:update", async ({ id, nome, unidadeIds }, ctx) => {
+    const f = await loadFuncionario(ctx, id);
+    const n = cleanFuncNome(nome);
+    const escolhidas = await cleanFuncUnidades(ctx, unidadeIds);
+    if (n !== f.nome) await funcNomeTaken(n, f.id);
+    const units = [...new Set([...f.unidadeIds.filter((u) => !f.permitidas.includes(u)), ...escolhidas])];
+    if (n !== f.nome)
+      dbError((await supabase.from("funcionarios").update({ nome: n }).eq("id", f.id)).error, `Já existe um funcionário chamado "${n}".`);
+    // Primeiro adiciona as novas, depois remove as que saíram (nunca fica sem unidade no meio do caminho)
+    dbError((await supabase.from("funcionario_unidades")
+      .upsert(units.map((u) => ({ funcionario_id: f.id, unidade_id: u })), { onConflict: "funcionario_id,unidade_id", ignoreDuplicates: true })).error);
+    dbError((await supabase.from("funcionario_unidades").delete().eq("funcionario_id", f.id).not("unidade_id", "in", `(${units.join(",")})`)).error);
+    const nomeTxt = n === f.nome ? n : `${f.nome} → ${n}`;
+    await audit(ctx, "funcionario_editado", `${nomeTxt}, unidades ${(await nomesUnidades(escolhidas)).join(", ")}`);
+    return true;
+  }, { perm: "funcionarios" });
+
+  // Desativado some da escolha de quem está fazendo; o histórico continua apontando para ele
+  handle("funcionarios:toggle", async ({ id }, ctx) => {
+    const f = await loadFuncionario(ctx, id);
+    dbError((await supabase.from("funcionarios").update({ ativo: !f.ativo }).eq("id", f.id)).error);
+    await audit(ctx, f.ativo ? "funcionario_desativado" : "funcionario_reativado", f.nome);
+    return true;
+  }, { perm: "funcionarios" });
 
   /* ======== Usuários (somente administrador) ======== */
   const CARGOS = Object.keys(CARGO_LABEL);
