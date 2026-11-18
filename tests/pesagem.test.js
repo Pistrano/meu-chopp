@@ -52,8 +52,7 @@ describe("pesagem dos barris", { skip: SEM_BANCO }, () => {
     u.porto = (await admin.ok("units:create", { razaoSocial: "Bar do Porto Bebidas Ltda", nome: "Bar do Porto", nomeCurto: "Porto", cnpj: "11.444.777/0001-61", endereco: "Rua do Porto, 200, Cuiabá - MT" })).id;
     await admin.ok("taps:create", { unitId: u.centro, quantidade: 6 });
     await admin.ok("taps:create", { unitId: u.porto, quantidade: 2 });
-    const estilo = await admin.ok("estilos:create", { nome: "Pilsen" });
-    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", estiloId: estilo.id })).id;
+    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", custoLitro: 12 })).id;
     validade = somaDias((await admin.ok("config:get")).hoje, 10);
     gerente = await makeUser(srv.base, admin, { nome: "Gina", email: "gina@barrilfacil.test", cargo: "gerente", unidadeIds: [u.centro] });
     quiosque = await makeUser(srv.base, admin, { nome: "Quiosque Centro", email: "quiosque@barrilfacil.test", cargo: "operador", unidadeIds: [u.centro] });
@@ -189,7 +188,7 @@ describe("pesagem dos barris", { skip: SEM_BANCO }, () => {
 
   test("taras: qualquer cargo cadastra; editar, desativar e apagar só administrador e gerente; usada não é apagada", async () => {
     const t = await quiosque.ok("taras:create", { tamanho: 20, pesoKg: "8,4", descricao: "Barril inox" });
-    await quiosque.fail("taras:create", { tamanho: 25, pesoKg: "8" }, /tamanho do barril/);
+    await quiosque.fail("taras:create", { tamanho: 25, pesoKg: "8" }, /tamanho de barril cadastrado/);
     await quiosque.fail("taras:create", { tamanho: 20, pesoKg: "0" }, /peso do vasilhame vazio/);
     await quiosque.fail("taras:update", { id: t.id, pesoKg: "8,5" }, SEM_PERMISSAO);
     await quiosque.fail("taras:toggle", { id: t.id }, SEM_PERMISSAO);
@@ -299,13 +298,13 @@ describe("pesagem dos barris", { skip: SEM_BANCO }, () => {
     assert.deepEqual(pes.map((m) => [m.codigo, m.litros, m.estimado, m.responsavel]), [["A1", 22.5, true, "Eduardo"]]);
 
     const csv = csvLinhas((await admin.ok("history:export", { unitId: u.centro })).csv);
-    const ops = new Set(csv.slice(1).map((l) => l[4]));
+    const ops = new Set(csv.slice(1).map((l) => l[3]));
     assert.ok(ops.has("Retirado com chope") && ops.has("Pesagem"), [...ops].join(", "));
 
     const estoque = csvLinhas((await admin.ok("barris:exportStock", { unitId: u.centro })).csv);
     const linha = estoque.find((l) => l[0] === "#A1");
-    assert.equal(linha[4], "Disponível · ≈ 22,5 L");
-    assert.equal(estoque.find((l) => l[0] === "#P2")[4], "Disponível · 18,2 L");
+    assert.equal(linha[3], "Disponível · ≈ 22,5 L");
+    assert.equal(estoque.find((l) => l[0] === "#P2")[3], "Disponível · 18,2 L");
   });
 
   test("apagar usuário passa as pesagens e os inventários para quem recebe o histórico", async () => {

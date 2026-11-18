@@ -19,7 +19,7 @@ const somaDias = (dia, n) => {
 describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANCO }, () => {
   let srv, admin, gerente, operador, hoje, validade;
   const u = {};   // unidades
-  const ids = {}; // usuários, chopes, estilos e barris criados nos testes
+  const ids = {}; // usuários, chopes e barris criados nos testes
 
   const consulta = async (q) => { const { data, error } = await q; assert.ifError(error); return data; };
   const idDe = async (email) => (await consulta(banco().from("usuarios").select("id").eq("email", email)))[0].id;
@@ -52,9 +52,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     u.pantanal = (await admin.ok("units:create", { razaoSocial: "Loja Pantanal Comércio de Bebidas Ltda", nome: "Loja Pantanal", cnpj: "11.444.777/0001-61", endereco: "Av. do Pantanal, 200, Cuiabá - MT" })).id;
     await admin.ok("taps:create", { unitId: u.centro, quantidade: 3 });
     await admin.ok("taps:create", { unitId: u.pantanal, quantidade: 2 });
-    const pilsen = await admin.ok("estilos:create", { nome: "Pilsen" });
-    ids.estiloPilsen = pilsen.id;
-    ids.pilsen = (await admin.ok("chopes:create", { nome: "Louvada Pilsen", estiloId: pilsen.id })).id;
+    ids.pilsen = (await admin.ok("chopes:create", { nome: "Louvada Pilsen", custoLitro: 12 })).id;
     hoje = (await admin.ok("config:get")).hoje;
     validade = somaDias(hoje, 5);
     gerente = await criar({ nome: "Gina Gerente", email: "gina@barrilfacil.test", cargo: "gerente", unidadeIds: [u.centro] });
@@ -84,21 +82,22 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     assert.equal(error && error.code, "23514");
   });
 
-  test("gerente edita estilo e chope e vê os desativados", async () => {
-    await gerente.ok("estilos:update", { id: ids.estiloPilsen, nome: "Pilsen Clássica" });
-    await gerente.ok("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen", estiloId: ids.estiloPilsen });
-    const ale = await gerente.ok("estilos:create", { nome: "Ale" });
-    await gerente.ok("estilos:toggle", { id: ale.id });
-    assert.equal((await gerente.ok("estilos:list", { todos: true })).find((e) => e.id === ale.id).ativo, 0);
-    await gerente.ok("estilos:toggle", { id: ale.id });
-    const audit = await consulta(banco().from("auditoria").select("acao").eq("usuario_id", ids.gina).eq("acao", "estilo_editado"));
-    assert.equal(audit.length, 1);
+  test("gerente edita chope e vê os desativados", async () => {
+    await gerente.ok("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen Clássica" });
+    await gerente.ok("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen" });
+    const ale = await gerente.ok("chopes:create", { nome: "Ale", custoLitro: 15 });
+    ids.ale = ale.id;
+    await gerente.ok("chopes:toggle", { id: ale.id });
+    assert.equal((await gerente.ok("chopes:list", { todos: true })).find((c) => c.id === ale.id).ativo, 0);
+    await gerente.ok("chopes:toggle", { id: ale.id });
+    const audit = await consulta(banco().from("auditoria").select("acao").eq("usuario_id", ids.gina).eq("acao", "chope_editado"));
+    assert.equal(audit.length, 2);
   });
 
   test("gerente vê o relatório, engata e retira", async () => {
     const rel = await gerente.ok("reports:barrels", periodo());
     assert.equal(rel.unidade, "Todas as minhas unidades");
-    await gerente.ok("reports:barrelsDetail", { ...periodo(), chopeId: ids.pilsen });
+    await gerente.ok("reports:barrelsDetail", { ...periodo(), chope: "Louvada Pilsen" });
     await usarBarril(gerente, u.centro, "G1");
   });
 
@@ -137,13 +136,12 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     await operador.fail("barris:exportStock", { unitId: u.centro }, SEM_PERMISSAO);
     await operador.fail("history:export", { unitId: u.centro }, SEM_PERMISSAO);
     await operador.fail("reports:barrelsExport", periodo(), SEM_PERMISSAO);
-    await operador.fail("estilos:update", { id: ids.estiloPilsen, nome: "Outro" }, SEM_PERMISSAO);
+    await operador.fail("chopes:update", { id: ids.pilsen, nome: "Outro" }, SEM_PERMISSAO);
     await operador.fail("chopes:toggle", { id: ids.pilsen }, SEM_PERMISSAO);
     // "todos" (inclui desativados) só para quem edita o catálogo
-    const ale = (await admin.ok("estilos:list", { todos: true })).find((e) => e.nome === "Ale");
-    await admin.ok("estilos:toggle", { id: ale.id });
-    assert.equal((await operador.ok("estilos:list", { todos: true })).some((e) => e.id === ale.id), false);
-    await admin.ok("estilos:toggle", { id: ale.id });
+    await admin.ok("chopes:toggle", { id: ids.ale });
+    assert.equal((await operador.ok("chopes:list", { todos: true })).some((c) => c.id === ids.ale), false);
+    await admin.ok("chopes:toggle", { id: ids.ale });
   });
 
   test("o administrador continua exportando", async () => {
@@ -161,12 +159,12 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
   test("trocar operador para gerente vale na próxima chamada, sem sair", async () => {
     const paula = await criar({ nome: "Paula", email: "paula@barrilfacil.test", cargo: "operador", unidadeIds: [u.centro] });
     const id = await idDe("paula@barrilfacil.test");
-    await paula.fail("estilos:update", { id: ids.estiloPilsen, nome: "Pilsen Clássica" }, SEM_PERMISSAO);
+    await paula.fail("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen" }, SEM_PERMISSAO);
     await admin.ok("users:setRole", { id, cargo: "gerente", unidadeIds: [u.centro, u.pantanal] });
     const me = await paula.ok("auth:me");
     assert.equal(me.cargo, "gerente");
     assert.deepEqual(me.permissoes, ["catalogo:editar", "funcionarios"]);
-    await paula.ok("estilos:update", { id: ids.estiloPilsen, nome: "Pilsen Clássica" });
+    await paula.ok("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen" });
     assert.deepEqual((await paula.ok("units:list")).map((x) => x.id), [u.centro, u.pantanal]);
     const audit = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "cargo_alterado").order("id"));
     assert.equal(audit.at(-1).detalhe, `paula@barrilfacil.test: Operador → Gerente, unidades ${u.centro}, ${u.pantanal}`);

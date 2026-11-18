@@ -36,10 +36,10 @@ const MC = (() => {
     return div.innerHTML;
   }
 
-  /* Chope do barril com o estilo: "German Pilsen · Pilsen". Barris antigos (sem chope) mostram só o estilo. */
+  /* Nome do chope do barril. Barril antigo, sem chope do catálogo, mostra o estilo gravado nele. */
   function chopeLabel(b) {
     if (!b) return "";
-    return b.chope_nome ? `${b.chope_nome} · ${b.estilo || ""}` : b.estilo || "";
+    return b.chope_nome || b.estilo || "";
   }
 
   /* Validade: "2026-10-22" -> "22/10/2026" e o selo de alerta (amarelo: vence hoje/amanhã; vermelho: vencido) */
@@ -134,10 +134,11 @@ const MC = (() => {
      type "select": options [{value,label}] + value (opção já escolhida).
      hidden: o campo começa escondido (o onOpen mostra quando precisar, pelo [data-field="id"]).
      html: conteúdo extra (já escapado) entre a introdução e os campos. type "err": título em vermelho.
+     htmlForm: conteúdo extra (já escapado) dentro do formulário, depois dos campos (quem chamou lê os valores dele).
      onOpen(overlay): chamado depois que o diálogo aparece (ex.: aplicar máscara de CNPJ).
      funcionario: a escolha de MC.escolherFuncionario (ou null). A grade de nomes vai antes dos botões e o confirmar
        só habilita depois que a pessoa toca num nome. */
-  function dialog({ title, intro, html = "", type = "", fields = [], submitLabel = "Confirmar", rules = false, onSubmit, onOpen, funcionario = null }) {
+  function dialog({ title, intro, html = "", htmlForm = "", type = "", fields = [], submitLabel = "Confirmar", rules = false, onSubmit, onOpen, funcionario = null }) {
     return new Promise((resolve) => {
       const radios = (f) => `<fieldset class="mb-3"><legend class="form-label">${esc(f.label)}</legend>
           <div class="radio-list" id="mcf_${f.id}">${f.options
@@ -161,7 +162,7 @@ const MC = (() => {
         )
         .join("");
       const overlay = openOverlay(`<h2${type ? ` class="notice-title notice-title--${type}"` : ""}>${esc(title)}</h2>${intro ? `<p class="mc-modal-intro">${esc(intro)}</p>` : ""}${html}
-        <form novalidate>${inputs}${funcionario ? funcionario.html : ""}${rules ? '<ul class="pw-rules" id="mcRules"></ul>' : ""}
+        <form novalidate>${inputs}${htmlForm}${funcionario ? funcionario.html : ""}${rules ? '<ul class="pw-rules" id="mcRules"></ul>' : ""}
         <div class="field-error" id="mcErr" aria-live="polite"></div>
         <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
         <button type="submit" class="btn btn-mc btn-mc-sm">${esc(submitLabel)}</button></div></form>`);
@@ -403,7 +404,7 @@ const MC = (() => {
 
   /* ---------- Tabelas no celular ----------
      Copia o título de cada coluna para as células (data-label). No celular o CSS
-     usa isso para mostrar cada linha como um cartão ("Estilo: Pilsen"), sem precisar
+     usa isso para mostrar cada linha como um cartão ("Chope: Pilsen"), sem precisar
      arrastar a tabela para o lado. Funciona sozinho para todas as tabelas .table-card. */
   function labelTable(table) {
     const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());

@@ -140,7 +140,7 @@ o resto depende da permissão do cargo:
 | `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
 | `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
 | `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
-| `catalogo:editar`: editar, desativar, reativar e apagar chopes, estilos e taras dos vasilhames | ✓ | ✓ | |
+| `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
@@ -155,7 +155,7 @@ o resto depende da permissão do cargo:
   navegador), *Claro* e *Escuro*. A escolha fica só naquele aparelho. As cores do escuro estão em `src/renderer/css/tema-escuro.css`
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
-- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras/funcionários, apagar usuário, estilo ou chope e geração de senha temporária pedem confirmação antes de alterar os dados. No celular do quiosque, o cadastro de barril também pede confirmação, junto com a escolha de quem está fazendo.
+- **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras/funcionários, apagar usuário ou chope e geração de senha temporária pedem confirmação antes de alterar os dados. No celular do quiosque, o cadastro de barril também pede confirmação, junto com a escolha de quem está fazendo.
 - **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
 - **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade, torneira e o funcionário da última ação.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
@@ -203,7 +203,7 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
 - Aba **Torneiras** (todos os usuários com acesso à unidade): um cartão por torneira ativa, com o chope engatado, desde
   quando e por quem. Cada cartão tem dois botões:
   - Torneira livre: **Engatar barril** abre a lista dos barris disponíveis da unidade (o que vence primeiro fica em cima,
-    com busca por código, chope ou estilo). Barril vencido pede a mesma confirmação da aba Barris.
+    com busca por código ou chope). Barril vencido pede a mesma confirmação da aba Barris.
   - Torneira ocupada: **Retirar barril**, com as mesmas perguntas e o mesmo aviso da aba Barris.
   - **Histórico**: os engates daquela torneira.
 - A tela se atualiza sozinha a cada minuto, menos enquanto uma janela estiver aberta. Se outro aparelho usou a torneira ou o
@@ -268,7 +268,8 @@ Ainda não há relatório de perda: esta parte só grava os dados.
   abrem, cada um vê só as unidades liberadas para ele (uma unidade ou *Todas as minhas*).
 - Período: atalhos *Hoje*, *Últimos 7 dias*, *Este mês* e *Mês passado*, ou as datas *De* e *Até* (os dois dias entram inteiros,
   no fuso `APP_TZ`). Até 400 dias.
-- Uma linha por chope, agrupada por estilo, com o total de cada estilo e o total geral:
+- Uma linha por chope, em ordem de nome, e o total geral. Barril antigo sem chope do catálogo aparece pelo nome gravado
+  nele (`barris.chope_nome` ou, sem ele, `barris.estilo`); com o mesmo nome de um chope do catálogo, cai na linha dele:
   - **Recebidos:** barris cadastrados na unidade no período (transferência recebida não conta).
   - **Utilizados** e **Litros utilizados:** barris engatados pela **primeira vez** no período. O barril engatado em 30/09 e
     esvaziado em 02/10 conta só em setembro.
@@ -279,20 +280,34 @@ Ainda não há relatório de perda: esta parte só grava os dados.
   *Exportar CSV* e *Imprimir* saem com o período e a unidade; o CSV termina com o bloco *Barris utilizados no período*,
   um barril por linha, com o funcionário do engate e o da retirada.
 - As contas ficam no banco, nas funções `fn_relatorio_barris` e `fn_relatorio_barris_detalhe`
-  (`supabase/migrations/20261023000000_relatorio_barris.sql`).
+  (`supabase/migrations/20261023000000_relatorio_barris.sql`; a versão por chope, sem estilo, está em
+  `supabase/migrations/20261118200000_chope_nome_tamanhos_custo.sql`).
 
-## Chopes e estilos
+## Chopes, tamanhos de barril e custo por litro
 
-- O barril é cadastrado escolhendo um **chope** do catálogo (ex.: *German Pilsen · Pilsen*). Se o chope ainda não existe,
-  a opção *+ Cadastrar novo chope…* cria o chope (e, se precisar, o estilo) sem sair da tela.
-- Aba **Chopes** (todos): lista do catálogo e cadastro de chopes e estilos novos. Editar, desativar e reativar são do
-  administrador e do gerente. Renomear atualiza os barris daquele chope/estilo; desativar só tira o chope do cadastro de barris novos
-  (os barris antigos continuam com ele).
-- **Apagar** (administrador e gerente), para o que foi cadastrado errado, sem perder histórico:
-  - Chope: só apaga se nenhum barril usa o chope. Se algum usa, o app avisa quantos e sugere desativar ou editar o nome.
-  - Estilo sem chopes: só confirma. Estilo com chopes (ativos ou não): escolha para qual estilo ativo os chopes vão.
-    Os barris desses chopes passam a mostrar o estilo novo, inclusive no histórico e no Relatório de barris.
-    Barris antigos cadastrados sem chope do catálogo não mudam.
+- O chope tem só o **nome** (sem estilo). O barril é cadastrado escolhendo o chope do catálogo; se ele ainda não existe,
+  a opção *+ Cadastrar novo chope…* cria o chope sem sair da tela. A tabela `estilos` e a coluna `barris.estilo` continuam
+  no banco: `barris.estilo` recebe o nome do chope, e o barril antigo sem chope do catálogo aparece pelo estilo gravado nele.
+- Aba **Chopes** (todos): lista do catálogo e cadastro de chope novo. Editar, desativar, reativar, apagar e os preços são do
+  administrador e do gerente (`catalogo:editar`). Renomear atualiza os barris daquele chope; desativar só tira o chope do
+  cadastro de barris novos (os barris antigos continuam com ele).
+- **Apagar** (administrador e gerente), para o que foi cadastrado errado: só apaga chope que nenhum barril usa (os preços
+  dele vão junto). Se algum barril usa, o app avisa quantos e sugere desativar ou editar o nome.
+- **Tamanhos de barril** (tabela `tamanhos_barril`): começam com 20, 30 e 50 L (prefixos BA2, BA3 e BA5). O campo Tamanho
+  do cadastro de barril e a tara usam só os ativos. Administrador e gerente cadastram um tamanho novo pela opção
+  *+ Novo tamanho…* do cadastro de barril (litros inteiros ou com uma casa; prefixo do código opcional) ou pela seção
+  *Tamanhos de barril* da aba Chopes, que mostra quantos barris usam cada um. Tamanho repetido é recusado. Tamanho não é
+  apagado, só desativado: some do cadastro de barril e dos campos de preço, e o servidor recusa barril com ele.
+- **Custo por litro** (só administrador e gerente veem; o operador não recebe custo em nenhuma resposta):
+  - Caixa desmarcada: um *Custo por litro (R$)* para qualquer tamanho. Marcada: o preço do barril de cada tamanho ativo, e o
+    servidor grava `custo_litro = preço ÷ litros` (20 L a R$ 300,00 = R$ 15,00/L). Tamanho vazio fica *Sem preço*.
+  - Chope novo pela aba Chopes exige o preço. O operador cria chope só com o nome (no cadastro de barril), e ele fica *Sem preço*.
+  - Botão **Preços**: os valores atuais, o *Início* (hoje, editável) e o histórico. Salvar grava linhas novas em
+    `custos_chope` (só o que mudou), sem apagar as antigas. Dá para trocar entre preço único e por tamanho.
+  - No topo da aba Chopes, *N chopes sem preço*, contando o chope sem preço num tamanho (ex.: um tamanho novo).
+  - `fn_custo_litro(chope, tamanho, data)` dá o custo que vale para um barril: as linhas do tamanho (ou as de tamanho nulo, no
+    preço único), a de maior início até a data de cadastro do barril e, se não houver, a de menor início; nulo sem preço.
+    Trocar entre preço único e por tamanho vale também para barris antigos (a função usa o modo atual do chope).
 
 ## Usuários
 

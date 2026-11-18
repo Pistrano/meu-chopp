@@ -977,10 +977,12 @@ function registerHandlers() {
     };
   });
 
-  /* ======== Catálogo de chopes e estilos ========
-     Cadastrar: qualquer usuário logado (direto do cadastro de barril).
-     Editar, desativar e apagar: permissão catalogo:editar (administrador e gerente). Apagar é só para o que foi
-     cadastrado errado: chope com barris não é apagado, e os chopes de um estilo apagado passam para outro estilo. */
+  /* ======== Chopes, tamanhos de barril e custo por litro ========
+     O chope tem só o nome. A tabela estilos e a coluna barris.estilo ficam no banco: barris.estilo recebe o nome do
+     chope, e o barril antigo sem chope do catálogo aparece pelo estilo gravado nele.
+     Cadastrar chope: qualquer usuário logado (direto do cadastro de barril). Editar, desativar, apagar, preços e
+     tamanhos de barril: permissão catalogo:editar (administrador e gerente). Quem não tem essa permissão não recebe
+     custos em nenhuma resposta: o operador cria o chope só com o nome e ele fica "Sem preço". */
   const cleanCatalogName = (value, tipo) => {
     const nome = String(value || "").trim().replace(/\s+/g, " ");
     if (nome.length < 2 || nome.length > 60) throw new AppError(`O nome do ${tipo} deve ter de 2 a 60 caracteres.`);
@@ -994,102 +996,263 @@ function registerHandlers() {
     const extra = igual.ativo ? "" : " (desativado). Peça a um administrador para reativá-lo";
     throw new AppError(`Já existe um ${tipo} chamado "${igual.nome}"${extra}.`);
   };
-  const loadEstilo = async (id) => {
-    const r = await supabase.from("estilos").select("*").eq("id", Number(id)).maybeSingle();
-    dbError(r.error);
-    if (!r.data) throw new AppError("Estilo não encontrado.");
-    return r.data;
-  };
   const loadChope = async (id) => {
-    const r = await supabase.from("chopes").select("*, estilos(nome)").eq("id", Number(id)).maybeSingle();
+    const r = await supabase.from("chopes").select("*").eq("id", Number(id)).maybeSingle();
     dbError(r.error);
     if (!r.data) throw new AppError("Chope não encontrado.");
     return r.data;
   };
   const wantsAll = (p, ctx) => !!p.todos && pode(ctx.session, "catalogo:editar");
 
-  // Para quem edita o catálogo, cada estilo vem com quantos chopes tem (ativos ou não): a tela usa ao apagar
-  handle("estilos:list", async (p, ctx) => {
+  /* ---------- Tamanhos de barril ----------
+     Todos os cargos veem os ativos (cadastro de barril, tara). Cadastrar, desativar e reativar: catalogo:editar.
+     Tamanho usado em barril não é apagado, só desativado: some do cadastro de barril e dos campos de preço. */
+  const loadTamanho = async (id) => {
+    const r = await supabase.from("tamanhos_barril").select("*").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Tamanho de barril não encontrado.");
+    return r.data;
+  };
+  const tamanhosAtivos = async () =>
+    ok(await supabase.from("tamanhos_barril").select("litros").eq("ativo", true).order("litros")).map((t) => Number(t.litros));
+  // Litros: inteiro ou uma casa decimal, de mais que 0 a 200
+  const cleanLitros = (v) => {
+    const n = typeof v === "number" ? v : Number(String(v ?? "").trim().replace(",", "."));
+    if (String(v ?? "").trim() === "" || !(n > 0) || n > 200) throw new AppError("Informe os litros do barril: mais que 0 e até 200 (ex.: 40).");
+    if (Math.abs(Math.round(n * 10) - n * 10) > 1e-9) throw new AppError("Use no máximo uma casa decimal nos litros (ex.: 7,5).");
+    return Math.round(n * 10) / 10;
+  };
+  const cleanPrefixo = (v) => {
+    const p = String(v ?? "").trim().toUpperCase();
+    if (!p) return null;
+    if (!/^[A-Z0-9]{1,10}$/.test(p)) throw new AppError("O prefixo do código deve ter de 1 a 10 letras ou números, sem espaço (ex.: BA4).");
+    return p;
+  };
+  const tamanhoTexto = (t) => `Barril de ${litrosTexto(t.litros)}${t.prefixo_codigo ? ` (prefixo ${t.prefixo_codigo})` : ""}`;
+
+  // todos (só quem edita): também os desativados, com quantos barris usam cada tamanho (inclusive os recolhidos)
+  handle("tamanhos:list", async (p, ctx) => {
+    const todos = wantsAll(p || {}, ctx);
+    let query = supabase.from("tamanhos_barril").select("id, litros, prefixo_codigo, ativo").order("litros");
+    if (!todos) query = query.eq("ativo", true);
+    const rows = ok(await query).map((t) => ({ id: t.id, litros: Number(t.litros), prefixo: t.prefixo_codigo, ativo: b2i(t.ativo) }));
+    if (!todos) return rows;
+    const usos = await Promise.all(rows.map((t) =>
+      supabase.from("barris").select("id", { count: "exact", head: true }).eq("tamanho_l", t.litros)));
+    return rows.map((t, i) => { dbError(usos[i].error); return { ...t, barris: usos[i].count || 0 }; });
+  });
+
+  handle("tamanhos:create", async ({ litros, prefixo }, ctx) => {
+    const n = cleanLitros(litros);
+    const pre = cleanPrefixo(prefixo);
+    const igual = ok(await supabase.from("tamanhos_barril").select("ativo").eq("litros", n).maybeSingle());
+    const repetido = `Já existe o barril de ${litrosTexto(n)}`;
+    if (igual) throw new AppError(igual.ativo ? repetido : `${repetido} (desativado). Reative em Chopes, na seção Tamanhos de barril.`);
+    if (pre) {
+      const dono = ok(await supabase.from("tamanhos_barril").select("litros").eq("prefixo_codigo", pre).maybeSingle());
+      if (dono) throw new AppError(`O prefixo ${pre} já é do barril de ${litrosTexto(dono.litros)}.`);
+    }
+    const row = ok(await supabase.from("tamanhos_barril").insert({ litros: n, prefixo_codigo: pre, criado_por: ctx.session.id })
+      .select("id, litros, prefixo_codigo, ativo").single(), repetido);
+    await audit(ctx, "tamanho_barril_criado", tamanhoTexto(row));
+    return { id: row.id, litros: Number(row.litros), prefixo: row.prefixo_codigo, ativo: 1 };
+  }, { perm: "catalogo:editar" });
+
+  handle("tamanhos:toggle", async ({ id }, ctx) => {
+    const t = await loadTamanho(id);
+    if (t.ativo) {
+      const outros = ok(await supabase.from("tamanhos_barril").select("id").eq("ativo", true).neq("id", t.id).limit(1));
+      if (!outros.length) throw new AppError("Deixe pelo menos um tamanho de barril ativo.");
+    }
+    dbError((await supabase.from("tamanhos_barril").update({ ativo: !t.ativo }).eq("id", t.id)).error);
+    await audit(ctx, t.ativo ? "tamanho_barril_desativado" : "tamanho_barril_reativado", tamanhoTexto(t));
+    return true;
+  }, { perm: "catalogo:editar" });
+
+  /* ---------- Custo por litro do chope ----------
+     Preço único (preco_por_tamanho = false): uma linha com tamanho nulo e o custo por litro digitado.
+     Por tamanho: uma linha por tamanho com o preço do barril; custo_litro = preço ÷ litros, calculado aqui.
+     Mudar o preço grava linhas novas com a data de início; as antigas ficam (fn_custo_litro escolhe pela data). */
+  const reais = (n) => `R$ ${Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const diaBR = (dia) => dia.split("-").reverse().join("/");
+  // "300", "300,50", "1.234,56", "R$ 575,00" ou número
+  const dinheiroBR = (v) => {
+    if (typeof v === "number") return v;
+    let t = String(v ?? "").replace(/R\$|\s/g, "");
+    if (t === "") return null;
+    if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+    return Number(t);
+  };
+  const vazio = (v) => v === null || v === undefined || String(v).trim() === "";
+  const cleanDinheiro = (v, oque) => {
+    const n = dinheiroBR(v);
+    if (!(n > 0) || n > 1000000) throw new AppError(`Informe ${oque} em reais (ex.: 300,00).`);
+    return Math.round(n * 100) / 100;
+  };
+  const cleanInicio = (v) => {
+    const dia = String(v || "").trim();
+    if (!dia) return hojeTZ();
+    if (!diaValido(dia)) throw new AppError("Data de início inválida.");
+    if (dia < "2020-01-01") throw new AppError("A data de início está muito no passado.");
+    if (dia > somaDias(hojeTZ(), 366)) throw new AppError("A data de início pode ser no máximo um ano à frente.");
+    return dia;
+  };
+  const mesmoTamanho = (l, tamanho) => (tamanho === null ? l.tamanho_l === null : l.tamanho_l !== null && Number(l.tamanho_l) === tamanho);
+  // Mesma regra da fn_custo_litro: entre as linhas, a de maior início até a data; sem nenhuma, a de menor início.
+  // No mesmo início, vale a gravada por último.
+  function custoVigente(linhas, dia) {
+    let ate = null;
+    let primeira = null;
+    for (const l of linhas) {
+      if (l.inicio <= dia && (!ate || l.inicio > ate.inicio || (l.inicio === ate.inicio && l.id > ate.id))) ate = l;
+      if (!primeira || l.inicio < primeira.inicio || (l.inicio === primeira.inicio && l.id > primeira.id)) primeira = l;
+    }
+    return ate || primeira;
+  }
+  /* O que vale hoje para o chope: custoLitro (preço único) ou precos (um por tamanho ativo), a faixa do custo por litro
+     e o que está sem preço (semPreco = nenhum preço; semPrecoTamanhos = tamanhos sem preço no chope por tamanho). */
+  function resumoCusto(c, linhas, tamanhos, dia) {
+    const num = (v) => (v === null || v === undefined ? null : Number(v));
+    if (!c.preco_por_tamanho) {
+      const v = custoVigente(linhas.filter((l) => l.tamanho_l === null), dia);
+      const custo = v ? num(v.custo_litro) : null;
+      return { porTamanho: false, custoLitro: custo, precos: [], min: custo, max: custo, semPreco: custo === null, semPrecoTamanhos: [] };
+    }
+    const precos = tamanhos.map((t) => {
+      const v = custoVigente(linhas.filter((l) => mesmoTamanho(l, t)), dia);
+      return { tamanho: t, precoBarril: v ? num(v.preco_barril) : null, custoLitro: v ? num(v.custo_litro) : null };
+    });
+    const valores = precos.filter((x) => x.custoLitro !== null).map((x) => x.custoLitro);
+    return {
+      porTamanho: true, custoLitro: null, precos,
+      min: valores.length ? Math.min(...valores) : null, max: valores.length ? Math.max(...valores) : null,
+      semPreco: !valores.length, semPrecoTamanhos: precos.filter((x) => x.custoLitro === null).map((x) => x.tamanho),
+    };
+  }
+  const linhasCusto = async (ids) => (ids.length
+    ? ok(await supabase.from("custos_chope").select("id, chope_id, tamanho_l, preco_barril, custo_litro, inicio").in("chope_id", ids))
+    : []);
+
+  /* Lê e confere os preços enviados (antes de gravar qualquer coisa). Retorna as linhas novas, sem o chope.
+     precoPorTamanho falso: custoLitro. Verdadeiro: precos = { "20": 300, "50": 575 } (litros -> preço do barril);
+     pelo menos um tamanho ativo preenchido, o vazio fica "Sem preço". */
+  async function lerPrecos({ precoPorTamanho, custoLitro, precos, inicio }) {
+    const porTamanho = !!precoPorTamanho;
+    const dia = cleanInicio(inicio);
+    if (!porTamanho) {
+      if (vazio(custoLitro)) throw new AppError("Informe o custo por litro (R$).");
+      return { porTamanho, dia, linhas: [{ tamanho_l: null, preco_barril: null, custo_litro: cleanDinheiro(custoLitro, "o custo por litro") }] };
+    }
+    const linhas = [];
+    for (const t of await tamanhosAtivos()) {
+      const bruto = precos && typeof precos === "object" ? precos[String(t)] : null;
+      if (vazio(bruto)) continue;
+      const preco = cleanDinheiro(bruto, `o preço do barril de ${litrosTexto(t)}`);
+      linhas.push({ tamanho_l: t, preco_barril: preco, custo_litro: Math.round((preco / t) * 10000) / 10000 });
+    }
+    if (!linhas.length) throw new AppError("Informe o preço de pelo menos um tamanho de barril.");
+    return { porTamanho, dia, linhas };
+  }
+  const precoTexto = (l) => (l.tamanho_l === null
+    ? `${reais(l.custo_litro)}/L (qualquer tamanho)`
+    : `barril de ${litrosTexto(l.tamanho_l)} ${reais(l.preco_barril)} (${reais(l.custo_litro)}/L)`);
+
+  /* Grava só o que muda na data de início (comparando com o preço que vale nessa data) e a troca entre preço único e
+     por tamanho. Auditoria "chope_preco" com o chope, os valores e o início. */
+  async function gravarPrecos(ctx, chope, lido) {
+    const antigas = await linhasCusto([chope.id]);
+    const novas = lido.linhas.filter((n) => {
+      const v = custoVigente(antigas.filter((l) => mesmoTamanho(l, n.tamanho_l)), lido.dia);
+      return !v || Number(v.custo_litro) !== n.custo_litro || (n.preco_barril !== null && Number(v.preco_barril) !== n.preco_barril);
+    });
+    const mudouModo = lido.porTamanho !== !!chope.preco_por_tamanho;
+    if (!novas.length && !mudouModo) return { gravadas: 0, mudouModo: false };
+    if (novas.length) {
+      dbError((await supabase.from("custos_chope").insert(novas.map((l) => ({
+        ...l, chope_id: chope.id, inicio: lido.dia, criado_por: ctx.session.id,
+      })))).error);
+    }
+    // Depois das linhas: se a troca de modo falhar, as linhas novas ficam sem efeito até salvar de novo
+    if (mudouModo) dbError((await supabase.from("chopes").update({ preco_por_tamanho: lido.porTamanho }).eq("id", chope.id)).error);
+    const modo = mudouModo ? (lido.porTamanho ? " · preço por tamanho do barril" : " · preço único") : "";
+    const valores = novas.length ? novas.map(precoTexto).join("; ") : "sem valor novo";
+    await audit(ctx, "chope_preco", `${chope.nome}: ${valores}${modo} · início ${diaBR(lido.dia)}`);
+    return { gravadas: novas.length, mudouModo };
+  }
+
+  /* Ativos por padrão (o cadastro de barril). todos: também os desativados (só quem edita).
+     custos (só quem edita): o resumo do custo por litro de cada chope, para a tela Chopes. */
+  handle("chopes:list", async (p, ctx) => {
+    const q = p || {};
     const editar = pode(ctx.session, "catalogo:editar");
-    let query = supabase.from("estilos").select(editar ? "id, nome, ativo, chopes(count)" : "id, nome, ativo").order("nome");
-    if (!wantsAll(p, ctx)) query = query.eq("ativo", true);
-    return ok(await query).map(({ chopes, ...e }) => ({
-      ...e, ativo: b2i(e.ativo), ...(editar ? { chopes: chopes && chopes[0] ? chopes[0].count : 0 } : {}),
+    let query = supabase.from("chopes").select("id, nome, ativo, preco_por_tamanho").order("nome");
+    if (!wantsAll(q, ctx)) query = query.eq("ativo", true);
+    const rows = ok(await query);
+    if (!editar || !q.custos) return rows.map((c) => ({ id: c.id, nome: c.nome, ativo: b2i(c.ativo) }));
+    const [tamanhos, linhas] = await Promise.all([tamanhosAtivos(), linhasCusto(rows.map((c) => c.id))]);
+    const hoje = hojeTZ();
+    return rows.map((c) => ({
+      id: c.id, nome: c.nome, ativo: b2i(c.ativo),
+      custo: resumoCusto(c, linhas.filter((l) => l.chope_id === c.id), tamanhos, hoje),
     }));
   });
 
-  handle("estilos:create", async ({ nome }, ctx) => {
-    const n = cleanCatalogName(nome, "estilo");
-    await catalogNameTaken("estilos", "estilo", n);
-    const row = ok(await supabase.from("estilos").insert({ nome: n }).select("id, nome").single(), `Já existe um estilo chamado "${n}".`);
-    await audit(ctx, "estilo_criado", n);
-    return row;
-  });
-
-  // Renomear o estilo também atualiza barris.estilo dos barris dos chopes desse estilo
-  handle("estilos:update", async ({ id, nome }, ctx) => {
-    const e = await loadEstilo(id);
-    const n = cleanCatalogName(nome, "estilo");
-    if (n === e.nome) return true;
-    await catalogNameTaken("estilos", "estilo", n, e.id);
-    dbError((await supabase.from("estilos").update({ nome: n }).eq("id", e.id)).error, `Já existe um estilo chamado "${n}".`);
-    const chopeIds = ok(await supabase.from("chopes").select("id").eq("estilo_id", e.id)).map((c) => c.id);
-    if (chopeIds.length) dbError((await supabase.from("barris").update({ estilo: n }).in("chope_id", chopeIds)).error);
-    await audit(ctx, "estilo_editado", `${e.nome} → ${n}`);
-    return true;
-  }, { perm: "catalogo:editar" });
-
-  handle("estilos:toggle", async ({ id }, ctx) => {
-    const e = await loadEstilo(id);
-    dbError((await supabase.from("estilos").update({ ativo: !e.ativo }).eq("id", e.id)).error);
-    await audit(ctx, e.ativo ? "estilo_desativado" : "estilo_reativado", e.nome);
-    return true;
-  }, { perm: "catalogo:editar" });
-
-  // Estilo com chopes: os chopes (e os barris deles) passam para o estilo destinoId. fn_estilo_apagar: tudo ou nada.
-  handle("estilos:delete", async ({ id, destinoId }, ctx) => {
-    const e = await loadEstilo(id);
-    const r = await rpc("fn_estilo_apagar", { p_estilo: e.id, p_destino: Number(destinoId) || null });
-    const extra = r.chopes ? `: ${r.chopes} chope(s) e ${r.barris} barril(is) passaram para o estilo ${r.destino}` : "";
-    await audit(ctx, "estilo_apagado", `${r.nome}${extra}`);
-    return r;
-  }, { perm: "catalogo:editar" });
-
-  handle("chopes:list", async (p, ctx) => {
-    let query = supabase.from("chopes").select("id, nome, estilo_id, ativo, estilos(nome)").order("nome");
-    if (!wantsAll(p, ctx)) query = query.eq("ativo", true);
-    return ok(await query).map(({ estilos, ...c }) => ({ ...c, ativo: b2i(c.ativo), estilo: estilos ? estilos.nome : null }));
-  });
-
-  handle("chopes:create", async ({ nome, estiloId }, ctx) => {
-    const n = cleanCatalogName(nome, "chope");
-    if (!Number(estiloId)) throw new AppError("Escolha o estilo do chope.");
-    const e = await loadEstilo(estiloId);
-    if (!e.ativo) throw new AppError(`O estilo "${e.nome}" está desativado. Escolha outro.`);
+  // Quem edita o catálogo informa o preço junto (obrigatório). Os outros cargos criam só com o nome: os preços são ignorados.
+  handle("chopes:create", async (p, ctx) => {
+    const q = p || {};
+    const n = cleanCatalogName(q.nome, "chope");
+    const editar = pode(ctx.session, "catalogo:editar");
+    const lido = editar ? await lerPrecos(q) : null;
     await catalogNameTaken("chopes", "chope", n);
     const row = ok(
-      await supabase.from("chopes").insert({ nome: n, estilo_id: e.id }).select("id, nome, estilo_id").single(),
+      await supabase.from("chopes").insert({ nome: n, preco_por_tamanho: lido ? lido.porTamanho : false })
+        .select("id, nome, preco_por_tamanho").single(),
       `Já existe um chope chamado "${n}".`
     );
-    await audit(ctx, "chope_criado", `${n} (${e.nome})`);
-    return { ...row, estilo: e.nome };
+    await audit(ctx, "chope_criado", n);
+    if (lido) await gravarPrecos(ctx, row, lido);
+    return { id: row.id, nome: row.nome };
   });
 
-  // Editar o chope atualiza chope_nome e estilo de todos os barris desse chope
-  handle("chopes:update", async ({ id, nome, estiloId }, ctx) => {
+  /* Preços de um chope para o formulário: o que vale hoje nos dois modos (custoLitro do preço único e precos, um por
+     tamanho ativo), para a pessoa poder trocar de modo, e o histórico, do mais novo para o mais antigo. */
+  handle("chopes:custos", async ({ id }) => {
+    const c = await loadChope(id);
+    const [tamanhos, historico] = await Promise.all([
+      tamanhosAtivos(),
+      supabase.from("custos_chope").select("id, tamanho_l, preco_barril, custo_litro, inicio, criado_em, usuarios(nome)")
+        .eq("chope_id", c.id).order("inicio", { ascending: false }).order("id", { ascending: false }).then((r) => ok(r)),
+    ]);
+    const hoje = hojeTZ();
+    const unico = resumoCusto({ preco_por_tamanho: false }, historico, tamanhos, hoje);
+    const porTamanho = resumoCusto({ preco_por_tamanho: true }, historico, tamanhos, hoje);
+    return {
+      id: c.id, nome: c.nome, hoje, tamanhos, porTamanho: !!c.preco_por_tamanho,
+      custoLitro: unico.custoLitro, precos: porTamanho.precos,
+      historico: historico.map((l) => ({
+        tamanho: l.tamanho_l === null ? null : Number(l.tamanho_l),
+        precoBarril: l.preco_barril === null ? null : Number(l.preco_barril),
+        custoLitro: Number(l.custo_litro), inicio: l.inicio,
+        criadoEm: fmtTs(l.criado_em), criadoPor: l.usuarios ? l.usuarios.nome : null,
+      })),
+    };
+  }, { perm: "catalogo:editar" });
+
+  // Salvar preços: grava linhas novas, sem apagar as antigas. Dá para trocar entre preço único e por tamanho.
+  handle("chopes:precos", async (p, ctx) => {
+    const c = await loadChope((p || {}).id);
+    return gravarPrecos(ctx, c, await lerPrecos(p || {}));
+  }, { perm: "catalogo:editar" });
+
+  // Renomear o chope atualiza chope_nome e estilo de todos os barris dele (barris.estilo guarda o nome do chope)
+  handle("chopes:update", async ({ id, nome }, ctx) => {
     const c = await loadChope(id);
     const n = cleanCatalogName(nome, "chope");
-    if (!Number(estiloId)) throw new AppError("Escolha o estilo do chope.");
-    const e = await loadEstilo(estiloId);
-    if (!e.ativo && e.id !== c.estilo_id) throw new AppError(`O estilo "${e.nome}" está desativado. Escolha outro.`);
+    if (n === c.nome) return true;
     await catalogNameTaken("chopes", "chope", n, c.id);
-    dbError(
-      (await supabase.from("chopes").update({ nome: n, estilo_id: e.id }).eq("id", c.id)).error,
-      `Já existe um chope chamado "${n}".`
-    );
-    dbError((await supabase.from("barris").update({ chope_nome: n, estilo: e.nome }).eq("chope_id", c.id)).error);
-    const antes = `${c.nome} (${c.estilos ? c.estilos.nome : "?"})`;
-    await audit(ctx, "chope_editado", `${antes} → ${n} (${e.nome})`);
+    dbError((await supabase.from("chopes").update({ nome: n }).eq("id", c.id)).error, `Já existe um chope chamado "${n}".`);
+    dbError((await supabase.from("barris").update({ chope_nome: n, estilo: n }).eq("chope_id", c.id)).error);
+    await audit(ctx, "chope_editado", `${c.nome} → ${n}`);
     return true;
   }, { perm: "catalogo:editar" });
 
@@ -1100,12 +1263,12 @@ function registerHandlers() {
     return true;
   }, { perm: "catalogo:editar" });
 
-  // Só chope sem barris (fn_chope_apagar); com barris, a mensagem do banco sugere desativar ou editar
+  // Só chope sem barris (fn_chope_apagar; os preços dele vão junto); com barris, a mensagem do banco sugere desativar ou editar
   handle("chopes:delete", async ({ id }, ctx) => {
     const c = await loadChope(id);
     const r = await rpc("fn_chope_apagar", { p_chope: c.id });
-    await audit(ctx, "chope_apagado", `${r.nome} (${r.estilo || "?"})`);
-    return r;
+    await audit(ctx, "chope_apagado", r.nome);
+    return { nome: r.nome };
   }, { perm: "catalogo:editar" });
 
   /* ======== Dashboard ======== */
@@ -1198,7 +1361,8 @@ function registerHandlers() {
     // Recolhidos já voltaram para a fábrica: só aparecem quando o filtro pede por eles
     query = status ? query.eq("status", String(status)) : query.neq("status", "recolhido");
     const termo = cleanTerm(q);
-    if (termo) query = query.or(`codigo.ilike.*${termo}*,estilo.ilike.*${termo}*,chope_nome.ilike.*${termo}*`);
+    // Código ou chope (barril antigo sem chope: o estilo gravado nele é o nome)
+    if (termo) query = query.or(`codigo.ilike.*${termo}*,chope_nome.ilike.*${termo}*,and(chope_nome.is.null,estilo.ilike.*${termo}*)`);
 
     const data = ok(await query);
     const hoje = hojeTZ();
@@ -1230,11 +1394,11 @@ function registerHandlers() {
       return `"${t.replace(/"/g, '""')}"`;
     };
     // Funcionário: quem fez a última ação do barril (a que o deixou na situação atual: recebeu, engatou, retirou ou enviou)
-    const header = ["Barril", "Chope", "Estilo", "Tamanho (L)", "Situação", "Validade", "Unidade", "Torneira", "Funcionário"];
+    const header = ["Barril", "Chope", "Tamanho (L)", "Situação", "Validade", "Unidade", "Torneira", "Funcionário"];
     const lines = rows.map((b) => {
       const engate = (b.engates || []).find((e) => e.retirado_em === null);
       const ultima = (b.movimentacoes || []).reduce((a, m) => (!a || m.id > a.id ? m : a), null);
-      return ["#" + b.codigo, b.chope_nome, b.estilo, b.tamanho_l, situacaoTexto(b, labels), b.validade,
+      return ["#" + b.codigo, b.chope_nome || b.estilo, b.tamanho_l, situacaoTexto(b, labels), b.validade,
         b.unidades ? b.unidades.nome_curto : "", engate && engate.torneiras ? `Torneira ${engate.torneiras.numero}` : "",
         ultima ? quemFez(ultima.funcionarios, ultima.usuarios) : ""]
         .map(esc).join(";");
@@ -1247,9 +1411,9 @@ function registerHandlers() {
     };
   }, { perm: "exportar" });
 
-  /* Entrada do barril: chope do catálogo + validade informada (olhando a data no barril).
-     A fn_barril_entrada grava o barril (com barris.estilo = estilo do chope, usado no histórico e nas
-     transferências), a movimentação e a auditoria numa única transação. */
+  /* Entrada do barril: chope do catálogo + tamanho cadastrado e ativo + validade informada (olhando a data no barril).
+     A fn_barril_entrada confere o tamanho e grava o barril (com barris.estilo = nome do chope), a movimentação e a
+     auditoria numa única transação. */
   const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
   const diaValido = (v) => DIA_RE.test(v) && new Date(`${v}T12:00:00Z`).toISOString().slice(0, 10) === v;
 
@@ -1425,7 +1589,6 @@ function registerHandlers() {
     if (d.length > 80) throw new AppError("A descrição da tara deve ter até 80 caracteres.");
     return d || null;
   };
-  const TAMANHOS = [20, 30, 50];
   const loadTara = async (id) => {
     const r = await supabase.from("taras").select("*, pesagens(count)").eq("id", Number(id)).maybeSingle();
     dbError(r.error);
@@ -1454,7 +1617,7 @@ function registerHandlers() {
 
   handle("taras:create", async ({ tamanho, pesoKg, descricao }, ctx) => {
     const tam = Number(tamanho);
-    if (!TAMANHOS.includes(tam)) throw new AppError("Escolha o tamanho do barril (20, 30 ou 50 L).");
+    if (!(await tamanhosAtivos()).includes(tam)) throw new AppError("Escolha um tamanho de barril cadastrado.");
     const row = ok(await supabase.from("taras")
       .insert({ tamanho_l: tam, peso_kg: cleanTaraPeso(pesoKg), descricao: cleanTaraDescricao(descricao), criado_por: ctx.session.id })
       .select("id, tamanho_l, peso_kg, descricao").single());
@@ -1581,9 +1744,9 @@ function registerHandlers() {
       return `"${t.replace(/"/g, '""')}"`;
     };
     // Responsável = conta que estava logada; Funcionário = quem o operador escolheu na ação (vazio se ninguém foi escolhido)
-    const header = ["Data/Hora", "Barril", "Chope", "Estilo", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Funcionário", "Observação"];
+    const header = ["Data/Hora", "Barril", "Chope", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Funcionário", "Observação"];
     const lines = rows.map((r) =>
-      [r.criado_em, "#" + r.codigo, r.chope_nome || "", r.estilo, labels[r.operacao], r.origem || FORNECEDOR, r.destino || "",
+      [r.criado_em, "#" + r.codigo, r.chope_nome || r.estilo || "", labels[r.operacao], r.origem || FORNECEDOR, r.destino || "",
        r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.usuario, r.funcionario || "", r.observacao]
         .map(esc)
         .join(";")
@@ -1595,7 +1758,7 @@ function registerHandlers() {
     return { filename: `relatorio-movimentacoes-${dia}.csv`, csv, total: rows.length };
   }, { perm: "exportar" });
 
-  /* Relatório de barris: uso por estilo e chope num período, mais a situação agora.
+  /* Relatório de barris: uso por chope num período, mais a situação agora.
      Cada linha de barris é um ciclo (o código se repete depois do recolhimento), por isso o banco conta por barris.id.
      unidadeId vazio = todas as unidades liberadas para o usuário. */
   async function reportUnits(ctx, unidadeId) {
@@ -1633,24 +1796,9 @@ function registerHandlers() {
   const REL_NUMS = ["recebidos", "utilizados", "litros", "esvaziados", "recolhidos", "estoque", "engatados", "vazios", "em_transferencia"];
   const relNums = (src) => Object.fromEntries(REL_NUMS.map((k) => [k, Number(src ? src[k] : 0) || 0]));
 
-  // Linhas do banco (uma por chope) agrupadas por estilo; "Pilsen" de barril antigo cai no mesmo grupo do "Pilsen" do catálogo
-  function agruparPorEstilo(linhas) {
-    const grupos = new Map();
-    for (const l of linhas) {
-      const chave = l.estilo.toLocaleLowerCase("pt-BR");
-      if (!grupos.has(chave)) grupos.set(chave, { estilo: l.estilo, chopes: [], total: relNums() });
-      const g = grupos.get(chave);
-      const nums = relNums(l);
-      g.chopes.push({
-        chope: l.chope || "Chope não informado",
-        // Chave para abrir o detalhe: o chope do catálogo ou, no barril antigo, os textos gravados nele
-        chave: l.chope_id ? { chopeId: l.chope_id } : { estilo: l.estilo_chave || "", chope: l.chope_chave || "" },
-        ...nums,
-      });
-      for (const k of REL_NUMS) g.total[k] += nums[k];
-    }
-    return [...grupos.values()];
-  }
+  /* Uma linha por chope, já em ordem de nome. O banco junta o barril antigo (sem chope do catálogo) pelo nome:
+     barris.chope_nome ou, sem ele, barris.estilo. O nome da linha é a chave do detalhe. */
+  const linhasPorChope = (linhas) => linhas.map((l) => ({ chope: l.chope || "Sem nome", ...relNums(l) }));
 
   async function relatorioBarris(ctx, { unidadeId, de, ate }) {
     const periodo = reportPeriod(de, ate);
@@ -1660,7 +1808,7 @@ function registerHandlers() {
       de: periodo.de, ate: periodo.ate,
       unidade: unidade.nome, slug: unidade.slug,
       geradoEm: fmtTs(r.gerado_em),
-      grupos: agruparPorEstilo(r.linhas || []),
+      chopes: linhasPorChope(r.linhas || []),
       total: relNums(r.totais),
     };
   }
@@ -1670,12 +1818,12 @@ function registerHandlers() {
     return rel;
   });
 
-  // Barris do chope que tiveram o primeiro engate no período. engatado_por/retirado_por: o funcionário (ou o usuário).
-  async function detalheBarris(unidade, periodo, { chopeId, estilo, chope }) {
-    const id = Number(chopeId) || null;
+  // Barris do chope (nome da linha) que tiveram o primeiro engate no período. engatado_por/retirado_por: o funcionário (ou o usuário).
+  async function detalheBarris(unidade, periodo, chope) {
+    const nome = String(chope ?? "").trim();
+    if (!nome) throw new AppError("Escolha o chope.");
     const rows = await rpcRelatorio("fn_relatorio_barris_detalhe", {
-      p_unidades: unidade.ids, p_de: periodo.inicio, p_ate: periodo.fim,
-      p_chope: id, p_estilo: id ? null : String(estilo ?? "").trim(), p_chope_nome: id ? null : String(chope ?? "").trim(),
+      p_unidades: unidade.ids, p_de: periodo.inicio, p_ate: periodo.fim, p_chope: nome,
     });
     return (rows || []).map((b) => ({
       id: b.id, codigo: b.codigo, tamanho_l: b.tamanho_l, validade: b.validade,
@@ -1689,7 +1837,7 @@ function registerHandlers() {
     const { unidadeId, de, ate } = p || {};
     const periodo = reportPeriod(de, ate);
     const unidade = await reportUnits(ctx, unidadeId);
-    return detalheBarris(unidade, periodo, p || {});
+    return detalheBarris(unidade, periodo, (p || {}).chope);
   });
 
   handle("reports:barrelsExport", async (p, ctx) => {
@@ -1697,24 +1845,20 @@ function registerHandlers() {
     // Depois do resumo, os barris utilizados no período (os mesmos do detalhe de cada chope), com quem engatou e quem retirou
     const periodo = reportPeriod(rel.de, rel.ate);
     const unidade = await reportUnits(ctx, (p || {}).unidadeId);
-    const detalhes = await Promise.all(rel.grupos.flatMap((g) => g.chopes.filter((c) => c.utilizados > 0).map(async (c) =>
-      (await detalheBarris(unidade, periodo, c.chave)).map((b) => ({ ...b, estilo: g.estilo, chope: c.chope })))));
+    const detalhes = await Promise.all(rel.chopes.filter((c) => c.utilizados > 0).map(async (c) =>
+      (await detalheBarris(unidade, periodo, c.chope)).map((b) => ({ ...b, chope: c.chope }))));
     const esc = (v) => {
       let t = String(v ?? "");
       if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
       return `"${t.replace(/"/g, '""')}"`;
     };
     const num = (n) => String(n).replace(".", ","); // litros com vírgula, como o Excel em português espera
-    const linha = (estilo, chope, n) => [estilo, chope, n.recebidos, n.utilizados, num(n.litros), n.esvaziados, n.recolhidos,
+    const linha = (chope, n) => [chope, n.recebidos, n.utilizados, num(n.litros), n.esvaziados, n.recolhidos,
       n.estoque, n.engatados, n.vazios, n.em_transferencia].map(esc).join(";");
-    const header = ["Estilo", "Chope", "Recebidos", "Utilizados", "Litros utilizados", "Esvaziados", "Recolhidos",
+    const header = ["Chope", "Recebidos", "Utilizados", "Litros utilizados", "Esvaziados", "Recolhidos",
       "Em estoque agora", "Engatados agora", "Vazios aguardando recolhimento", "Em transferência agora"];
-    const lines = [];
-    for (const g of rel.grupos) {
-      for (const c of g.chopes) lines.push(linha(g.estilo, c.chope, c));
-      lines.push(linha(g.estilo, `Total ${g.estilo}`, g.total));
-    }
-    lines.push(linha("Total geral", "", rel.total));
+    const lines = rel.chopes.map((c) => linha(c.chope, c));
+    lines.push(linha("Total geral", rel.total));
     const br = (dia) => dia.split("-").reverse().join("/");
     lines.push("", ["Período", `${br(rel.de)} a ${br(rel.ate)}`].map(esc).join(";"),
       ["Unidade", rel.unidade].map(esc).join(";"),
@@ -1724,9 +1868,9 @@ function registerHandlers() {
     if (barris.length) {
       const hora = (ts) => (ts ? `${br(ts.slice(0, 10))} ${ts.slice(11, 16)}` : "");
       lines.push("", esc("Barris utilizados no período"),
-        ["Estilo", "Chope", "Barril", "Tamanho (L)", "Validade", "Engatado em", "Retirado em", "Torneira", "Unidade",
+        ["Chope", "Barril", "Tamanho (L)", "Validade", "Engatado em", "Retirado em", "Torneira", "Unidade",
           "Funcionário (engate)", "Funcionário (retirada)"].map(esc).join(";"),
-        ...barris.map((b) => [b.estilo, b.chope, "#" + b.codigo, num(b.tamanho_l), b.validade ? br(b.validade) : "",
+        ...barris.map((b) => [b.chope, "#" + b.codigo, num(b.tamanho_l), b.validade ? br(b.validade) : "",
           hora(b.engatado_em), hora(b.retirado_em), b.torneira ? `Torneira ${b.torneira}` : "", b.unidade || "",
           b.engatado_por || "", b.retirado_por || ""].map(esc).join(";")));
     }
@@ -1734,7 +1878,7 @@ function registerHandlers() {
     return {
       filename: `relatorio-barris-${rel.slug}-${rel.de}-a-${rel.ate}.csv`,
       csv: "﻿" + [header.map(esc).join(";"), ...lines].join("\r\n"),
-      total: rel.grupos.reduce((s, g) => s + g.chopes.length, 0),
+      total: rel.chopes.length,
     };
   }, { perm: "exportar" });
 

@@ -40,7 +40,7 @@
         </div>
         <div class="col-6 col-lg-2">
           <label class="form-label" for="tamanho">Tamanho</label>
-          <select id="tamanho" class="form-select"><option value="30">30 litros</option><option value="50">50 litros</option><option value="20">20 litros</option></select>
+          <select id="tamanho" class="form-select" required><option value="">Carregando…</option></select>
         </div>
         <div class="col-6 col-lg-3">
           <label class="form-label" for="validade">Validade</label>
@@ -52,7 +52,7 @@
     </section>
 
     <div class="filters">
-      <input id="q" class="form-control" type="search" placeholder="Buscar por código, chope ou estilo">
+      <input id="q" class="form-control" type="search" placeholder="Buscar por código ou chope">
       <select id="status" class="form-select">
         <option value="">Todos, menos recolhidos</option><option value="disponivel">Disponível</option>
         <option value="em_uso">Em uso</option><option value="em_transferencia">Em transferência</option><option value="esgotado">Vazio</option>
@@ -74,6 +74,7 @@
   <script src="js/auth.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/acoes-barril.js"></script>
+  <script src="js/precos.js"></script>
   <script src="js/barris.js"></script>
 </body>
 </html>

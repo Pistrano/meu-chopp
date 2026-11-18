@@ -46,8 +46,7 @@ describe("funcionários do quiosque e quem fez cada ação", { skip: SEM_BANCO }
     t.um = torneiras.find((x) => x.numero === 1).id;
     t.dois = torneiras.find((x) => x.numero === 2).id;
     t.vazia = (await admin.ok("units:details", { id: u.vazia })).torneiras[0].id;
-    const estilo = await admin.ok("estilos:create", { nome: "Pilsen" });
-    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", estiloId: estilo.id })).id;
+    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", custoLitro: 12 })).id;
     hoje = (await admin.ok("config:get")).hoje;
     validade = somaDias(hoje, 5);
     gerente = await makeUser(srv.base, admin, { nome: "Gina", email: "gina@barrilfacil.test", cargo: "gerente", unidadeIds: [u.centro] });
@@ -158,10 +157,10 @@ describe("funcionários do quiosque e quem fez cada ação", { skip: SEM_BANCO }
 
     const hist = csvLinhas((await admin.ok("history:export", { unitId: u.centro, q: "F1" })).csv);
     const cab = hist[0];
-    assert.deepEqual(cab.slice(8, 10), ["Responsável", "Funcionário"]);
-    const retirada = hist.find((l) => l[4] === "Vazio");
-    assert.equal(retirada[8], "Quiosque Centro");
-    assert.equal(retirada[9], "Davi Lima");
+    assert.deepEqual(cab.slice(7, 9), ["Responsável", "Funcionário"]);
+    const retirada = hist.find((l) => l[3] === "Vazio");
+    assert.equal(retirada[7], "Quiosque Centro");
+    assert.equal(retirada[8], "Davi Lima");
 
     const estoque = csvLinhas((await admin.ok("barris:exportStock", { unitId: u.centro })).csv);
     assert.equal(estoque[0].at(-1), "Funcionário");
@@ -169,7 +168,7 @@ describe("funcionários do quiosque e quem fez cada ação", { skip: SEM_BANCO }
     assert.equal(estoque.find((l) => l[0] === "#F1").at(-1), "Davi Lima");   // retirou
 
     const periodo = { unidadeId: u.centro, de: somaDias(hoje, -1), ate: hoje };
-    const detalhe = await admin.ok("reports:barrelsDetail", { ...periodo, chopeId: chope });
+    const detalhe = await admin.ok("reports:barrelsDetail", { ...periodo, chope: "Chopp Pilsen" });
     const d1 = detalhe.find((x) => x.codigo === "F1");
     assert.deepEqual([d1.engatado_por, d1.retirado_por], ["Bruno", "Davi Lima"]);
     assert.equal(detalhe.find((x) => x.codigo === "F2").retirado_por, null);
@@ -177,7 +176,7 @@ describe("funcionários do quiosque e quem fez cada ação", { skip: SEM_BANCO }
     const inicio = rel.findIndex((l) => l[0] === "Barris utilizados no período");
     assert.ok(inicio > 0, "o CSV do relatório tem a lista de barris");
     assert.deepEqual(rel[inicio + 1].slice(-2), ["Funcionário (engate)", "Funcionário (retirada)"]);
-    const linhaF1 = rel.slice(inicio + 2).find((l) => l[2] === "#F1");
+    const linhaF1 = rel.slice(inicio + 2).find((l) => l[1] === "#F1");
     assert.deepEqual(linhaF1.slice(-2), ["Bruno", "Davi Lima"]);
   });
 

@@ -7,10 +7,12 @@
   const q = document.getElementById("q");
   const status = document.getElementById("status");
   const selChope = document.getElementById("chope");
+  const selTamanho = document.getElementById("tamanho");
   const validade = document.getElementById("validade");
   const statusInicial = new URLSearchParams(location.search).get("status");
   if (ctx.config.hoje) validade.min = ctx.config.hoje; // sem valor pré-preenchido: a pessoa olha a data no barril
-  const NOVO = "__novo"; // última opção dos selects: cadastrar um chope/estilo novo
+  const NOVO = "__novo"; // última opção dos selects: cadastrar um chope ou um tamanho novo
+  const editar = MC.pode("catalogo:editar"); // vê os preços do chope novo e cadastra tamanho de barril
   let rows = [];
 
   // Busca e filtro de status ficam lembrados ao trocar de aba; as colunas ordenam ao clicar no título
@@ -27,51 +29,26 @@
     if (!list) return;
     list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
     selChope.innerHTML = `<option value="">${list.length ? "Escolha o chope" : "Nenhum chope cadastrado"}</option>` +
-      list.map((c) => `<option value="${c.id}">${MC.esc(c.nome)} · ${MC.esc(c.estilo)}</option>`).join("") +
+      list.map((c) => `<option value="${c.id}">${MC.esc(c.nome)}</option>`).join("") +
       `<option value="${NOVO}">+ Cadastrar novo chope…</option>`;
     selChope.value = selectId ? String(selectId) : "";
   }
 
-  /* Cadastra um chope novo (e, se precisar, um estilo novo) sem sair do cadastro de barril */
+  /* Cadastra um chope novo sem sair do cadastro de barril. Administrador e gerente informam o preço junto;
+     o operador cadastra só o nome e o chope fica "Sem preço" até alguém preencher na tela Chopes. */
   async function novoChope() {
-    const estilos = await MC.run(() => MC.call("estilos:list"));
-    if (!estilos) { selChope.value = ""; return; }
-    estilos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
-    let estiloCriado = null; // se o chope falhar depois de criar o estilo, não tenta criar o estilo de novo
-
+    let caixa = null;
     const chope = await MC.dialog({
       title: "Cadastrar novo chope",
-      intro: "O chope fica disponível para todas as unidades.",
-      fields: [
-        { id: "nome", label: "Nome do chope", value: "" },
-        {
-          id: "estilo", label: "Estilo", type: "select", value: "",
-          options: [{ value: "", label: "Escolha o estilo" }, ...estilos.map((e) => ({ value: e.id, label: e.nome })), { value: NOVO, label: "+ Novo estilo…" }],
-        },
-        { id: "novoEstilo", label: "Nome do novo estilo", hidden: true },
-      ],
+      intro: editar ? "O chope fica disponível para todas as unidades."
+        : "O chope fica disponível para todas as unidades. O preço é cadastrado por um administrador ou gerente.",
+      fields: [{ id: "nome", label: "Nome do chope", value: "" }],
+      htmlForm: editar ? MCPrecos.html({ tamanhos: tamanhosAtivos.map((t) => t.litros) }) : "",
       submitLabel: "Salvar chope",
-      onOpen: (overlay) => {
-        const sel = overlay.querySelector("#mcf_estilo");
-        const box = overlay.querySelector('[data-field="novoEstilo"]');
-        sel.addEventListener("change", () => {
-          box.classList.toggle("d-none", sel.value !== NOVO);
-          if (sel.value === NOVO) overlay.querySelector("#mcf_novoEstilo").focus();
-        });
-      },
-      onSubmit: async (v) => {
+      onOpen: (overlay) => { caixa = overlay; if (editar) MCPrecos.ligar(overlay); },
+      onSubmit: (v) => {
         if (!v.nome.trim()) throw new Error("Informe o nome do chope.");
-        let estiloId = v.estilo;
-        if (!estiloId) throw new Error("Escolha o estilo do chope.");
-        if (estiloId === NOVO) {
-          const nomeEstilo = v.novoEstilo.trim().replace(/\s+/g, " ");
-          if (!nomeEstilo) throw new Error("Informe o nome do novo estilo.");
-          const igual = (n) => n.toLowerCase() === nomeEstilo.toLowerCase();
-          const existente = estilos.find((e) => igual(e.nome)) || (estiloCriado && igual(estiloCriado.nome) ? estiloCriado : null);
-          estiloCriado = existente || (await MC.call("estilos:create", { nome: nomeEstilo }));
-          estiloId = estiloCriado.id;
-        }
-        return MC.call("chopes:create", { nome: v.nome, estiloId: Number(estiloId) });
+        return MC.call("chopes:create", { nome: v.nome, ...(editar ? MCPrecos.ler(caixa) : {}) });
       },
     });
 
@@ -82,6 +59,41 @@
       selChope.value = "";
     }
   }
+
+  /* ---------- Tamanho do barril (tamanhos cadastrados) ----------
+     Os ativos, do menor para o maior. A última opção, só para administrador e gerente, cadastra um tamanho novo.
+     O aparelho lembra o último tamanho usado. */
+  const ULTIMO_TAMANHO = "bf:ultimoTamanho";
+  let tamanhosAtivos = [];
+  let tamanhoAnterior = "";
+  const lerUltimo = () => { try { return localStorage.getItem(ULTIMO_TAMANHO) || ""; } catch { return ""; } };
+  const guardarUltimo = (v) => { try { localStorage.setItem(ULTIMO_TAMANHO, String(v)); } catch { /* sem armazenamento */ } };
+  async function loadTamanhos(escolher) {
+    const list = await MC.run(() => MC.call("tamanhos:list"));
+    if (!list) return;
+    tamanhosAtivos = list;
+    selTamanho.innerHTML = (list.length ? "" : '<option value="">Nenhum tamanho cadastrado</option>') +
+      list.map((t) => `<option value="${t.litros}">${MC.esc(MC.fmtLitros(t.litros).replace(" L", " litros"))}</option>`).join("") +
+      (editar ? `<option value="${NOVO}">+ Novo tamanho…</option>` : "");
+    const valores = list.map((t) => String(t.litros));
+    const preferido = [escolher, lerUltimo(), "30"].map((v) => (v === undefined || v === null ? "" : String(v))).find((v) => valores.includes(v));
+    selTamanho.value = preferido || valores[0] || "";
+    tamanhoAnterior = selTamanho.value;
+  }
+
+  async function novoTamanho() {
+    const t = await MCPrecos.novoTamanho();
+    if (t && t.id) {
+      MC.toast(`Barril de ${MC.fmtLitros(t.litros)} cadastrado.`);
+      await loadTamanhos(t.litros);
+    } else {
+      selTamanho.value = tamanhoAnterior;
+    }
+  }
+  selTamanho.addEventListener("change", () => {
+    if (selTamanho.value === NOVO) novoTamanho();
+    else tamanhoAnterior = selTamanho.value;
+  });
 
   selChope.addEventListener("change", () => { if (selChope.value === NOVO) novoChope(); });
 
@@ -106,10 +118,8 @@
     tbody.innerHTML = list.length
       ? list.map((b) => `<tr>
           <td class="t-strong">#${MC.esc(b.codigo)}</td>
-          <td>${b.chope_nome
-            ? `<span class="t-strong">${MC.esc(b.chope_nome)}</span><br><span class="t-muted">${MC.esc(b.estilo)}</span>`
-            : MC.esc(b.estilo)}</td>
-          <td>${b.tamanho_l} L</td>
+          <td class="t-strong">${MC.esc(MC.chopeLabel(b))}</td>
+          <td>${MC.esc(MC.fmtLitros(b.tamanho_l))}</td>
           <td><span class="validade-cell">${MC.fmtDia(b.validade)} ${MC.validadeBadge(b.situacao_validade)}</span></td>
           <td><span class="op-badge op-badge--${b.status}">${MC.esc(MC.statusTexto(b))}</span></td>
           <td>${tapCell(b)}</td>
@@ -158,7 +168,7 @@
         options: torneiras.map((t) => ({
           value: t.id,
           label: `Torneira ${t.numero}`,
-          hint: t.ocupada ? `Ocupada · barril #${t.barril}${t.estilo ? ` (${MC.chopeLabel(t)})` : ""}` : "Livre",
+          hint: t.ocupada ? `Ocupada · barril #${t.barril}${MC.chopeLabel(t) ? ` (${MC.chopeLabel(t)})` : ""}` : "Livre",
           disabled: t.ocupada,
           checked: livres.length === 1 && !t.ocupada,
         })),
@@ -199,7 +209,7 @@
       <div class="collect-list">${vazios.map((b) => `<label class="collect-item">
           <input type="checkbox" value="${b.id}">
           <span class="collect-main">#${MC.esc(b.codigo)} <span class="collect-chope">${MC.esc(MC.chopeLabel(b))}</span></span>
-          <span class="collect-hint">${b.tamanho_l} L · ${diasVazio(b.dias)}</span></label>`).join("")}</div>
+          <span class="collect-hint">${MC.esc(MC.fmtLitros(b.tamanho_l))} · ${diasVazio(b.dias)}</span></label>`).join("")}</div>
       ${funcionario ? funcionario.html : ""}
       <div class="field-error" id="colErr" aria-live="polite"></div>
       <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
@@ -276,23 +286,27 @@
     e.preventDefault();
     const codigo = document.getElementById("codigo");
     if (!selChope.value || selChope.value === NOVO) return MC.toast("Escolha o chope do barril.", "err");
+    if (!selTamanho.value || selTamanho.value === NOVO) return MC.toast("Escolha o tamanho do barril.", "err");
     if (!validade.value) { validade.focus(); return MC.toast("Informe a data de validade que está no barril.", "err"); }
     // Celular do quiosque (conta de operador): confirma o cadastro escolhendo quem está fazendo. Sem escolha, salva direto.
     const funcionario = await MC.escolherFuncionario(ctx.unitId);
     if (funcionario) {
       if (!codigo.value.replace("#", "").trim()) { codigo.focus(); return MC.toast("Preencha código, chope e tamanho do barril.", "err"); }
       const resumo = [`#${codigo.value.replace("#", "").trim().toUpperCase()}`, selChope.selectedOptions[0].textContent,
-        document.getElementById("tamanho").selectedOptions[0].textContent, `validade ${MC.fmtDia(validade.value)}`];
+        selTamanho.selectedOptions[0].textContent, `validade ${MC.fmtDia(validade.value)}`];
       if (!await MC.confirm({ title: "Cadastrar barril", text: resumo.join(" · "), confirmLabel: "Cadastrar barril", funcionario })) return;
     }
     const ok = await MC.run(
       () => MC.call("barris:create", {
-        codigo: codigo.value, chopeId: Number(selChope.value), tamanho: document.getElementById("tamanho").value,
+        codigo: codigo.value, chopeId: Number(selChope.value), tamanho: Number(selTamanho.value),
         validade: validade.value, unitId: ctx.unitId, funcionarioId: funcionario ? funcionario.id : undefined,
       }),
       "Barril cadastrado."
     );
-    if (ok) { codigo.value = ""; selChope.value = ""; validade.value = ""; codigo.focus(); load(); MCLayout.refreshAlerts(); }
+    if (ok) {
+      guardarUltimo(selTamanho.value);
+      codigo.value = ""; selChope.value = ""; validade.value = ""; codigo.focus(); load(); MCLayout.refreshAlerts();
+    }
   });
 
   let t;
@@ -300,5 +314,6 @@
   status.addEventListener("change", load);
   ctx.onUnitChange = load;
   loadChopes();
+  loadTamanhos();
   load();
 })();

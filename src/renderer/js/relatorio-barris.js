@@ -1,4 +1,4 @@
-/* BarrilFacil — relatório de barris: uso por estilo e chope num período, mais a situação agora.
+/* BarrilFacil — relatório de barris: uso por chope num período, mais a situação agora (uma linha por chope).
    Os números vêm prontos do servidor, contados por barril (o código se repete depois do recolhimento). */
 (async () => {
   const ctx = await MCLayout.init("relatorio");
@@ -65,17 +65,15 @@
     `<td class="rel-num${i >= 5 ? " rel-agora" : ""}${i === 5 ? " rel-agora--ini" : ""}">${num(r[k])}</td>`).join("");
 
   let rel = null;          // último relatório carregado (com os filtros usados nele)
-  let chopes = new Map();  // chave da linha -> chope (para abrir o detalhe)
   let pedido = 0;
 
   function render() {
     if (!rel) return;
-    const grupos = sorter.apply(rel.grupos);
-    tbody.innerHTML = grupos.length
-      ? grupos.map((g) => `<tr class="rel-estilo"><td><span class="rel-estilo-nome">${MC.esc(g.nome)}</span> <span class="rel-sub">total do estilo</span></td>${celulas(g)}</tr>` +
-          sorter.apply(g.chopes).map((c) =>
-            `<tr class="rel-chope"><td><button type="button" class="rel-link" data-key="${c.key}" title="Ver os barris utilizados">${MC.esc(c.nome)}</button></td>${celulas(c)}</tr>`).join(""))
-        .join("") + `<tr class="rel-total"><td>Total geral</td>${celulas(rel.total)}</tr>`
+    const linhas = sorter.apply(rel.chopes);
+    tbody.innerHTML = linhas.length
+      ? linhas.map((c) =>
+          `<tr class="rel-chope"><td><button type="button" class="rel-link" data-key="${c.key}" title="Ver os barris utilizados">${MC.esc(c.nome)}</button></td>${celulas(c)}</tr>`).join("") +
+        `<tr class="rel-total"><td>Total geral</td>${celulas(rel.total)}</tr>`
       : `<tr><td colspan="10" class="table-empty">Nenhum barril com movimento neste período, e nenhum na unidade agora.</td></tr>`;
   }
 
@@ -100,15 +98,7 @@
     const meu = ++pedido;
     const r = await MC.run(() => MC.call("reports:barrels", f));
     if (meu !== pedido || !r) return; // chegou a resposta de um filtro antigo
-    chopes = new Map();
-    r.grupos = r.grupos.map((g, i) => ({
-      nome: g.estilo, ...g.total,
-      chopes: g.chopes.map((c, j) => {
-        const linha = { ...c, nome: c.chope, estilo: g.estilo, key: `${i}-${j}` };
-        chopes.set(linha.key, linha);
-        return linha;
-      }),
-    }));
+    r.chopes = r.chopes.map((c, i) => ({ ...c, nome: c.chope, key: String(i) }));
     rel = { ...r, filtros: f };
     mostrarCabecalho();
     render();
@@ -117,9 +107,9 @@
   // Detalhe: os barris do chope que tiveram o primeiro engate no período
   tbody.addEventListener("click", async (e) => {
     const btn = e.target.closest(".rel-link");
-    const c = btn && chopes.get(btn.dataset.key);
+    const c = btn && rel && rel.chopes.find((x) => x.key === btn.dataset.key);
     if (!c) return;
-    const lista = await MC.run(() => MC.call("reports:barrelsDetail", { ...rel.filtros, ...c.chave }));
+    const lista = await MC.run(() => MC.call("reports:barrelsDetail", { ...rel.filtros, chope: c.chope }));
     if (!lista) return;
     const todas = rel.filtros.unidadeId === null;
     // Quem engatou e, se foi outra pessoa, quem retirou (o funcionário escolhido ou o usuário da conta)
@@ -129,7 +119,7 @@
         : MC.esc(b.engatado_por);
     const linhas = lista.map((b) => `<tr>
         <td data-label="Barril" class="t-strong">#${MC.esc(b.codigo)}</td>
-        <td data-label="Tamanho">${MC.esc(b.tamanho_l)} L</td>
+        <td data-label="Tamanho">${MC.esc(MC.fmtLitros(b.tamanho_l))}</td>
         <td data-label="Validade">${b.validade ? MC.fmtDia(b.validade) : '<span class="t-muted">—</span>'}</td>
         <td data-label="Engatado em">${diaHora(b.engatado_em)}</td>
         <td data-label="Retirado em">${b.retirado_em ? diaHora(b.retirado_em) : '<span class="op-badge op-badge--em_uso">ainda engatado</span>'}</td>
@@ -142,7 +132,7 @@
           <tbody>${linhas}</tbody></table></div>`
       : '<p class="t-muted mb-0">Nenhum barril deste chope foi engatado pela primeira vez neste período.</p>';
     const total = lista.length === 1 ? "1 barril utilizado" : `${lista.length} barris utilizados`;
-    MC.notice({ title: c.nome, text: `${c.estilo} · ${total} · ${periodoTexto(rel.de, rel.ate)} · ${rel.unidade}`, html, type: "plain", buttonLabel: "Fechar" });
+    MC.notice({ title: c.nome, text: `${total} · ${periodoTexto(rel.de, rel.ate)} · ${rel.unidade}`, html, type: "plain", buttonLabel: "Fechar" });
     const modal = [...document.querySelectorAll(".mc-overlay .mc-modal")].pop(); // a janela que acabou de abrir
     if (modal) modal.classList.add("mc-modal--rel");
   });
