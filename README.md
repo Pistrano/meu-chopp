@@ -122,7 +122,7 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Vendas da Teknisa e
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Vendas e
   Funcionários (administrador e gerente) e, para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
@@ -142,7 +142,7 @@ o resto depende da permissão do cargo:
 | `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
 | `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
-| `vendas`: Vendas da Teknisa (importar, cancelar e o de-para dos produtos; o gerente só nas unidades dele) | ✓ | ✓ | |
+| `vendas`: Vendas (importar, cancelar e o de-para dos produtos; o gerente só nas unidades dele) | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
 - A tabela fica num lugar só: `PERMISSOES` em `src/server/api.js`. As rotas pedem uma permissão com
@@ -310,12 +310,13 @@ Ainda não há relatório de perda: esta parte só grava os dados.
     preço único), a de maior início até a data de cadastro do barril e, se não houver, a de menor início; nulo sem preço.
     Trocar entre preço único e por tamanho vale também para barris antigos (a função usa o modo atual do chope).
 
-## Vendas da Teknisa (cálculo de perdas, parte 2)
+## Vendas (cálculo de perdas, parte 2)
 
-Importa as vendas do relatório **Vendas Realizadas no Período** da Teknisa (XLSX), com o horário de cada venda. O relatório
-de perda (parte 3) usa estas vendas junto com as pesagens.
+Importa as vendas do relatório do sistema de caixa, com o horário de cada venda. Hoje o único formato aceito é o da
+Teknisa: relatório **Vendas Realizadas no Período** (XLSX). O relatório de perda (parte 3) usa estas vendas junto com
+as pesagens.
 
-- Tela **Mais > Vendas da Teknisa**, do administrador e do gerente (`vendas`; o gerente só nas unidades dele).
+- Tela **Mais > Vendas**, do administrador e do gerente (`vendas`; o gerente só nas unidades dele).
 - **Leitura** (no servidor, `src/server/teknisa.js`, com a biblioteca `exceljs`, versão fixa no `package.json`): arquivo
   .xlsx de até 10 MB. As colunas são achadas pelo nome (`Unidade | Venda | Código | Produto | Qtde. | Un. | Pr. Unit. | Desc. |
   Acrés. | Vr. Bruto | Vr. Total | Ab. Comanda`), o cabeçalho pode vir depois do título. Arquivo com outro cabeçalho é
@@ -325,9 +326,9 @@ de perda (parte 3) usa estas vendas junto com as pesagens.
   estão no horário da loja (`APP_TZ`), menos a *Dt. Ven.* dos terminais de autoatendimento (Modalidade *Terminal de
   Autoatendimento*), que a Teknisa grava no horário de Brasília: essa é lida como `America/Sao_Paulo`. As duas datas do
   arquivo ficam gravadas (`dt_venda` e `comanda_aberta_em`).
-- **Unidade**: o código antes do " - " ("0003 - LOJA ..." = 0003) é `unidades.codigo_teknisa`, preenchido na tela Unidades
-  (administrador) ou na primeira importação daquela loja (a tela pede a unidade e grava o código). Um arquivo com duas lojas
-  gera uma importação por loja.
+- **Unidade**: o código antes do " - " ("0003 - LOJA ..." = 0003) é `unidades.codigo_teknisa`, o *Código no sistema de
+  caixa* da tela Unidades (administrador), ou é preenchido na primeira importação daquela loja (a tela pede a unidade e
+  grava o código). Um arquivo com duas lojas gera uma importação por loja.
 - **Produtos** (`produtos_teknisa`, o de-para): a chave é o nome sem acento e em maiúsculas (o código muda entre relatórios).
   Produto novo vem com sugestão:
   - volume: "300 ML" ou "355 ML" num chope = 0,36 L (a caneca servida é de 360 ml); "1L"/"1 L" = 1 L (refil de growler);
@@ -340,7 +341,7 @@ de perda (parte 3) usa estas vendas junto com as pesagens.
   Depois da primeira importação, vale a escolha gravada (não sugere de novo).
 - **Prévia**: período editável (vem com o primeiro e o último dia do arquivo; só entram vendas dentro dele), a tabela de
   produtos (chope, volume, litros; os novos marcados *Novo*), os ignorados recolhidos em *Ignorados (N)*, litros por chope,
-  litros por dia e os totais do arquivo para comparar com a Teknisa. Item que já foi importado é pulado (*N itens já tinham
+  litros por dia e os totais do arquivo para comparar com o sistema de caixa. Item que já foi importado é pulado (*N itens já tinham
   sido importados e serão pulados.*): uma venda é unidade + caixa + número, e `linha` é a posição do item dentro dela.
 - **Importar** grava as escolhas dos produtos e as importações numa transação só (`fn_vendas_importar`). Só os itens de chope
   são gravados em `vendas_itens`, com cópia do chope e do volume do produto: mudar o de-para depois não muda o que já foi

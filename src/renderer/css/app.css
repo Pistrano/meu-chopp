@@ -428,8 +428,9 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .precos-historico td, .precos-historico th { font-size: .85rem; }
 @media (max-width: 420px) { .preco-litro { min-width: 6.5rem; font-size: .9rem; } }
 
-/* ---------- Mais > Vendas da Teknisa ---------- */
+/* ---------- Mais > Vendas ---------- */
 .vendas-arquivo { max-width: 520px; }
+.vendas-formato { margin: 0 0 .35rem; }
 .vendas-fatos { margin-top: 1rem; }
 .vendas-periodo { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
 .vendas-periodo > div { flex: 0 1 200px; min-width: 150px; }

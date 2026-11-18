@@ -192,7 +192,7 @@ describe("vendas da Teknisa", { skip: SEM_BANCO }, () => {
       ["AGUA MINERAL 500ML UN", "CERVEJA LATA 350ML UN", "GROWLER PET 1 L UN", "PORCAO BATATA FRITA"]);
     assert.equal(produtos.find((x) => x.nome === "CHOPP APA 300 ML UN").chope_id, chope["APA Session"]);
     assert.match((await ultimaAuditoria("vendas_importadas")).detalhe, /^Loja Centro: período 10\/11\/2026 a 11\/11\/2026, 7 itens novos, 5,82 L \(arquivo vendas-10a11\.xlsx\)$/);
-    assert.match((await ultimaAuditoria("unidade_codigo_teknisa")).detalhe, /Loja Centro: código Teknisa 0009/);
+    assert.match((await ultimaAuditoria("unidade_codigo_teknisa")).detalhe, /Loja Centro: código no sistema de caixa 0009 \(na importação de vendas\)/);
   });
 
   test("segunda importação: reaproveita o de-para e não duplica o dia em comum", async () => {
@@ -268,7 +268,7 @@ describe("vendas da Teknisa", { skip: SEM_BANCO }, () => {
     const previa = await ler(admin, buf, { unidades: { "0011": porto, "0012": bairro } });
     assert.deepEqual(previa.unidades.map((u) => [u.codigo, u.unidadeId, u.nova]), [["0011", porto, true], ["0012", bairro, true]]);
     await admin.fail("vendas:ler", { arquivo: b64(buf), nome: "x.xlsx", unidades: { "0011": porto, "0012": porto } }, /unidades diferentes/);
-    await admin.fail("vendas:ler", { arquivo: b64(buf), nome: "x.xlsx", unidades: { "0011": centro } }, /já tem o código Teknisa 0009/);
+    await admin.fail("vendas:ler", { arquivo: b64(buf), nome: "x.xlsx", unidades: { "0011": centro } }, /A unidade Loja Centro já tem o código 0009 no sistema de caixa/);
     const r = await importar(admin, buf, previa, { de: "2026-11-11", ate: "2026-11-11", unidades: { "0011": porto, "0012": bairro } });
     const doPorto = r.importacoes.find((x) => x.unidadeId === porto);
     const doBairro = r.importacoes.find((x) => x.unidadeId === bairro);
@@ -321,6 +321,7 @@ describe("vendas da Teknisa", { skip: SEM_BANCO }, () => {
     // O código da Loja Bairro já é 0012; o admin troca na tela Unidades
     await admin.ok("units:update", { id: bairro, razaoSocial: "Loja Bairro Bebidas Ltda", nome: "Loja Bairro", cnpj: "45.723.174/0001-10",
       endereco: "Av. Exemplo, 100, Centro, Cuiabá - MT", codigoTeknisa: "0042" });
+    assert.match((await ultimaAuditoria("unidade_editada")).detalhe, /, código no sistema de caixa 0042$/);
     const previa = await ler(admin, buf);
     assert.equal(previa.unidades[0].unidadeId, bairro);
     await importar(admin, buf, previa, { ajustes: { "CHOPP IPA 300 ML UN": { chopeId: chope.IPA, volume: 0.36, ignorar: false } } });
@@ -332,10 +333,10 @@ describe("vendas da Teknisa", { skip: SEM_BANCO }, () => {
     assert.equal("venda" in doOperador[0], false);
   });
 
-  test("Unidades: código Teknisa só com números e letras, sem repetir; o gerente não edita", async () => {
+  test("Unidades: código no sistema de caixa só com números e letras, sem repetir; o gerente não edita", async () => {
     const dados = { id: porto, razaoSocial: "Loja Porto Bebidas Ltda", nome: "Loja Porto", cnpj: "11.444.777/0001-61", endereco: "Av. Exemplo, 100, Centro, Cuiabá - MT" };
-    await admin.fail("units:update", { ...dados, codigoTeknisa: "0009" }, /já está na unidade "Loja Centro"/);
-    await admin.fail("units:update", { ...dados, codigoTeknisa: "00-11" }, /só números e letras/);
+    await admin.fail("units:update", { ...dados, codigoTeknisa: "0009" }, /O código 0009 no sistema de caixa já está na unidade "Loja Centro"/);
+    await admin.fail("units:update", { ...dados, codigoTeknisa: "00-11" }, /O código no sistema de caixa tem só números e letras/);
     await admin.ok("units:update", dados); // sem o campo: o código fica
     assert.equal((await admin.ok("units:details", { id: porto })).codigo_teknisa, "0011");
     assert.equal((await admin.ok("units:adminList")).find((u) => u.id === porto).codigo_teknisa, "0011");

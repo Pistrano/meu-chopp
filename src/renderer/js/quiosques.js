@@ -63,7 +63,7 @@
         { id: "curto", label: "Nome curto (opcional, aparece no seletor de unidade)", value: u.nome_curto },
         { id: "cnpj", label: "CNPJ", value: u.cnpjFormatado || "" },
         { id: "endereco", label: "Endereço (rua, número, bairro, cidade, estado e CEP)", value: u.endereco || "" },
-        { id: "codigoTeknisa", label: "Código Teknisa (opcional; o número antes do nome da loja no relatório de vendas)", value: u.codigo_teknisa || "" },
+        { id: "codigoTeknisa", label: "Código no sistema de caixa (opcional; o número antes do nome da loja no relatório de vendas, ex.: 0003)", value: u.codigo_teknisa || "" },
       ],
       submitLabel: "Salvar",
       onOpen: (overlay) => {
@@ -93,7 +93,7 @@
       ["Razão social", d.razao_social || "A preencher"],
       ["CNPJ", d.cnpjFormatado || "A preencher"],
       ["Endereço", d.endereco || "A preencher"],
-      ["Código Teknisa", d.codigo_teknisa || "Sem código (preenchido na primeira importação de vendas)"],
+      ["Código no sistema de caixa", d.codigo_teknisa || "Sem código (preenchido na primeira importação de vendas)"],
       ["Torneiras ativas", String(ativas.length)],
       ["Ocupadas agora", String(ativas.filter((t) => t.ocupada).length)],
     ];
