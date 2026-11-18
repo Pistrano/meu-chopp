@@ -122,8 +122,8 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Funcionários (administrador e
-  gerente) e, para o administrador, Unidades e Usuários.
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Vendas da Teknisa e
+  Funcionários (administrador e gerente) e, para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
@@ -142,6 +142,7 @@ o resto depende da permissão do cargo:
 | `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
 | `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
+| `vendas`: Vendas da Teknisa (importar, cancelar e o de-para dos produtos; o gerente só nas unidades dele) | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
 - A tabela fica num lugar só: `PERMISSOES` em `src/server/api.js`. As rotas pedem uma permissão com
@@ -309,6 +310,49 @@ Ainda não há relatório de perda: esta parte só grava os dados.
     preço único), a de maior início até a data de cadastro do barril e, se não houver, a de menor início; nulo sem preço.
     Trocar entre preço único e por tamanho vale também para barris antigos (a função usa o modo atual do chope).
 
+## Vendas da Teknisa (cálculo de perdas, parte 2)
+
+Importa as vendas do relatório **Vendas Realizadas no Período** da Teknisa (XLSX), com o horário de cada venda. O relatório
+de perda (parte 3) usa estas vendas junto com as pesagens.
+
+- Tela **Mais > Vendas da Teknisa**, do administrador e do gerente (`vendas`; o gerente só nas unidades dele).
+- **Leitura** (no servidor, `src/server/teknisa.js`, com a biblioteca `exceljs`, versão fixa no `package.json`): arquivo
+  .xlsx de até 10 MB. As colunas são achadas pelo nome (`Unidade | Venda | Código | Produto | Qtde. | Un. | Pr. Unit. | Desc. |
+  Acrés. | Vr. Bruto | Vr. Total | Ab. Comanda`), o cabeçalho pode vir depois do título. Arquivo com outro cabeçalho é
+  recusado (*Este relatório não é aceito...*). Linhas sem Unidade ou sem Produto (totais) são puladas.
+  Do campo *Venda* saem só Caixa, Nr. Ven., Dt. Ven. e Modalidade (pagamento, cliente e vendedor não são guardados).
+- **Horário da venda** (`vendido_em`): a abertura da comanda (*Ab. Comanda*); sem ela, a data da venda (*Dt. Ven.*). As datas
+  estão no horário da loja (`APP_TZ`), menos a *Dt. Ven.* dos terminais de autoatendimento (Modalidade *Terminal de
+  Autoatendimento*), que a Teknisa grava no horário de Brasília: essa é lida como `America/Sao_Paulo`. As duas datas do
+  arquivo ficam gravadas (`dt_venda` e `comanda_aberta_em`).
+- **Unidade**: o código antes do " - " ("0003 - LOJA ..." = 0003) é `unidades.codigo_teknisa`, preenchido na tela Unidades
+  (administrador) ou na primeira importação daquela loja (a tela pede a unidade e grava o código). Um arquivo com duas lojas
+  gera uma importação por loja.
+- **Produtos** (`produtos_teknisa`, o de-para): a chave é o nome sem acento e em maiúsculas (o código muda entre relatórios).
+  Produto novo vem com sugestão:
+  - volume: "300 ML" ou "355 ML" num chope = 0,36 L (a caneca servida é de 360 ml); "1L"/"1 L" = 1 L (refil de growler);
+    outro volume vem do número no nome ("500ML" = 0,5). Combo com duas canecas é ajustado à mão (0,72);
+  - chope: nome que começa com "CHOPP"; o nome do chope é o texto entre "CHOPP" e o volume. Igual a um chope do catálogo
+    (sem diferenciar maiúsculas, acentos e espaços: "HOPLAGER" = "Hop Lager"): esse. Senão, parecido (um começa com o outro,
+    ou diferença de até 2 letras): se for um só, ele com o aviso *Nome parecido, confira*; se forem vários, nenhum, e os
+    parecidos vêm primeiro na lista;
+  - o resto (lata, garrafa, água, comida, kit e o "GROWLER PET 1 L UN", que é o vasilhame vazio) vem como *ignorar*.
+  Depois da primeira importação, vale a escolha gravada (não sugere de novo).
+- **Prévia**: período editável (vem com o primeiro e o último dia do arquivo; só entram vendas dentro dele), a tabela de
+  produtos (chope, volume, litros; os novos marcados *Novo*), os ignorados recolhidos em *Ignorados (N)*, litros por chope,
+  litros por dia e os totais do arquivo para comparar com a Teknisa. Item que já foi importado é pulado (*N itens já tinham
+  sido importados e serão pulados.*): uma venda é unidade + caixa + número, e `linha` é a posição do item dentro dela.
+- **Importar** grava as escolhas dos produtos e as importações numa transação só (`fn_vendas_importar`). Só os itens de chope
+  são gravados em `vendas_itens`, com cópia do chope e do volume do produto: mudar o de-para depois não muda o que já foi
+  importado. Auditoria *vendas_importadas* com a unidade, o período, os itens novos e os litros.
+- **Importações**: a lista com unidade, período, itens novos, litros, valor, quem e quando. *Ver* mostra litros e valor por
+  chope e por dia, com o preço de venda por litro (valor ÷ litros). *Cancelar* apaga os itens daquela importação e marca como
+  cancelada (dá para importar o arquivo de novo).
+- Aba **Produtos**: o de-para gravado, editável (chope, volume, ignorar). Vale para as próximas importações.
+- Aba **Chopes** (administrador e gerente): ao lado do custo por litro, o preço de venda por litro das vendas importadas dos
+  últimos 30 dias, nas unidades da pessoa (só leitura).
+- Chope com venda importada não é apagado (como chope com barril).
+
 ## Usuários
 
 - Aba **Usuários** (administrador): cria a conta com uma senha temporária, escolhe o cargo e as unidades de gerentes e operadores.
@@ -391,9 +435,9 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 
 ## Estrutura
 
-- `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`)
+- `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`; `teknisa.js` lê o XLSX de vendas da Teknisa)
 - `src/renderer/` — as telas (servidas pelo servidor)
 - `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
 - `supabase/migrations/` — schema e mudanças do banco (`supabase/config.toml` é do Supabase local dos testes)
-- `tests/` — testes automáticos (veja *Rodar os testes*)
+- `tests/` — testes automáticos (veja *Rodar os testes*); `tests/fixtures/` tem os arquivos inventados da Teknisa
 - `deploy/` — arquivos de implantação (Linux + HTTPS)

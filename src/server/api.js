@@ -14,6 +14,7 @@
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { supabase } = require("./supabase");
+const teknisa = require("./teknisa");
 
 const handlers = new Map();   // canal -> { fn, auth, perm }
 
@@ -22,10 +23,10 @@ const CARGO_LABEL = { admin: "Administrador", gerente: "Gerente", operador: "Ope
 /* ---------- Permissões (num lugar só) ----------
    O que cada cargo pode fazer além do dia a dia (barris, engates, transferências, histórico e relatório),
    que é de todos. As rotas pedem uma permissão com handle(canal, fn, { perm }) e as telas perguntam com MC.pode(). */
-const PERMISSOES_TODAS = ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios"];
+const PERMISSOES_TODAS = ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios", "vendas"];
 const PERMISSOES = {
   admin: PERMISSOES_TODAS,
-  gerente: ["catalogo:editar", "funcionarios"],
+  gerente: ["catalogo:editar", "funcionarios", "vendas"],
   operador: [],
 };
 const pode = (user, perm) => !!user && (PERMISSOES[user.cargo] || []).includes(perm);
@@ -763,13 +764,17 @@ function registerHandlers() {
   );
 
   handle("units:adminList", async () => {
-    const rows = await rpc("fn_unidades_resumo", {});
-    return rows.map((u) => ({ ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj) }));
+    const [rows, codigos] = await Promise.all([
+      rpc("fn_unidades_resumo", {}),
+      supabase.from("unidades").select("id, codigo_teknisa").then((r) => ok(r)),
+    ]);
+    const codigo = new Map(codigos.map((c) => [c.id, c.codigo_teknisa]));
+    return rows.map((u) => ({ ...u, ativo: b2i(u.ativo), cnpjFormatado: formatCnpj(u.cnpj), codigo_teknisa: codigo.get(u.id) || null }));
   }, { perm: "unidades" });
 
   /* Detalhes de uma unidade + suas torneiras (tela Unidades) */
   handle("units:details", async ({ id }) => {
-    const r = await supabase.from("unidades").select("id, nome, nome_curto, razao_social, ativo, cnpj, endereco").eq("id", Number(id)).maybeSingle();
+    const r = await supabase.from("unidades").select("id, nome, nome_curto, razao_social, ativo, cnpj, endereco, codigo_teknisa").eq("id", Number(id)).maybeSingle();
     dbError(r.error);
     if (!r.data) throw new AppError("Unidade não encontrada.");
     const u = r.data;
@@ -779,6 +784,15 @@ function registerHandlers() {
   /* Razão social, nome fantasia (coluna nome: o nome mostrado no app), CNPJ e endereço são obrigatórios
      ao cadastrar e ao editar. */
   const likeEscape = (s) => s.replace(/[\\%_]/g, "\\$&");
+  /* Código da loja na Teknisa (opcional): o número antes do " - " na coluna Unidade do relatório de vendas (ex.: "0003") */
+  const cleanCodigoTeknisa = async (v, exceptId = 0) => {
+    const cod = String(v ?? "").trim().toUpperCase();
+    if (!cod) return null;
+    if (!/^[0-9A-Z]{1,10}$/.test(cod)) throw new AppError("O código Teknisa tem só números e letras, até 10 (ex.: 0003).");
+    const outra = ok(await supabase.from("unidades").select("nome").eq("codigo_teknisa", cod).neq("id", exceptId).limit(1));
+    if (outra.length) throw new AppError(`O código Teknisa ${cod} já está na unidade "${outra[0].nome}".`);
+    return cod;
+  };
   const cleanUnitData = async ({ razaoSocial, nome, nomeCurto, cnpj, endereco }, exceptId = 0) => {
     const razao = String(razaoSocial || "").trim().replace(/\s+/g, " ");
     if (razao.length < 2) throw new AppError("Informe a razão social da unidade.");
@@ -800,12 +814,13 @@ function registerHandlers() {
 
   handle("units:create", async (p, ctx) => {
     const { razao, full, short, doc, end } = await cleanUnitData(p);
+    const cod = await cleanCodigoTeknisa(p.codigoTeknisa);
     const row = ok(
-      await supabase.from("unidades").insert({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end }).select("id").single(),
-      "Já existe uma unidade com esse nome fantasia ou CNPJ."
+      await supabase.from("unidades").insert({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end, codigo_teknisa: cod }).select("id").single(),
+      "Já existe uma unidade com esse nome fantasia, CNPJ ou código Teknisa."
     );
     esquecerUnidadesDasSessoes(); // o administrador vê todas as unidades ativas: a nova aparece já
-    await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})`);
+    await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código Teknisa ${cod}` : ""}`);
     return { id: row.id };
   }, { perm: "unidades" });
 
@@ -814,11 +829,16 @@ function registerHandlers() {
     const ex = ok(await supabase.from("unidades").select("id").eq("id", id));
     if (!ex.length) throw new AppError("Unidade não encontrada.");
     const { razao, full, short, doc, end } = await cleanUnitData(p, id);
+    // Sem o campo no pedido (tela antiga): o código fica como está
+    const mudaCodigo = Object.prototype.hasOwnProperty.call(p, "codigoTeknisa");
+    const cod = mudaCodigo ? await cleanCodigoTeknisa(p.codigoTeknisa, id) : undefined;
     dbError(
-      (await supabase.from("unidades").update({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end }).eq("id", id)).error,
-      "Já existe uma unidade com esse nome fantasia ou CNPJ."
+      (await supabase.from("unidades").update({
+        razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end, ...(mudaCodigo ? { codigo_teknisa: cod } : {}),
+      }).eq("id", id)).error,
+      "Já existe uma unidade com esse nome fantasia, CNPJ ou código Teknisa."
     );
-    await audit(ctx, "unidade_editada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})`);
+    await audit(ctx, "unidade_editada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código Teknisa ${cod}` : ""}`);
     return true;
   }, { perm: "unidades" });
 
@@ -1180,8 +1200,22 @@ function registerHandlers() {
     return { gravadas: novas.length, mudouModo };
   }
 
+  /* Preço de venda por litro de cada chope nas vendas importadas da Teknisa desde `desde`, nas unidades liberadas para a
+     pessoa: chope_id -> { litros, valor, precoLitro }. Sem o SQL das vendas no banco: vazio. */
+  async function vendasPorLitro(ctx, desde) {
+    const ids = await allowedUnitIds(ctx);
+    if (!ids.length) return new Map();
+    const { data, error } = await supabase.rpc("fn_vendas_preco_litro", { p_unidades: ids, p_desde: desde.toISOString() });
+    if (error && error.code === "PGRST202") return new Map();
+    dbError(error);
+    return new Map((data || []).filter((v) => Number(v.litros) > 0).map((v) => [v.chope_id, {
+      litros: Number(v.litros), valor: Number(v.valor), precoLitro: Math.round((Number(v.valor) / Number(v.litros)) * 100) / 100,
+    }]));
+  }
+
   /* Ativos por padrão (o cadastro de barril). todos: também os desativados (só quem edita).
-     custos (só quem edita): o resumo do custo por litro de cada chope, para a tela Chopes. */
+     custos (só quem edita): o resumo do custo por litro de cada chope e o preço de venda por litro dos últimos 30 dias
+     (vendas importadas da Teknisa), para a tela Chopes. */
   handle("chopes:list", async (p, ctx) => {
     const q = p || {};
     const editar = pode(ctx.session, "catalogo:editar");
@@ -1189,11 +1223,14 @@ function registerHandlers() {
     if (!wantsAll(q, ctx)) query = query.eq("ativo", true);
     const rows = ok(await query);
     if (!editar || !q.custos) return rows.map((c) => ({ id: c.id, nome: c.nome, ativo: b2i(c.ativo) }));
-    const [tamanhos, linhas] = await Promise.all([tamanhosAtivos(), linhasCusto(rows.map((c) => c.id))]);
     const hoje = hojeTZ();
+    const [tamanhos, linhas, vendas] = await Promise.all([
+      tamanhosAtivos(), linhasCusto(rows.map((c) => c.id)), vendasPorLitro(ctx, inicioDoDia(somaDias(hoje, -29))),
+    ]);
     return rows.map((c) => ({
       id: c.id, nome: c.nome, ativo: b2i(c.ativo),
       custo: resumoCusto(c, linhas.filter((l) => l.chope_id === c.id), tamanhos, hoje),
+      venda: vendas.get(c.id) || null,
     }));
   });
 
@@ -1881,6 +1918,316 @@ function registerHandlers() {
       total: rel.chopes.length,
     };
   }, { perm: "exportar" });
+
+  /* ======== Vendas da Teknisa ========
+     Importa o relatório "Vendas Realizadas no Período" (XLSX) com o horário de cada venda (leitura em teknisa.js).
+     Administrador e gerente (permissão "vendas"); o gerente só nas unidades dele.
+     vendas:ler lê o arquivo e devolve a prévia (nada é gravado); vendas:importar lê de novo e grava, numa transação,
+     as escolhas dos produtos (de-para em produtos_teknisa) e uma importação por unidade do arquivo. */
+  const litrosVenda = (n) => `${Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} L`;
+  const periodoTexto = (de, ate) => (de === ate ? diaBR(de) : `${diaBR(de)} a ${diaBR(ate)}`);
+  const precoPorLitro = (valor, litros) => (Number(litros) > 0 ? Math.round((Number(valor) / Number(litros)) * 100) / 100 : null);
+
+  async function lerArquivoTeknisa(p) {
+    const b64 = typeof p.arquivo === "string" ? p.arquivo : "";
+    if (!b64) throw new AppError("Escolha o arquivo XLSX exportado da Teknisa.");
+    const buf = Buffer.from(b64, "base64");
+    if (buf.length > teknisa.MAX_ARQUIVO) throw new AppError("O arquivo passa de 10 MB.");
+    try {
+      return await teknisa.lerArquivo(buf, { tz: TZ });
+    } catch (err) {
+      if (err instanceof teknisa.ErroTeknisa) throw new AppError(err.message);
+      throw err;
+    }
+  }
+  const extremos = (lista) => lista.reduce((r, t) => [Math.min(r[0], t), Math.max(r[1], t)], [Infinity, -Infinity]);
+  // Todas as linhas de uma consulta, de 1000 em 1000 (o Supabase devolve no máximo 1000 por vez)
+  async function todasAsLinhas(consulta) {
+    const out = [];
+    for (let de = 0; ; de += 1000) {
+      const parte = ok(await consulta().range(de, de + 999));
+      out.push(...parte);
+      if (parte.length < 1000) return out;
+    }
+  }
+  const nomeArquivo = (p) => String(p.nome || "").replace(/[\r\n\t]/g, " ").trim().slice(0, 200) || "arquivo.xlsx";
+
+  /* Unidades do arquivo, pelo código antes do " - " ("0003 - LOJA ..." -> "0003").
+     escolhidas: { "0003": unidadeId } para código que ainda não está em nenhuma unidade (a importação grava o código).
+     acesso: a pessoa pode importar nesta unidade (o gerente, só nas dele). */
+  async function unidadesDoArquivo(ctx, itens, escolhidas) {
+    const codigos = [...new Set(itens.map((i) => i.unidade))];
+    const permitidas = await allowedUnitIds(ctx);
+    const comCodigo = ok(await supabase.from("unidades").select("id, nome, codigo_teknisa").in("codigo_teknisa", codigos));
+    const pedidas = escolhidas && typeof escolhidas === "object" ? escolhidas : {};
+    const usadas = new Set();
+    const out = [];
+    for (const codigo of codigos) {
+      const doArquivo = itens.find((i) => i.unidade === codigo);
+      const u = { codigo, nomeTeknisa: doArquivo.unidadeNome, unidadeId: null, unidadeNome: null, nova: false, acesso: false };
+      const cadastrada = comCodigo.find((x) => x.codigo_teknisa === codigo);
+      if (cadastrada) {
+        Object.assign(u, { unidadeId: cadastrada.id, unidadeNome: cadastrada.nome, acesso: permitidas.includes(cadastrada.id) });
+      } else if (Number(pedidas[codigo])) {
+        const id = Number(pedidas[codigo]);
+        if (!permitidas.includes(id)) throw new AppError("Você não tem acesso a esta unidade.", "FORBIDDEN", `unidade ${id}`);
+        const r = ok(await supabase.from("unidades").select("id, nome, codigo_teknisa").eq("id", id).maybeSingle());
+        if (!r) throw new AppError("Unidade não encontrada.");
+        if (r.codigo_teknisa) throw new AppError(`A unidade ${r.nome} já tem o código Teknisa ${r.codigo_teknisa}.`);
+        if (usadas.has(id)) throw new AppError(`Escolha unidades diferentes para as lojas do arquivo (${r.nome} foi escolhida duas vezes).`);
+        Object.assign(u, { unidadeId: id, unidadeNome: r.nome, nova: true, acesso: true });
+      }
+      if (u.unidadeId) usadas.add(u.unidadeId);
+      out.push(u);
+    }
+    return out;
+  }
+
+  // Produtos do arquivo (nome normalizado), com o último código visto, a quantidade, o valor e as linhas
+  function produtosDoArquivo(itens) {
+    const mapa = new Map();
+    for (const i of itens) {
+      const p = mapa.get(i.produto) || { nome: i.produto, codigo: null, quantidade: 0, valor: 0, linhas: 0 };
+      if (i.codigoProduto) p.codigo = i.codigoProduto;
+      p.quantidade += i.quantidade;
+      p.valor += i.valor;
+      p.linhas += 1;
+      mapa.set(i.produto, p);
+    }
+    return [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }
+  const todosChopes = async () =>
+    ok(await supabase.from("chopes").select("id, nome, ativo").order("nome")).map((c) => ({ id: c.id, nome: c.nome, ativo: b2i(c.ativo) }));
+
+  // Volume digitado: "0,36", "0.36" ou número. Vazio: null.
+  const lerVolume = (v) => {
+    if (v === null || v === undefined || String(v).trim() === "") return null;
+    const n = typeof v === "number" ? v : Number(String(v).trim().replace(",", "."));
+    return Number.isFinite(n) ? n : NaN;
+  };
+  // Confere a escolha de um produto: não ignorado precisa de chope do catálogo e de volume (até 100 L por item)
+  function escolhaValida(nome, e, idsChopes) {
+    const ignorar = !!e.ignorar;
+    const chopeId = Number(e.chopeId) || null;
+    const volume = lerVolume(e.volume);
+    if (chopeId && !idsChopes.has(chopeId)) throw new AppError(`O chope escolhido para "${nome}" não existe mais. Escolha de novo.`);
+    if (volume !== null && !(volume > 0 && volume <= 100)) throw new AppError(`Volume inválido em "${nome}": use os litros de chope por item vendido (ex.: 0,36).`);
+    if (!ignorar && !chopeId) throw new AppError(`Escolha o chope de "${nome}" ou marque para ignorar.`);
+    if (!ignorar && volume === null) throw new AppError(`Informe o volume em litros de "${nome}" (ex.: 0,36).`);
+    return { chope_id: chopeId, volume_l: volume === null ? null : Math.round(volume * 10000) / 10000, ignorar };
+  }
+
+  // Itens que já foram importados (posições em `itens`), por unidade
+  async function itensExistentes(unidadeId, itens) {
+    if (!itens.length) return new Set();
+    const chaves = itens.map((i, n) => ({ i: n, caixa: i.caixa, nr: i.nr, linha: i.linha }));
+    return new Set(await rpc("fn_vendas_existentes", { p_unidade: unidadeId, p_chaves: chaves }));
+  }
+
+  /* Prévia. Devolve o período do arquivo, as unidades (com os totais do arquivo para conferir com a Teknisa), os produtos
+     (os conhecidos com o que está gravado; os novos com a sugestão) e, por unidade, grupos por produto e dia:
+     q/v/n = quantidade, valor e itens; qr/vr/nr = o que já tinha sido importado (será pulado). A tela calcula os litros. */
+  handle("vendas:ler", async (p, ctx) => {
+    const itens = await lerArquivoTeknisa(p || {});
+    const unidades = await unidadesDoArquivo(ctx, itens, (p || {}).unidades);
+    const produtos = produtosDoArquivo(itens);
+    const [chopes, salvos] = await Promise.all([
+      todosChopes(),
+      todasAsLinhas(() => supabase.from("produtos_teknisa").select("nome, chope_id, volume_l, ignorar").order("id")),
+    ]);
+    const salvo = new Map(salvos.map((r) => [r.nome, r]));
+    const ativos = chopes.filter((c) => c.ativo);
+    const indice = new Map(produtos.map((x, i) => [x.nome, i]));
+    const listaProdutos = produtos.map((x) => {
+      const s = salvo.get(x.nome);
+      const base = { nome: x.nome, codigo: x.codigo, quantidade: x.quantidade, valor: Math.round(x.valor * 100) / 100, linhas: x.linhas };
+      if (s) return { ...base, novo: false, chopeId: s.chope_id, volume: s.volume_l === null ? null : Number(s.volume_l), ignorar: !!s.ignorar, aviso: null, parecidos: [] };
+      return { ...base, novo: true, ...teknisa.sugestaoProduto(x.nome, ativos) };
+    });
+
+    const blocos = [];
+    for (const u of unidades) {
+      const daUnidade = itens.filter((i) => i.unidade === u.codigo);
+      const existentes = u.unidadeId && u.acesso ? await itensExistentes(u.unidadeId, daUnidade) : new Set();
+      const grupos = new Map();
+      daUnidade.forEach((i, n) => {
+        const k = `${indice.get(i.produto)}|${i.dia}`;
+        const g = grupos.get(k) || { p: indice.get(i.produto), dia: i.dia, q: 0, v: 0, n: 0, qr: 0, vr: 0, nr: 0 };
+        g.q += i.quantidade; g.v += i.valor; g.n += 1;
+        if (existentes.has(n)) { g.qr += i.quantidade; g.vr += i.valor; g.nr += 1; }
+        grupos.set(k, g);
+      });
+      const [primeiraU, ultimaU] = extremos(daUnidade.map((i) => i.vendidoEm.getTime()));
+      blocos.push({
+        ...u,
+        linhas: daUnidade.length,
+        quantidade: daUnidade.reduce((s, i) => s + i.quantidade, 0),
+        valor: Math.round(daUnidade.reduce((s, i) => s + i.valor, 0) * 100) / 100,
+        primeiraVenda: fmtTs(primeiraU), ultimaVenda: fmtTs(ultimaU),
+        grupos: [...grupos.values()].map((g) => ({ ...g, v: Math.round(g.v * 100) / 100, vr: Math.round(g.vr * 100) / 100 })),
+      });
+    }
+    const [t0, t1] = extremos(itens.map((i) => i.vendidoEm.getTime()));
+    const primeira = new Date(t0);
+    const ultima = new Date(t1);
+    // Unidades que podem receber um código novo: as liberadas para a pessoa, ainda sem código Teknisa
+    const permitidas = await allowedUnitIds(ctx);
+    const livres = permitidas.length
+      ? ok(await supabase.from("unidades").select("id, nome").in("id", permitidas).is("codigo_teknisa", null).order("nome"))
+      : [];
+    return {
+      arquivo: nomeArquivo(p || {}),
+      primeiraVenda: fmtTs(primeira), ultimaVenda: fmtTs(ultima),
+      de: teknisa.diaNoFuso(primeira, TZ), ate: teknisa.diaNoFuso(ultima, TZ),
+      unidades: blocos, unidadesLivres: livres, produtos: listaProdutos, chopes,
+    };
+  }, { perm: "vendas" });
+
+  /* Importar: { arquivo, nome, de, ate, unidades: { codigo: unidadeId }, produtos: [{ nome, chopeId, volume, ignorar }] }.
+     Só entram os itens de chope (produto não ignorado) com o dia da venda dentro do período. */
+  handle("vendas:importar", async (p, ctx) => {
+    const q = p || {};
+    const periodo = reportPeriod(q.de, q.ate);
+    const itens = await lerArquivoTeknisa(q);
+    const unidades = await unidadesDoArquivo(ctx, itens, q.unidades);
+    const semUnidade = unidades.find((u) => !u.unidadeId);
+    if (semUnidade) throw new AppError(`Escolha a unidade da loja ${semUnidade.codigo} - ${semUnidade.nomeTeknisa}.`);
+    const lotesUnidades = unidades.filter((u) => u.acesso);
+    if (!lotesUnidades.length) throw new AppError("Você não tem acesso a nenhuma unidade deste arquivo.", "FORBIDDEN", "vendas:importar");
+
+    const chopes = await todosChopes();
+    const idsChopes = new Set(chopes.map((c) => c.id));
+    const escolhas = new Map((Array.isArray(q.produtos) ? q.produtos : [])
+      .filter((x) => x && typeof x === "object").map((x) => [teknisa.normalizar(x.nome), x]));
+    const produtos = produtosDoArquivo(itens).map((x) => {
+      const e = escolhas.get(x.nome);
+      if (!e) throw new AppError(`Falta a escolha do produto "${x.nome}". Escolha o arquivo de novo.`);
+      return { nome: x.nome, codigo: x.codigo, ...escolhaValida(x.nome, e, idsChopes) };
+    });
+    const ignorado = new Set(produtos.filter((x) => x.ignorar).map((x) => x.nome));
+    const iso = (d) => (d ? d.toISOString() : null);
+    const lotes = lotesUnidades.map((u) => {
+      const doPeriodo = itens.filter((i) => i.unidade === u.codigo && i.dia >= periodo.de && i.dia <= periodo.ate);
+      const [t0, t1] = extremos(doPeriodo.map((i) => i.vendidoEm.getTime()));
+      return {
+        unidade_id: u.unidadeId,
+        codigo_teknisa: u.nova ? u.codigo : null,
+        primeira: doPeriodo.length ? new Date(t0).toISOString() : null,
+        ultima: doPeriodo.length ? new Date(t1).toISOString() : null,
+        itens: doPeriodo.filter((i) => !ignorado.has(i.produto)).map((i) => ({
+          caixa: i.caixa, nr: i.nr, linha: i.linha, vendido_em: iso(i.vendidoEm), dt_venda: iso(i.dtVenda), comanda: iso(i.comanda),
+          modalidade: i.modalidade, produto: i.produto, quantidade: i.quantidade, valor: i.valor,
+        })),
+      };
+    });
+    const arquivo = nomeArquivo(q);
+    const r = ok(await supabase.rpc("fn_vendas_importar", {
+      p_usuario: ctx.session.id, p_arquivo: arquivo, p_de: periodo.de, p_ate: periodo.ate, p_produtos: produtos, p_lotes: lotes,
+    }), "Este código Teknisa já está em outra unidade.");
+
+    const resultado = r.map((x) => {
+      const u = lotesUnidades.find((y) => y.unidadeId === Number(x.unidade_id));
+      return {
+        importacaoId: x.importacao_id, unidadeId: u.unidadeId, unidade: u.unidadeNome, codigo: u.codigo,
+        linhas: x.linhas, novas: x.novas, repetidas: x.repetidas, litros: Number(x.litros), valor: Number(x.valor),
+      };
+    });
+    for (const x of resultado) {
+      if (!x.importacaoId) continue;
+      await audit(ctx, "vendas_importadas",
+        `${x.unidade}: período ${periodoTexto(periodo.de, periodo.ate)}, ${x.novas} ${x.novas === 1 ? "item novo" : "itens novos"}, ` +
+        `${litrosVenda(x.litros)}${x.repetidas ? `, ${x.repetidas} já importado(s)` : ""} (arquivo ${arquivo})`);
+    }
+    for (const u of lotesUnidades.filter((y) => y.nova))
+      await audit(ctx, "unidade_codigo_teknisa", `${u.unidadeNome}: código Teknisa ${u.codigo} (na importação de vendas)`);
+    return {
+      de: periodo.de, ate: periodo.ate, importacoes: resultado,
+      semAcesso: unidades.filter((u) => !u.acesso).map((u) => `${u.codigo} - ${u.nomeTeknisa}`),
+    };
+  }, { perm: "vendas" });
+
+  const importacaoLinha = (x) => ({
+    id: x.id, unidadeId: x.unidade_id, unidade: x.unidades ? x.unidades.nome : null, arquivo: x.arquivo_nome,
+    de: x.periodo_de, ate: x.periodo_ate, primeiraVenda: fmtTs(x.primeira_venda), ultimaVenda: fmtTs(x.ultima_venda),
+    linhas: x.linhas, novas: x.linhas_novas, repetidas: x.linhas_repetidas,
+    litros: Number(x.total_litros), valor: Number(x.total_valor), precoLitro: precoPorLitro(x.total_valor, x.total_litros),
+    criadoEm: fmtTs(x.criado_em), criadoPor: x.usuario ? x.usuario.nome : null,
+    cancelada: !!x.cancelada, canceladaEm: fmtTs(x.cancelada_em), canceladaPor: x.cancelador ? x.cancelador.nome : null,
+  });
+  const IMPORTACAO_SELECT = "id, unidade_id, arquivo_nome, periodo_de, periodo_ate, primeira_venda, ultima_venda, linhas, linhas_novas," +
+    " linhas_repetidas, total_litros, total_valor, criado_em, cancelada, cancelada_em, unidades(nome)," +
+    " usuario:usuarios!usuario_id(nome), cancelador:usuarios!cancelada_por(nome)";
+  async function loadImportacao(ctx, id) {
+    const r = ok(await supabase.from("importacoes_vendas").select(IMPORTACAO_SELECT).eq("id", Number(id)).maybeSingle());
+    if (!r) throw new AppError("Importação não encontrada.");
+    await assertUnit(ctx, r.unidade_id);
+    return r;
+  }
+
+  // As importações das unidades liberadas, da mais nova para a mais antiga (as 200 últimas)
+  handle("vendas:importacoes", async (_p, ctx) => {
+    const ids = await allowedUnitIds(ctx);
+    if (!ids.length) return [];
+    const rows = ok(await supabase.from("importacoes_vendas").select(IMPORTACAO_SELECT)
+      .in("unidade_id", ids).order("id", { ascending: false }).limit(200));
+    return rows.map(importacaoLinha);
+  }, { perm: "vendas" });
+
+  // "Ver": litros e valor por chope e por dia, com o preço de venda por litro (valor ÷ litros)
+  handle("vendas:resumo", async ({ id }, ctx) => {
+    const imp = await loadImportacao(ctx, id);
+    const r = await rpc("fn_importacao_resumo", { p_importacao: imp.id, p_tz: TZ });
+    const linha = (x) => ({ quantidade: Number(x.quantidade), litros: Number(x.litros), valor: Number(x.valor), precoLitro: precoPorLitro(x.valor, x.litros) });
+    return {
+      ...importacaoLinha(imp),
+      chopes: (r.chopes || []).map((c) => ({ chopeId: c.chope_id, nome: c.nome, ...linha(c) })),
+      dias: (r.dias || []).map((d) => ({ dia: d.dia, ...linha(d) })),
+    };
+  }, { perm: "vendas" });
+
+  // Cancelar: apaga os itens que esta importação gravou e marca como cancelada (as outras importações ficam)
+  handle("vendas:cancelar", async ({ id }, ctx) => {
+    const imp = await loadImportacao(ctx, id);
+    const r = await rpc("fn_vendas_cancelar", { p_importacao: imp.id, p_usuario: ctx.session.id });
+    await audit(ctx, "vendas_importacao_cancelada",
+      `${imp.unidades ? imp.unidades.nome : `Unidade ${imp.unidade_id}`}: período ${periodoTexto(imp.periodo_de, imp.periodo_ate)}, ` +
+      `${r.itens} ${r.itens === 1 ? "item apagado" : "itens apagados"} (arquivo ${imp.arquivo_nome || "—"})`);
+    return { itens: r.itens };
+  }, { perm: "vendas" });
+
+  /* Aba Produtos: o de-para. Mudar o chope ou o volume vale para as próximas importações; as vendas já importadas
+     guardam a cópia que tinham. */
+  handle("vendas:produtos", async () => {
+    const [rows, chopes] = await Promise.all([
+      todasAsLinhas(() => supabase.from("produtos_teknisa").select("id, nome, codigo, chope_id, volume_l, ignorar, atualizado_em, chopes(nome)")
+        .order("nome").order("id")),
+      todosChopes(),
+    ]);
+    return {
+      chopes,
+      produtos: rows.map((x) => ({
+        id: x.id, nome: x.nome, codigo: x.codigo, chopeId: x.chope_id, chope: x.chopes ? x.chopes.nome : null,
+        volume: x.volume_l === null ? null : Number(x.volume_l), ignorar: !!x.ignorar, atualizadoEm: fmtTs(x.atualizado_em),
+      })),
+    };
+  }, { perm: "vendas" });
+
+  handle("vendas:produtoSalvar", async (p, ctx) => {
+    const q = p || {};
+    const atual = ok(await supabase.from("produtos_teknisa").select("id, nome, chope_id, volume_l, ignorar").eq("id", Number(q.id)).maybeSingle());
+    if (!atual) throw new AppError("Produto não encontrado.");
+    const chopes = await todosChopes();
+    const e = escolhaValida(atual.nome, q, new Set(chopes.map((c) => c.id)));
+    const igual = e.chope_id === atual.chope_id && e.ignorar === atual.ignorar &&
+      (e.volume_l === null ? atual.volume_l === null : atual.volume_l !== null && Number(atual.volume_l) === e.volume_l);
+    if (igual) return { mudou: false };
+    dbError((await supabase.from("produtos_teknisa").update({ ...e, atualizado_em: new Date().toISOString() }).eq("id", atual.id)).error);
+    const chope = chopes.find((c) => c.id === e.chope_id);
+    await audit(ctx, "produto_teknisa_editado", e.ignorar
+      ? `${atual.nome}: ignorado`
+      : `${atual.nome}: ${chope ? chope.nome : "—"}, ${litrosVenda(e.volume_l)} por item`);
+    return { mudou: true };
+  }, { perm: "vendas" });
 
   handle("audit:list", async () => {
     const rows = ok(

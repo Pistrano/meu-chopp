@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="icon" href="assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Vendas da Teknisa | BarrilFacil</title>
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <link href="css/tema-escuro.css" rel="stylesheet">
+  <script src="js/tema.js"></script>
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Vendas da Teknisa</h1><p>Importe o relatório de vendas da Teknisa para ter os litros de chope vendidos e o horário de cada venda. Só os itens de chope são gravados.</p></div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Vendas da Teknisa">
+      <button type="button" role="tab" id="abaImportar" class="active" aria-selected="true" aria-controls="painelImportar" data-aba="importar">Importar</button>
+      <button type="button" role="tab" id="abaProdutos" aria-selected="false" aria-controls="painelProdutos" data-aba="produtos">Produtos</button>
+    </div>
+
+    <!-- Importar: arquivo, prévia e lista de importações -->
+    <section id="painelImportar" role="tabpanel" aria-labelledby="abaImportar">
+      <section class="panel">
+        <h2 class="panel-title">1. Arquivo</h2>
+        <p class="panel-note">Na Teknisa, exporte o relatório "Vendas Realizadas no Período" em XLSX (até 10 MB) e escolha o arquivo aqui. Nada é gravado antes de você conferir e tocar em Importar.</p>
+        <div class="vendas-arquivo">
+          <input type="file" id="arquivo" class="form-control" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        </div>
+        <div id="lendo" class="t-muted small-note mt-1 d-none" role="status">Lendo o arquivo…</div>
+
+        <div id="infoArquivo" class="d-none">
+          <dl class="unit-facts vendas-fatos" id="fatosArquivo"></dl>
+          <div class="vendas-periodo">
+            <div><label class="form-label" for="de">Período: de</label><input type="date" id="de" class="form-control"></div>
+            <div><label class="form-label" for="ate">até</label><input type="date" id="ate" class="form-control"></div>
+          </div>
+          <p class="t-muted small-note">Só entram as vendas com data dentro do período. Ele já vem com o primeiro e o último dia do arquivo.</p>
+          <div id="unidadesArquivo"></div>
+        </div>
+      </section>
+
+      <section class="panel d-none" id="secPrevia" aria-labelledby="tituloPrevia">
+        <h2 class="panel-title" id="tituloPrevia">2. Prévia</h2>
+        <p class="panel-note">Confira o chope e o volume (litros de chope por item vendido) de cada produto. Os produtos novos vêm com uma sugestão; os que já foram importados antes vêm com a escolha gravada.</p>
+        <div id="avisoRepetidos" class="warn-note d-none" role="status"></div>
+
+        <div class="table-card vendas-previa">
+          <table>
+            <thead><tr><th>Produto</th><th>Quantidade</th><th>Chope</th><th>Volume (L)</th><th>Litros</th><th>Ignorar</th></tr></thead>
+            <tbody id="tbodyPrevia"></tbody>
+          </table>
+        </div>
+
+        <details class="vendas-ignorados" id="ignorados">
+          <summary id="ignoradosTitulo">Ignorados (0)</summary>
+          <p class="t-muted small-note">Lata, garrafa, água, comida, kit e o growler vazio não entram. Desmarque "Ignorar" se algum for chope.</p>
+          <div class="table-card vendas-previa">
+            <table>
+              <thead><tr><th>Produto</th><th>Quantidade</th><th>Valor</th><th>Ignorar</th></tr></thead>
+              <tbody id="tbodyIgnorados"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="vendas-resumo">
+          <div>
+            <h3 class="vendas-subtitulo">Litros por chope</h3>
+            <div class="table-card"><table>
+              <thead><tr><th>Chope</th><th>Quantidade</th><th>Litros</th><th>Valor</th><th>R$ por litro</th></tr></thead>
+              <tbody id="tbodyPorChope"></tbody>
+            </table></div>
+          </div>
+          <div>
+            <h3 class="vendas-subtitulo">Litros por dia</h3>
+            <div class="table-card"><table>
+              <thead><tr><th>Dia</th><th>Litros</th><th>Valor</th></tr></thead>
+              <tbody id="tbodyPorDia"></tbody>
+            </table></div>
+          </div>
+        </div>
+        <dl class="unit-facts vendas-fatos" id="totais"></dl>
+
+        <div class="vendas-acoes">
+          <button type="button" class="btn btn-mc btn-mc-sm" id="btnImportar">Importar</button>
+          <button type="button" class="btn-ghost" id="btnOutro">Escolher outro arquivo</button>
+        </div>
+      </section>
+
+      <h2 class="section-title">Importações</h2>
+      <div class="table-card mb-section">
+        <table>
+          <thead><tr><th>Unidade</th><th>Período</th><th>Itens novos</th><th>Litros</th><th>Valor</th><th>Importado por</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tbodyImportacoes"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Produtos: o de-para da Teknisa para o chope do catálogo -->
+    <section id="painelProdutos" role="tabpanel" aria-labelledby="abaProdutos" class="d-none">
+      <div class="warn-note">Mudar o chope ou o volume vale para as próximas importações. As vendas já importadas continuam com o chope e o volume que tinham. Para refazer uma importação, cancele e importe o arquivo de novo.</div>
+      <div class="filters">
+        <input type="search" id="buscaProduto" class="form-control" placeholder="Procurar produto" aria-label="Procurar produto">
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Produto</th><th>Código</th><th>Chope</th><th>Volume (L)</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tbodyProdutos"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/vendas-teknisa.js"></script>
+</body>
+</html>

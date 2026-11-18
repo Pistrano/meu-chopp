@@ -46,7 +46,7 @@ function banco() {
 /* Apaga tudo, na ordem certa (quem aponta para outra tabela sai antes dela). Roda antes de cada arquivo de teste. */
 const TABELAS = [
   ["sessoes", "token_hash"], ["auditoria", "id"], ["movimentacoes", "id"], ["pesagens", "id"], ["inventarios", "id"], ["taras", "id"],
-  ["transferencias", "id"], ["engates", "id"],
+  ["transferencias", "id"], ["engates", "id"], ["vendas_itens", "id"], ["importacoes_vendas", "id"], ["produtos_teknisa", "id"],
   ["barris", "id"], ["torneiras", "id"], ["usuario_unidades", "usuario_id"], ["funcionario_unidades", "funcionario_id"],
   ["funcionarios", "id"], ["custos_chope", "id"], ["chopes", "id"], ["estilos", "id"], ["tamanhos_barril", null],
   ["usuarios", "id"], ["unidades", "id"],
