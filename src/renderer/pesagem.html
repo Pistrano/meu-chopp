@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="icon" href="assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Pesagem | BarrilFacil</title>
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <link href="css/tema-escuro.css" rel="stylesheet">
+  <script src="js/tema.js"></script>
+</head>
+<body>
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Pesagem</h1><p id="subtitle">Quanto chope tem em cada barril: inventário, pesagem avulsa e as taras dos vasilhames.</p></div>
+    </div>
+
+    <section class="panel" aria-labelledby="tituloInv">
+      <h2 class="panel-title" id="tituloInv">Inventário</h2>
+      <div id="inventario" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="tituloAvulsa">
+      <h2 class="panel-title" id="tituloAvulsa">Pesagem avulsa</h2>
+      <p class="panel-note" id="avulsaNota">Pese um barril engatado ou disponível fora do inventário. No disponível, o resultado passa a ser o saldo do barril.</p>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-8"><label class="form-label" for="avulsaBarril">Barril</label>
+          <select id="avulsaBarril" class="form-select"></select></div>
+        <div class="col-md-4"><button type="button" class="btn btn-mc btn-mc-sm" id="btnAvulsa">Pesar barril</button></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="tituloTaras">
+      <div class="page-head page-head--panel">
+        <h2 class="panel-title" id="tituloTaras">Taras dos vasilhames</h2>
+        <button type="button" class="btn btn-mc btn-mc-sm" id="btnNovaTara">Nova tara de vasilhame</button>
+      </div>
+      <p class="panel-note">Peso do barril vazio de cada tamanho. Na balança, os litros são (peso − tara) ÷ densidade do chope. A tara padrão de cada tamanho é a ativa mais recente.</p>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Tamanho</th><th>Peso</th><th>Descrição</th><th>Desde</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tbodyTaras"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/acoes-barril.js"></script>
+  <script src="js/pesagem.js"></script>
+</body>
+</html>

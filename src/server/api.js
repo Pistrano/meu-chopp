@@ -65,6 +65,9 @@ const inicioDoDia = (dia) => {
 const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
 // APP_ENV=beta marca o ambiente de testes (as telas mostram a faixa amarela). Sem APP_ENV: servidor das lojas.
 const AMBIENTE = String(process.env.APP_ENV || "").trim().toLowerCase() || null;
+// Densidade do chope (kg por litro) para converter o peso da balança em litros. Fica só aqui: vai para as telas
+// (config.densidade, para mostrar os litros enquanto a pessoa digita) e é copiada em cada pesagem gravada.
+const DENSIDADE_CHOPE = 1.01;
 const b2i = (v) => (v ? 1 : 0);
 
 class AppError extends Error {
@@ -87,7 +90,12 @@ function handle(channel, fn, { auth = true, perm = null } = {}) {
 function dbError(error, dupMsg) {
   if (!error) return;
   if (error.code === "23505") throw new AppError(dupMsg || "Já existe um registro com esse valor.");
-  if (error.code === "P0001") throw new AppError(error.message);
+  if (error.code === "P0001") {
+    // Retirada com chope que deu 0,5 L ou menos: a tela pergunta se marca o barril como vazio
+    const quase = /^QUASE_VAZIO:([\d.]+)$/.exec(error.hint || "");
+    if (quase) throw new AppError(error.message, "QUASE_VAZIO", null, { litros: Number(quase[1]) });
+    throw new AppError(error.message);
+  }
   console.error("[supabase]", error);
   throw new Error(error.message || "Falha no banco de dados.");
 }
@@ -362,6 +370,32 @@ function situacaoValidade(validade, status, hoje = hojeTZ()) {
   if (validade === somaDias(hoje, 1)) return "vence_amanha";
   return "ok";
 }
+/* Litros com uma casa, como nas telas: 18.217 -> "18,2 L"; 50 -> "50 L" */
+const litrosTexto = (n) => `${Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`;
+/* Disponível com saldo (sobrou chope de uma retirada): "Disponível · 18,2 L" ou "Disponível · ≈ 37,5 L" (estimado) */
+const situacaoTexto = (b, labels) => {
+  const base = labels[b.status] || b.status;
+  if (b.status !== "disponivel" || b.saldo_l === null || b.saldo_l === undefined) return base;
+  return `${base} · ${b.saldo_estimado ? "≈ " : ""}${litrosTexto(b.saldo_l)}`;
+};
+/* Medida de uma pesagem vinda da tela -> parâmetros das funções SQL (que fazem as contas e as conferências).
+   Balança: pesoBruto (kg, aceita vírgula), taraId (vazio = a padrão do tamanho) e, na primeira pesagem do tamanho,
+   taraNovaKg. Estimativa: nivel (100, 75, 50 ou 25). A densidade é sempre a do servidor (DENSIDADE_CHOPE). */
+function argsMedida({ metodo, pesoBruto, taraId, taraNovaKg, nivel }) {
+  const num = (v) => (v === null || v === undefined || String(v).trim() === "" ? null : Number(String(v).trim().replace(",", ".")));
+  if (metodo === "estimativa") {
+    const n = Number(nivel);
+    if (![100, 75, 50, 25].includes(n)) throw new AppError("Escolha quanto chope sobrou: cerca de 100%, 75%, 50% ou 25%.");
+    return { p_metodo: "estimativa", p_peso_bruto: null, p_tara: null, p_nivel: n, p_densidade: null, p_tara_nova: null };
+  }
+  if (metodo !== "balanca") throw new AppError("Escolha pesar na balança ou estimar sem balança.");
+  const peso = num(pesoBruto);
+  if (!(peso > 0)) throw new AppError("Informe o peso do barril na balança (kg).");
+  const tara = Number(taraId) || null;
+  const nova = tara ? null : num(taraNovaKg);
+  if (nova !== null && !(nova > 0)) throw new AppError("Informe o peso do vasilhame vazio (kg).");
+  return { p_metodo: "balanca", p_peso_bruto: peso, p_tara: tara, p_nivel: null, p_densidade: DENSIDADE_CHOPE, p_tara_nova: nova };
+}
 const MSG_SEM_TORNEIRA = "Não há torneiras disponíveis nesta unidade. Verifique as torneiras cadastradas ou libere uma torneira antes de continuar.";
 
 async function emailTaken(email, exceptId = 0) {
@@ -523,13 +557,14 @@ function publicUser(u) {
 }
 
 /* ---------- Consulta de movimentações (usada em dashboard, histórico e CSV) ---------- */
-async function queryMovements({ unitId, q, operacao, funcionarioId, limit }) {
+/* semPesagens: o Painel não mostra as pesagens (um inventário encheria as movimentações recentes); o Histórico mostra. */
+async function queryMovements({ unitId, q, operacao, funcionarioId, limit, semPesagens = false }) {
   const unit = Number(unitId);
   let query = supabase
     .from("movimentacoes")
     .select(
       "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome), funcionarios(nome)," +
-      " origem:unidades!origem_unidade_id(nome), destino:unidades!destino_unidade_id(nome)"
+      " origem:unidades!origem_unidade_id(nome), destino:unidades!destino_unidade_id(nome), pesagens(litros, metodo)"
     )
     .or(`origem_unidade_id.eq.${unit},destino_unidade_id.eq.${unit}`)
     .order("id", { ascending: false })
@@ -537,6 +572,7 @@ async function queryMovements({ unitId, q, operacao, funcionarioId, limit }) {
   const termo = cleanTerm(q);
   if (termo) query = query.ilike("barris.codigo", `%${termo}%`);
   if (operacao) query = query.eq("operacao", String(operacao));
+  else if (semPesagens) query = query.neq("operacao", "pesagem");
   if (Number(funcionarioId)) query = query.eq("funcionario_id", Number(funcionarioId));
   const rows = ok(await query);
   return rows.map((m) => ({
@@ -553,6 +589,9 @@ async function queryMovements({ unitId, q, operacao, funcionarioId, limit }) {
     funcionario: m.funcionarios ? m.funcionarios.nome : null,
     origem: m.origem ? m.origem.nome : null,
     destino: m.destino ? m.destino.nome : null,
+    // Retirado com chope e pesagem: os litros da pesagem e se foi estimado (sem balança)
+    litros: m.pesagens ? Number(m.pesagens.litros) : null,
+    estimado: m.pesagens ? m.pesagens.metodo === "estimativa" : null,
   }));
 }
 
@@ -665,7 +704,9 @@ function registerHandlers() {
 
   // Dados do servidor que as telas usam (carregados junto com o cabeçalho).
   // Sem login (telas de entrar, primeiro acesso e configuração) devolve só o ambiente, para a faixa de testes.
-  const configDe = (ctx) => (ctx.session ? { fornecedor: FORNECEDOR, hoje: hojeTZ(), ambiente: AMBIENTE } : { ambiente: AMBIENTE });
+  const configDe = (ctx) => (ctx.session
+    ? { fornecedor: FORNECEDOR, hoje: hojeTZ(), ambiente: AMBIENTE, densidade: DENSIDADE_CHOPE }
+    : { ambiente: AMBIENTE });
   handle("config:get", (_p, ctx) => configDe(ctx), { auth: "opcional" });
 
   /* Tudo o que o cabeçalho das telas precisa numa ida só: o usuário (como auth:me), as unidades liberadas (como
@@ -874,6 +915,7 @@ function registerHandlers() {
       barril: {
         id: b.id, codigo: b.codigo, estilo: b.estilo, chope_nome: b.chope_nome || null, status: b.status,
         validade: b.validade, situacao_validade: situacaoValidade(b.validade, b.status),
+        tamanho_l: b.tamanho_l, saldo_l: b.saldo_l, saldo_estimado: b.saldo_estimado,
       },
       unidade: r.data,
       torneiras,
@@ -1078,7 +1120,7 @@ function registerHandlers() {
         .eq("unidade_id", unit).eq("funcionarios.ativo", true).limit(1));
       if (!ativos.length) semFuncionarios = ok(await supabase.from("unidades").select("nome").eq("id", unit).single()).nome;
     }
-    return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8 }), semFuncionarios };
+    return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8, semPesagens: true }), semFuncionarios };
   });
 
   /* Ordem: validade (vencidos primeiro), transferências pendentes, vazios aguardando recolhimento.
@@ -1175,7 +1217,7 @@ function registerHandlers() {
   handle("barris:exportStock", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const rows = ok(await supabase.from("barris")
-      .select("codigo, chope_nome, estilo, tamanho_l, validade, status, unidades(nome_curto), engates(retirado_em, torneiras(numero))," +
+      .select("codigo, chope_nome, estilo, tamanho_l, validade, status, saldo_l, saldo_estimado, unidades(nome_curto), engates(retirado_em, torneiras(numero))," +
         " movimentacoes(id, usuarios(nome), funcionarios(nome))")
       .eq("unidade_id", unit)
       .neq("status", "recolhido")
@@ -1192,7 +1234,7 @@ function registerHandlers() {
     const lines = rows.map((b) => {
       const engate = (b.engates || []).find((e) => e.retirado_em === null);
       const ultima = (b.movimentacoes || []).reduce((a, m) => (!a || m.id > a.id ? m : a), null);
-      return ["#" + b.codigo, b.chope_nome, b.estilo, b.tamanho_l, labels[b.status] || b.status, b.validade,
+      return ["#" + b.codigo, b.chope_nome, b.estilo, b.tamanho_l, situacaoTexto(b, labels), b.validade,
         b.unidades ? b.unidades.nome_curto : "", engate && engate.torneiras ? `Torneira ${engate.torneiras.numero}` : "",
         ultima ? quemFez(ultima.funcionarios, ultima.usuarios) : ""]
         .map(esc).join(";");
@@ -1268,6 +1310,18 @@ function registerHandlers() {
     const b = await loadBarril(ctx, id);
     const func = await funcionarioDaAcao(ctx, b.unidade_id, funcionarioId);
     return rpc("fn_barril_esgotar", { p_barril: b.id, p_usuario: ctx.session.id, p_funcionario: func });
+  });
+
+  /* Retirada com chope: o barril sai da torneira e volta para o estoque com o que sobrou, medido na balança
+     (metodo "balanca": pesoBruto em kg e taraId; sem tara para o tamanho, taraNovaKg cadastra a primeira) ou estimado
+     (metodo "estimativa": nivel 100, 75, 50 ou 25). Sobrou 0,5 L ou menos: erro QUASE_VAZIO, nada é gravado e a tela
+     pergunta se retira como vazio (barris:empty). */
+  handle("barris:retirarComChope", async (p, ctx) => {
+    const b = await loadBarril(ctx, p.id);
+    const func = await funcionarioDaAcao(ctx, b.unidade_id, p.funcionarioId);
+    return rpc("fn_barril_retirar_com_chope", {
+      p_barril: b.id, p_usuario: ctx.session.id, p_funcionario: func, ...argsMedida(p),
+    });
   });
 
   /* Barris vazios da unidade para o recolhimento, com há quantos dias cada um está vazio */
@@ -1357,6 +1411,158 @@ function registerHandlers() {
     return rpc("fn_transferencia_cancelar", { p_id: t.id, p_usuario: ctx.session.id, p_funcionario: func });
   });
 
+  /* ======== Pesagem: taras dos vasilhames, pesagem avulsa e inventário ========
+     Todos os cargos pesam e cadastram tara. Editar, desativar e apagar tara: catalogo:editar (administrador e gerente).
+     Tara usada em pesagem não é apagada, só desativada (a pesagem guarda uma cópia do peso). */
+  const numeroBR = (v) => (v === null || v === undefined || String(v).trim() === "" ? null : Number(String(v).trim().replace(",", ".")));
+  const cleanTaraPeso = (v) => {
+    const n = numeroBR(v);
+    if (!(n > 0) || n >= 1000) throw new AppError("Informe o peso do vasilhame vazio em kg (ex.: 13,5).");
+    return Math.round(n * 100) / 100;
+  };
+  const cleanTaraDescricao = (v) => {
+    const d = String(v || "").trim().replace(/\s+/g, " ");
+    if (d.length > 80) throw new AppError("A descrição da tara deve ter até 80 caracteres.");
+    return d || null;
+  };
+  const TAMANHOS = [20, 30, 50];
+  const loadTara = async (id) => {
+    const r = await supabase.from("taras").select("*, pesagens(count)").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Tara não encontrada.");
+    const { pesagens, ...t } = r.data;
+    return { ...t, pesagens: pesagens && pesagens[0] ? pesagens[0].count : 0 };
+  };
+  const taraTexto = (t) => `Vasilhame de ${litrosTexto(t.tamanho_l)}: ${Number(t.peso_kg).toLocaleString("pt-BR")} kg${t.descricao ? ` (${t.descricao})` : ""}`;
+
+  /* Ativas por padrão (as do diálogo de pesagem, a padrão de cada tamanho primeiro). todos: também as desativadas. */
+  handle("taras:list", async ({ todos }) => {
+    let query = supabase.from("taras").select("id, tamanho_l, peso_kg, descricao, ativo, criado_em, usuarios(nome), pesagens(count)")
+      .order("tamanho_l").order("criado_em", { ascending: false }).order("id", { ascending: false });
+    if (!todos) query = query.eq("ativo", true);
+    const padrao = new Set();
+    return ok(await query).map(({ usuarios, pesagens, ...t }) => {
+      const ehPadrao = t.ativo && !padrao.has(Number(t.tamanho_l));
+      if (ehPadrao) padrao.add(Number(t.tamanho_l));
+      return {
+        ...t, tamanho_l: Number(t.tamanho_l), peso_kg: Number(t.peso_kg), ativo: b2i(t.ativo), padrao: ehPadrao,
+        criado_em: fmtTs(t.criado_em), criado_por: usuarios ? usuarios.nome : null,
+        pesagens: pesagens && pesagens[0] ? pesagens[0].count : 0,
+      };
+    });
+  });
+
+  handle("taras:create", async ({ tamanho, pesoKg, descricao }, ctx) => {
+    const tam = Number(tamanho);
+    if (!TAMANHOS.includes(tam)) throw new AppError("Escolha o tamanho do barril (20, 30 ou 50 L).");
+    const row = ok(await supabase.from("taras")
+      .insert({ tamanho_l: tam, peso_kg: cleanTaraPeso(pesoKg), descricao: cleanTaraDescricao(descricao), criado_por: ctx.session.id })
+      .select("id, tamanho_l, peso_kg, descricao").single());
+    await audit(ctx, "tara_cadastrada", taraTexto(row));
+    return row;
+  });
+
+  // Muda o peso e a descrição. As pesagens já feitas guardam o peso antigo (não mudam).
+  handle("taras:update", async ({ id, pesoKg, descricao }, ctx) => {
+    const t = await loadTara(id);
+    const novo = { peso_kg: cleanTaraPeso(pesoKg), descricao: cleanTaraDescricao(descricao) };
+    if (Number(t.peso_kg) === novo.peso_kg && (t.descricao || null) === novo.descricao) return true;
+    dbError((await supabase.from("taras").update(novo).eq("id", t.id)).error);
+    await audit(ctx, "tara_editada", `${taraTexto(t)} → ${Number(novo.peso_kg).toLocaleString("pt-BR")} kg${novo.descricao ? ` (${novo.descricao})` : ""}`);
+    return true;
+  }, { perm: "catalogo:editar" });
+
+  handle("taras:toggle", async ({ id }, ctx) => {
+    const t = await loadTara(id);
+    dbError((await supabase.from("taras").update({ ativo: !t.ativo }).eq("id", t.id)).error);
+    await audit(ctx, t.ativo ? "tara_desativada" : "tara_reativada", taraTexto(t));
+    return true;
+  }, { perm: "catalogo:editar" });
+
+  // Só a tara nunca usada (cadastrada errada). Usada em pesagem: desativar.
+  handle("taras:delete", async ({ id }, ctx) => {
+    const t = await loadTara(id);
+    if (t.pesagens > 0)
+      throw new AppError(`Esta tara já foi usada em ${t.pesagens} pesagem(ns) e não pode ser apagada. Desative-a para não aparecer mais.`);
+    dbError((await supabase.from("taras").delete().eq("id", t.id)).error);
+    await audit(ctx, "tara_apagada", taraTexto(t));
+    return true;
+  }, { perm: "catalogo:editar" });
+
+  /* Pesagem fora da retirada: avulsa ou de inventário (inventarioId). Barril engatado ou disponível. O status não muda;
+     o disponível passa a ter o saldo pesado. */
+  handle("pesagens:registrar", async (p, ctx) => {
+    const b = await loadBarril(ctx, p.barrilId);
+    const inventario = Number(p.inventarioId) || null;
+    const func = await funcionarioDaAcao(ctx, b.unidade_id, p.funcionarioId);
+    return rpc("fn_pesagem_registrar", {
+      p_barril: b.id, p_usuario: ctx.session.id, p_funcionario: func, ...argsMedida(p),
+      p_motivo: inventario ? "inventario" : "avulsa", p_inventario: inventario,
+    });
+  });
+
+  /* Inventário da unidade: o aberto (ou null), os barris da lista e o último concluído.
+     Lista: engatados (com a torneira) e disponíveis. precisa = engatado ou disponível com saldo (tem de pesar);
+     o disponível cheio entra como 100% ao concluir, sem pesar. pesagem = a última deste inventário. */
+  async function inventarioDaUnidade(unit) {
+    const [aberto, ultimo, barris] = await Promise.all([
+      supabase.from("inventarios").select("id, iniciado_em, usuarios(nome)").eq("unidade_id", unit).is("concluido_em", null).maybeSingle()
+        .then((r) => ok(r)),
+      supabase.from("inventarios").select("id, concluido_em").eq("unidade_id", unit).not("concluido_em", "is", null)
+        .order("concluido_em", { ascending: false }).limit(1).then((r) => ok(r)),
+      supabase.from("barris")
+        .select("id, codigo, estilo, chope_nome, tamanho_l, status, saldo_l, saldo_estimado, engates(retirado_em, torneira_numero)")
+        .eq("unidade_id", unit).in("status", ["em_uso", "disponivel"]).order("codigo").limit(2000).then((r) => ok(r)),
+    ]);
+    const pesagens = aberto
+      ? ok(await supabase.from("pesagens").select("id, barril_id, litros, metodo, criado_em, usuarios(nome), funcionarios(nome)")
+        .eq("inventario_id", aberto.id).order("id"))
+      : [];
+    const ultimaDe = new Map(pesagens.map((x) => [x.barril_id, x])); // em ordem de id: fica a última
+    const lista = barris.map(({ engates, ...b }) => {
+      const engate = (engates || []).find((e) => e.retirado_em === null);
+      const pes = ultimaDe.get(b.id);
+      return {
+        ...b,
+        tamanho_l: Number(b.tamanho_l),
+        saldo_l: b.saldo_l === null ? null : Number(b.saldo_l),
+        torneira_numero: engate ? engate.torneira_numero : null,
+        precisa: b.status === "em_uso" || b.saldo_l !== null,
+        pesagem: pes ? {
+          litros: Number(pes.litros), estimado: pes.metodo === "estimativa",
+          criado_em: fmtTs(pes.criado_em), quem: quemFez(pes.funcionarios, pes.usuarios),
+        } : null,
+      };
+    });
+    // Engatados (pela torneira), depois os disponíveis com saldo, depois os cheios
+    const ordem = (b) => (b.status === "em_uso" ? 0 : b.precisa ? 1 : 2);
+    lista.sort((a, b) => ordem(a) - ordem(b) || (a.torneira_numero || 0) - (b.torneira_numero || 0)
+      || String(a.codigo).localeCompare(String(b.codigo), "pt-BR", { numeric: true }));
+    return {
+      inventario: aberto ? { id: aberto.id, iniciado_em: fmtTs(aberto.iniciado_em), iniciado_por: aberto.usuarios ? aberto.usuarios.nome : null } : null,
+      ultimo: ultimo[0] ? { id: ultimo[0].id, concluido_em: fmtTs(ultimo[0].concluido_em) } : null,
+      barris: lista,
+    };
+  }
+
+  handle("inventarios:atual", async ({ unitId }, ctx) => inventarioDaUnidade(await resolveUnit(ctx, unitId)));
+
+  handle("inventarios:iniciar", async ({ unitId }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    await rpc("fn_inventario_iniciar", { p_unidade: unit, p_usuario: ctx.session.id });
+    return inventarioDaUnidade(unit);
+  });
+
+  // Só conclui com todos os engatados e disponíveis com saldo pesados (o banco confere e lista os que faltam)
+  handle("inventarios:concluir", async ({ id, funcionarioId }, ctx) => {
+    const r = await supabase.from("inventarios").select("id, unidade_id").eq("id", Number(id)).maybeSingle();
+    dbError(r.error);
+    if (!r.data) throw new AppError("Inventário não encontrado. Atualize a tela.");
+    await assertUnit(ctx, r.data.unidade_id);
+    const func = await funcionarioDaAcao(ctx, r.data.unidade_id, funcionarioId);
+    return rpc("fn_inventario_concluir", { p_inventario: r.data.id, p_usuario: ctx.session.id, p_funcionario: func });
+  });
+
   /* ======== Histórico e relatórios ======== */
   handle("history:list", async ({ unitId, q, operacao, funcionarioId }, ctx) =>
     queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao, funcionarioId, limit: 300 })
@@ -1364,7 +1570,10 @@ function registerHandlers() {
 
   handle("history:export", async ({ unitId, q, operacao, funcionarioId }, ctx) => {
     const rows = await queryMovements({ unitId: await resolveUnit(ctx, unitId), q, operacao, funcionarioId });
-    const labels = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento" };
+    const labels = {
+      entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento",
+      retirada_com_chope: "Retirado com chope", pesagem: "Pesagem",
+    };
     // Células que começam com = + - @ viram texto (evita que o Excel execute fórmulas digitadas por usuários)
     const esc = (v) => {
       let t = String(v ?? "");
@@ -1788,10 +1997,13 @@ function registerHandlers() {
     const engates = await contar("engates", (q) => q.or(`engatado_por.eq.${u.id},retirado_por.eq.${u.id}`));
     const movimentacoes = await contar("movimentacoes", (q) => q.eq("usuario_id", u.id));
     const transferencias = await contar("transferencias", (q) => q.or(`solicitante_id.eq.${u.id},recebedor_id.eq.${u.id}`));
+    const pesagens = await contar("pesagens", (q) => q.eq("usuario_id", u.id));
+    const inventarios = await contar("inventarios", (q) => q.eq("usuario_id", u.id));
     const outros = ok(await supabase.from("usuarios").select("id, nome, email, usuario, ativo").neq("id", u.id).order("nome"));
     return {
       usuario: { id: u.id, nome: u.nome, email: u.email || u.usuario },
-      engates, movimentacoes, transferencias, total: engates + movimentacoes + transferencias,
+      engates, movimentacoes, transferencias, pesagens, inventarios,
+      total: engates + movimentacoes + transferencias + pesagens + inventarios,
       outros: outros.map((o) => ({ id: o.id, nome: o.nome, email: o.email || o.usuario, ativo: b2i(o.ativo) })),
     };
   }, { perm: "usuarios" });

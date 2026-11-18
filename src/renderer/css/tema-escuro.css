@@ -78,3 +78,7 @@
 :root[data-tema="escuro"] .radio-item.is-disabled { background: #13161c; }
 :root[data-tema="escuro"] .tap-age { color: var(--mc-gold-dark); }
 :root[data-tema="escuro"] .tap-history li.is-current .th-line { color: #e8d3a0; }
+
+/* Pesagem */
+:root[data-tema="escuro"] .op-badge--retirada_com_chope { background: #143532; color: #8bd8cd; }
+:root[data-tema="escuro"] .op-badge--pesagem { background: #2c2442; color: #c4b2f0; }

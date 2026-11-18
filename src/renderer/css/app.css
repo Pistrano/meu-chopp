@@ -379,3 +379,37 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .func-nome { overflow-wrap: anywhere; }
 .func-tag { font-size: .72rem; font-weight: 600; color: var(--mc-muted); text-transform: uppercase; letter-spacing: .04em; }
 .func-btn.is-selected .func-tag { color: var(--mc-gold-dark); }
+
+/* ---------- Pesagem: retirada com chope, balança ou estimativa, inventário e taras ---------- */
+.op-badge--retirada_com_chope { background: #dff1ef; color: #1d6b64; }
+.op-badge--pesagem { background: #ece7f7; color: #5a3f9c; }
+/* Escolhas grandes (celular do quiosque): "Vazio" / "Ainda tem chope", balança ou estimativa, nível estimado */
+.pergunta-grande { font-weight: 700; font-size: 1.05rem; margin: 0 0 .75rem; }
+.escolha-grande, .medir-modo { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-bottom: 1rem; }
+.medir-niveis { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: .5rem; }
+.escolha-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; min-height: 72px;
+  padding: .7rem .6rem; border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius); background: var(--mc-surface);
+  color: var(--mc-text); text-align: center; cursor: pointer; line-height: 1.25;
+}
+.escolha-btn:hover { border-color: var(--mc-gold-dark); }
+.escolha-btn.is-selected { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); box-shadow: inset 0 0 0 1px var(--mc-gold-dark); }
+.escolha-titulo { font-weight: 800; font-size: 1.05rem; }
+.escolha-hint { font-size: .8rem; color: var(--mc-muted); font-weight: 600; }
+.mc-modal--medir { max-width: 520px; }
+.medir-peso { font-size: 1.2rem; font-weight: 700; }
+.medir-resultado { min-height: 1.5rem; font-weight: 700; color: var(--mc-muted); }
+.medir-resultado.is-ok { color: var(--mc-success); font-size: 1.1rem; }
+.medir-resultado.is-aviso { color: var(--mc-gold-dark); }
+.medir-resultado.is-erro { color: var(--mc-danger); font-weight: 600; }
+@media (max-width: 380px) { .escolha-grande, .medir-modo { grid-template-columns: 1fr; } }
+
+/* Mais > Pesagem */
+.inv-status { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.inv-progresso { font-weight: 700; }
+.inv-acoes { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+.inv-falta { color: var(--mc-danger); font-weight: 700; }
+.inv-ok { color: var(--mc-success); font-weight: 700; }
+.panel-note { color: var(--mc-muted); margin: 0 0 1rem; }
+.page-head--panel { align-items: center; margin-bottom: .5rem; }
+.page-head--panel .panel-title { margin: 0; }

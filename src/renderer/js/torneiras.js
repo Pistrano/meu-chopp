@@ -155,7 +155,7 @@
           <input type="radio" name="engBarril" value="${b.id}"${barris.length === 1 ? " checked" : ""}>
           <span class="eng-main">#${MC.esc(b.codigo)} <span class="eng-size">· ${MC.esc(b.tamanho_l)} L</span></span>
           <span class="eng-chope">${MC.esc(MC.chopeLabel(b))}</span>
-          <span class="eng-validade">${b.validade ? `Validade ${MC.fmtDia(b.validade)}` : "Sem validade informada"} ${MC.validadeBadge(b.situacao_validade)}</span>
+          <span class="eng-validade">${b.validade ? `Validade ${MC.fmtDia(b.validade)}` : "Sem validade informada"} ${MC.validadeBadge(b.situacao_validade)}${MC.saldoTexto(b) ? ` <span class="op-badge op-badge--disponivel">${MC.esc(MC.statusTexto(b))}</span>` : ""}</span>
         </label>`).join("")}</div>
       <p class="t-muted small-note eng-nada d-none" id="engNada">Nenhum barril encontrado com essa busca.</p>
       ${funcionario ? `<div class="mt-3">${funcionario.html}</div>` : ""}
@@ -208,7 +208,7 @@
     const unit = ctx.units.find((u) => u.id === ctx.unitId);
     try {
       await MCBarril.retirar({
-        barril: { id: t.barril_id, codigo: t.codigo, torneira_numero: t.numero },
+        barril: { id: t.barril_id, codigo: t.codigo, tamanho_l: t.tamanho_l, torneira_numero: t.numero },
         unidade: unit.nome,
         unitId: ctx.unitId,
         aoRetirar: () => load(),
