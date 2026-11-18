@@ -29,6 +29,10 @@ const CSP = [
   "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
 ].join("; ");
 const MAX_BODY = 64 * 1024;
+// Canais que recebem um arquivo (XLSX de até 10 MB em base64): limite maior, só para quem tem cookie de sessão
+// (a sessão em si é conferida depois, no dispatch)
+const MAX_BODY_ARQUIVO = 14 * 1024 * 1024;
+const CANAIS_ARQUIVO = new Set(["vendas:ler", "vendas:importar"]);
 const LENTO_MS = 300; // chamadas da API acima disso vão para o log (canal e tempo)
 
 /* ---------- Versão dos arquivos das telas ----------
@@ -95,13 +99,13 @@ function createServer({ trustProxy = false } = {}) {
     return out;
   };
 
-  function readBody(req) {
+  function readBody(req, limite = MAX_BODY) {
     return new Promise((resolve, reject) => {
       let size = 0;
       const chunks = [];
       req.on("data", (c) => {
         size += c.length;
-        if (size > MAX_BODY) { reject(Object.assign(new Error("Pedido grande demais."), { status: 413 })); req.destroy(); return; }
+        if (size > limite) { reject(Object.assign(new Error("Pedido grande demais."), { status: 413 })); req.destroy(); return; }
         chunks.push(c);
       });
       req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
@@ -123,17 +127,18 @@ function createServer({ trustProxy = false } = {}) {
     const m = /^\/api\/([a-zA-Z]+)\/([a-zA-Z]+)$/.exec(pathname);
     if (!m) return sendJson(res, 404, { ok: false, error: "Operação desconhecida." });
 
+    const canal = `${m[1]}:${m[2]}`;
+    const cookies = parseCookies(req);
     let payload = {};
     try {
-      const raw = await readBody(req);
+      const raw = await readBody(req, CANAIS_ARQUIVO.has(canal) && cookies.mc_session ? MAX_BODY_ARQUIVO : MAX_BODY);
       if (raw) payload = JSON.parse(raw);
       if (payload === null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("formato");
     } catch (err) {
       return sendJson(res, err.status || 400, { ok: false, error: err.status === 413 ? "Pedido grande demais." : "Pedido inválido." });
     }
 
-    const canal = `${m[1]}:${m[2]}`;
-    const result = await dispatch(canal, payload, parseCookies(req).mc_session, { ip: clientIp(req) });
+    const result = await dispatch(canal, payload, cookies.mc_session, { ip: clientIp(req) });
     // Tempo da chamada no servidor: aparece no DevTools (Network > Timing) e, se passar de 300 ms, no log
     const ms = Number(process.hrtime.bigint() - inicio) / 1e6;
     res.setHeader("Server-Timing", `app;dur=${ms.toFixed(1)}`);

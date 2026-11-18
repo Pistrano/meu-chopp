@@ -427,3 +427,29 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .precos-historico { margin-bottom: .5rem; }
 .precos-historico td, .precos-historico th { font-size: .85rem; }
 @media (max-width: 420px) { .preco-litro { min-width: 6.5rem; font-size: .9rem; } }
+
+/* ---------- Mais > Vendas da Teknisa ---------- */
+.vendas-arquivo { max-width: 520px; }
+.vendas-fatos { margin-top: 1rem; }
+.vendas-periodo { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+.vendas-periodo > div { flex: 0 1 200px; min-width: 150px; }
+.vendas-loja { margin: .75rem 0 0; }
+.vendas-loja--fora { color: var(--mc-muted); }
+.vendas-loja--escolher { max-width: 520px; }
+.vendas-avisos { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; }
+.vendas-aviso { display: inline-block; font-size: .78rem; font-weight: 700; color: var(--mc-gold-dark); background: var(--mc-gold-soft); border-radius: 6px; padding: .05rem .45rem; }
+.vendas-aviso--erro { color: var(--mc-danger); background: var(--mc-danger-soft); }
+.vendas-previa select { min-width: 11rem; }
+.vendas-volume { width: 6.5rem; }
+.vendas-check { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; white-space: nowrap; }
+.vendas-check input { width: 18px; height: 18px; accent-color: var(--mc-gold-dark); margin: 0; }
+.vendas-ignorados { margin: 1rem 0 1.25rem; }
+.vendas-ignorados > summary { cursor: pointer; font-weight: 700; padding: .4rem 0; }
+.vendas-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.vendas-subtitulo { font-size: .95rem; font-weight: 700; margin: 0 0 .5rem; }
+.vendas-acoes { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+.table-card tr.vendas-cancelada td { color: var(--mc-muted); }
+@media (max-width: 767.98px) {
+  .vendas-previa select { min-width: 0; max-width: 62%; margin-left: auto; }
+  .vendas-volume { display: inline-block; max-width: 7rem; }
+}

@@ -1,4 +1,4 @@
-/* BarrilFacil — chopes (só o nome), o custo por litro de cada um e os tamanhos de barril
+/* BarrilFacil — chopes (só o nome), o custo por litro de cada um, o preço de venda por litro e os tamanhos de barril
    Todos veem a lista e cadastram chope novo, só com o nome. Quem tem a permissão catalogo:editar (administrador e
    gerente) também cadastra e muda os preços, edita, desativa, apaga e cuida dos tamanhos de barril (os botões nem
    aparecem para os outros, e o servidor também bloqueia). O operador não vê custo nenhum. */
@@ -45,12 +45,17 @@
       : "";
   }
 
+  /* Preço de venda por litro (só leitura): vendas importadas da Teknisa nos últimos 30 dias, nas unidades da pessoa */
+  const vendaTexto = (v) => (v
+    ? `${MC.esc(`${MCPrecos.reais(v.precoLitro)}/L`)}<br><span class="t-muted small-note">${MC.esc(MC.fmtLitros(v.litros))} vendidos</span>`
+    : '<span class="t-muted">Sem vendas importadas</span>');
+
   function renderChopes() {
     $("tbodyChopes").innerHTML = chopes.length
       ? chopes.map((c) => `<tr>
           <td class="t-strong">${MC.esc(c.nome)}</td>
-          ${editar ? `<td>${MCPrecos.custoTexto(c.custo)}</td><td>${badge(c.ativo)}</td><td>${actions(c)}</td>` : ""}</tr>`).join("")
-      : `<tr><td colspan="${editar ? 4 : 1}" class="table-empty">Nenhum chope cadastrado ainda.</td></tr>`;
+          ${editar ? `<td>${MCPrecos.custoTexto(c.custo)}</td><td>${vendaTexto(c.venda)}</td><td>${badge(c.ativo)}</td><td>${actions(c)}</td>` : ""}</tr>`).join("")
+      : `<tr><td colspan="${editar ? 5 : 1}" class="table-empty">Nenhum chope cadastrado ainda.</td></tr>`;
   }
 
   function renderTamanhos() {
