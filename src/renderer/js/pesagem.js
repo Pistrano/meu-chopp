@@ -166,13 +166,17 @@
     renderTaras();
   }
 
+  // Os tamanhos vêm do cadastro de tamanhos de barril (os ativos, do menor para o maior)
   document.getElementById("btnNovaTara").addEventListener("click", async () => {
+    const tamanhos = await MC.run(() => MC.call("tamanhos:list"));
+    if (!tamanhos) return;
+    const padrao = tamanhos.some((t) => t.litros === 50) ? "50" : String((tamanhos[0] || {}).litros || "");
     const r = await MC.dialog({
       title: "Nova tara de vasilhame",
       intro: "Pese o barril vazio na balança. A tara nova passa a ser a padrão do tamanho.",
       fields: [
-        { id: "tamanho", label: "Tamanho do barril", type: "select", value: "50",
-          options: [{ value: "50", label: "50 litros" }, { value: "30", label: "30 litros" }, { value: "20", label: "20 litros" }] },
+        { id: "tamanho", label: "Tamanho do barril", type: "select", value: padrao,
+          options: tamanhos.map((t) => ({ value: String(t.litros), label: MC.fmtLitros(t.litros).replace(" L", " litros") })) },
         { id: "peso", label: "Peso do vasilhame vazio (kg)" },
         { id: "descricao", label: "Descrição (opcional)" },
       ],

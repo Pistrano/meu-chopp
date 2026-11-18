@@ -44,10 +44,8 @@ describe("unidades, torneiras, engate e retirada", { skip: SEM_BANCO }, () => {
     maria = await makeOperator(srv.base, admin, { nome: "Maria", email: "maria@barrilfacil.test", unidadeIds: [u.centro] });
     joao = await makeOperator(srv.base, admin, { nome: "João", email: "joao@barrilfacil.test", unidadeIds: [u.pantanal] });
     ids.maria = (await linhas("usuarios", "id", (q) => q.eq("email", "maria@barrilfacil.test")))[0].id;
-    const pilsen = await admin.ok("estilos:create", { nome: "Pilsen" });
-    const ipa = await admin.ok("estilos:create", { nome: "IPA" });
-    ids.pilsen = (await admin.ok("chopes:create", { nome: "Louvada Pilsen", estiloId: pilsen.id })).id;
-    ids.ipa = (await admin.ok("chopes:create", { nome: "Louvada IPA", estiloId: ipa.id })).id;
+    ids.pilsen = (await admin.ok("chopes:create", { nome: "Louvada Pilsen", custoLitro: 12 })).id;
+    ids.ipa = (await admin.ok("chopes:create", { nome: "Louvada IPA", custoLitro: 14 })).id;
     validade = somaDias((await admin.ok("config:get")).hoje, 5);
   });
   after(async () => { if (srv) await srv.stop(); });
@@ -156,7 +154,7 @@ describe("unidades, torneiras, engate e retirada", { skip: SEM_BANCO }, () => {
   test("engata o barril na torneira livre escolhida e a torneira fica ocupada", async () => {
     const tap1 = await tapByNumber(u.centro, 1);
     const r = await maria.ok("barris:use", { id: ids.B1, torneiraId: tap1.id, unitId: u.centro });
-    assert.deepEqual(r, { codigo: "B1", estilo: "Pilsen", unidade: "Louvada Estação Cuiabá", torneira: 1 });
+    assert.deepEqual(r, { codigo: "B1", estilo: "Louvada Pilsen", unidade: "Louvada Estação Cuiabá", torneira: 1 });
     const b1 = await barril(maria, u.centro, "B1");
     assert.equal(b1.status, "em_uso");
     assert.equal(b1.torneira_numero, 1);

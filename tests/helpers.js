@@ -48,10 +48,21 @@ const TABELAS = [
   ["sessoes", "token_hash"], ["auditoria", "id"], ["movimentacoes", "id"], ["pesagens", "id"], ["inventarios", "id"], ["taras", "id"],
   ["transferencias", "id"], ["engates", "id"],
   ["barris", "id"], ["torneiras", "id"], ["usuario_unidades", "usuario_id"], ["funcionario_unidades", "funcionario_id"],
-  ["funcionarios", "id"], ["chopes", "id"], ["estilos", "id"], ["usuarios", "id"], ["unidades", "id"],
+  ["funcionarios", "id"], ["custos_chope", "id"], ["chopes", "id"], ["estilos", "id"], ["tamanhos_barril", null],
+  ["usuarios", "id"], ["unidades", "id"],
 ];
+/* Tamanhos de barril: voltam aos três da migration (20, 30 e 50 L, ativos), sem os criados nos testes */
+const TAMANHOS_INICIAIS = [{ litros: 20, prefixo_codigo: "BA2" }, { litros: 30, prefixo_codigo: "BA3" }, { litros: 50, prefixo_codigo: "BA5" }];
+async function restaurarTamanhos() {
+  const t = banco().from("tamanhos_barril");
+  let r = await t.delete().not("litros", "in", "(20,30,50)");
+  if (!r.error) r = await banco().from("tamanhos_barril")
+    .upsert(TAMANHOS_INICIAIS.map((x) => ({ ...x, ativo: true, criado_por: null })), { onConflict: "litros" });
+  if (r.error) throw new Error(`Não foi possível restaurar os tamanhos de barril do banco local: ${r.error.message}`);
+}
 async function limparBanco() {
   for (const [tabela, coluna] of TABELAS) {
+    if (tabela === "tamanhos_barril") { await restaurarTamanhos(); continue; }
     const { error } = await banco().from(tabela).delete().not(coluna, "is", null);
     if (error) throw new Error(`Não foi possível limpar a tabela ${tabela} do banco local: ${error.message}`);
   }

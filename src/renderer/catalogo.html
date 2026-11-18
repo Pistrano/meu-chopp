@@ -10,7 +10,7 @@
   <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Chopes e estilos | BarrilFacil</title>
+  <title>Chopes | BarrilFacil</title>
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
@@ -22,42 +22,41 @@
   <header id="appHeader" class="app-header"></header>
   <main class="dashboard-main">
     <div class="page-head">
-      <div><h1>Chopes e estilos</h1><p id="subtitle">Catálogo usado no cadastro de barris. Renomear um chope ou estilo atualiza também os barris dele.</p></div>
+      <div><h1>Chopes</h1><p id="subtitle">Catálogo usado no cadastro de barris. Renomear um chope atualiza também os barris dele.</p></div>
     </div>
+
+    <div id="avisoSemPreco" class="warn-note d-none" role="status"></div>
 
     <section class="panel">
       <h2 class="panel-title">Novo chope</h2>
-      <form id="formChope" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="chopeNome">Nome do chope</label><input id="chopeNome" class="form-control" placeholder="Ex.: German Pilsen" maxlength="60" required></div>
-        <div class="col-md-4"><label class="form-label" for="chopeEstilo">Estilo</label><select id="chopeEstilo" class="form-select" required></select></div>
-        <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar chope</button></div>
+      <form id="formChope" class="form-chope" novalidate>
+        <div class="mb-3"><label class="form-label" for="chopeNome">Nome do chope</label><input id="chopeNome" class="form-control" placeholder="Ex.: German Pilsen" maxlength="60" required></div>
+        <div id="precosNovo"></div>
+        <button class="btn btn-mc btn-mc-sm" type="submit">Cadastrar chope</button>
       </form>
     </section>
 
     <h2 class="section-title">Chopes</h2>
     <div class="table-card mb-section">
       <table>
-        <thead><tr><th>Chope</th><th>Estilo</th><th class="admin-only">Situação</th><th class="admin-only"></th></tr></thead>
+        <thead><tr><th>Chope</th><th class="admin-only">Custo por litro</th><th class="admin-only">Situação</th><th class="admin-only"></th></tr></thead>
         <tbody id="tbodyChopes"></tbody>
       </table>
     </div>
 
-    <section class="panel">
-      <h2 class="panel-title">Novo estilo</h2>
-      <form id="formEstilo" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5"><label class="form-label" for="estiloNome">Nome do estilo</label><input id="estiloNome" class="form-control" placeholder="Ex.: American Lager" maxlength="60" required aria-describedby="estiloAjuda"></div>
-        <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Cadastrar estilo</button></div>
-      </form>
-      <p id="estiloAjuda" class="t-muted small-note mt-2 mb-0">Estilo é a família da cerveja (American Lager, IPA, Weiss). O nome que aparece na torneira vai no cadastro do chope.</p>
+    <section class="panel admin-only" aria-labelledby="tituloTamanhos">
+      <div class="page-head page-head--panel">
+        <h2 class="panel-title" id="tituloTamanhos">Tamanhos de barril</h2>
+        <button type="button" class="btn btn-mc btn-mc-sm" id="btnNovoTamanho">Novo tamanho</button>
+      </div>
+      <p class="panel-note">Os tamanhos que aparecem no cadastro de barril e nos preços. Tamanho usado em barril não é apagado: desative para ele sumir do cadastro de barril e dos preços.</p>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Tamanho</th><th>Prefixo do código</th><th>Barris</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tbodyTamanhos"></tbody>
+        </table>
+      </div>
     </section>
-
-    <h2 class="section-title">Estilos</h2>
-    <div class="table-card">
-      <table>
-        <thead><tr><th>Estilo</th><th class="admin-only">Situação</th><th class="admin-only"></th></tr></thead>
-        <tbody id="tbodyEstilos"></tbody>
-      </table>
-    </div>
   </main>
 
   <script src="js/api.js"></script>
@@ -65,6 +64,7 @@
   <script src="js/common.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/layout.js"></script>
+  <script src="js/precos.js"></script>
   <script src="js/catalogo.js"></script>
 </body>
 </html>

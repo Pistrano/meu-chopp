@@ -264,7 +264,7 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 }
 
 /* ==========================================================
-   Chopes e estilos (catálogo)
+   Chopes (catálogo)
    ========================================================== */
 .section-title { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.05rem; margin: 0 0 .75rem; }
 .mb-section { margin-bottom: 2rem; }
@@ -288,7 +288,6 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .tap-num { font-family: var(--mc-font-display); font-weight: 700; font-size: 1rem; }
 .tap-free { color: var(--mc-success); font-weight: 700; }
 .tap-chope { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.3rem; line-height: 1.2; margin-top: .4rem; overflow-wrap: anywhere; }
-.tap-estilo { color: var(--mc-muted); font-weight: 600; }
 .tap-meta { font-weight: 700; margin-top: .4rem; }
 .tap-since { color: var(--mc-muted); font-size: .85rem; }
 .tap-age { color: #7a5a16; font-size: .85rem; font-weight: 700; }
@@ -362,8 +361,6 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .cargo-info li.is-sel { color: var(--mc-text); }
 .cargo-info li.is-sel::before { background: var(--mc-gold-dark); }
 .apagar-aviso { background: var(--mc-danger-soft); color: var(--mc-danger); border-radius: 8px; padding: .6rem .8rem; font-size: .88rem; font-weight: 600; }
-/* Chopes: lista do que muda de estilo ao apagar um estilo */
-.apagar-lista { margin: 0 0 .9rem; padding-left: 1.2rem; font-weight: 600; max-height: 12rem; overflow-y: auto; }
 
 /* Quem está fazendo? Grade de nomes dentro da confirmação de cada ação (celular do quiosque: alvos grandes) */
 .func-pick { margin: 0 0 1rem; }
@@ -413,3 +410,20 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 .panel-note { color: var(--mc-muted); margin: 0 0 1rem; }
 .page-head--panel { align-items: center; margin-bottom: .5rem; }
 .page-head--panel .panel-title { margin: 0; }
+
+/* ---------- Chopes: custo por litro e tamanhos de barril ---------- */
+.form-chope { max-width: 520px; }
+.precos-caixa { margin-bottom: 1rem; }
+.preco-linha { display: flex; align-items: center; gap: .75rem; }
+.preco-linha .form-control { flex: 1 1 auto; min-width: 0; }
+.preco-litro { flex: 0 0 auto; min-width: 7.5rem; font-weight: 700; color: var(--mc-success); }
+.preco-litro--erro { color: var(--mc-danger); font-weight: 600; }
+.sem-preco { display: inline-block; font-weight: 700; color: var(--mc-danger); background: var(--mc-danger-soft); border-radius: 6px; padding: .05rem .45rem; }
+.sem-preco--parcial { margin-top: .25rem; font-size: .8rem; }
+.sem-preco-lista { margin: .35rem 0 .35rem 1.1rem; padding: 0; font-weight: 600; }
+.sem-preco-dica { font-weight: 500; font-size: .85rem; }
+.mc-modal--precos { max-width: 600px; }
+.precos-hist-titulo { font-size: .95rem; font-weight: 700; margin: 1.25rem 0 .5rem; }
+.precos-historico { margin-bottom: .5rem; }
+.precos-historico td, .precos-historico th { font-size: .85rem; }
+@media (max-width: 420px) { .preco-litro { min-width: 6.5rem; font-size: .9rem; } }

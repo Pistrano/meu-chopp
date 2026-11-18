@@ -42,12 +42,11 @@
         </div>
       </article>`;
     }
-    const nome = t.chope_nome || t.estilo || "Chope";
+    const nome = MC.chopeLabel(t) || "Chope";
     return `<article class="tap-card tap-card--busy" aria-label="Torneira ${t.numero}, ocupada">
         <span class="tap-head"><span class="tap-num">Torneira ${t.numero}</span></span>
         <span class="tap-chope">${MC.esc(nome)}</span>
-        ${t.chope_nome && t.estilo ? `<span class="tap-estilo">${MC.esc(t.estilo)}</span>` : ""}
-        <span class="tap-meta">#${MC.esc(t.codigo)}${t.tamanho_l ? ` · ${t.tamanho_l} L` : ""}</span>
+        <span class="tap-meta">#${MC.esc(t.codigo)}${t.tamanho_l ? ` · ${MC.esc(MC.fmtLitros(t.tamanho_l))}` : ""}</span>
         ${t.validade ? `<span class="tap-validade">Validade ${MC.fmtDia(t.validade)} ${MC.validadeBadge(t.situacao_validade)}</span>` : ""}
         <span class="tap-since">Engatado em ${diaHora(t.engatado_em)}${t.engatado_por ? ` por ${MC.esc(t.engatado_por)}` : ""}</span>
         <span class="tap-age">${desde(t.engatado_em_iso)}</span>
@@ -149,11 +148,11 @@
     const funcionario = await MC.escolherFuncionario(ctx.unitId);
     const overlay = MC.openOverlay(`<h2>Engatar na Torneira ${t.numero}</h2>
       <p class="mc-modal-intro">Unidade: ${MC.esc(unit.nome)}. Escolha o barril que vai ser engatado nesta torneira.</p>
-      <input type="search" class="form-control mb-3" id="engBusca" placeholder="Buscar por código, chope ou estilo" aria-label="Buscar barril por código, chope ou estilo" autocomplete="off">
+      <input type="search" class="form-control mb-3" id="engBusca" placeholder="Buscar por código ou chope" aria-label="Buscar barril por código ou chope" autocomplete="off">
       <div class="eng-list" role="radiogroup" aria-label="Barris disponíveis">${barris.map((b) => `
-        <label class="eng-item" data-busca="${MC.esc(semAcento(`${b.codigo} ${b.chope_nome || ""} ${b.estilo || ""}`))}">
+        <label class="eng-item" data-busca="${MC.esc(semAcento(`${b.codigo} ${MC.chopeLabel(b)}`))}">
           <input type="radio" name="engBarril" value="${b.id}"${barris.length === 1 ? " checked" : ""}>
-          <span class="eng-main">#${MC.esc(b.codigo)} <span class="eng-size">· ${MC.esc(b.tamanho_l)} L</span></span>
+          <span class="eng-main">#${MC.esc(b.codigo)} <span class="eng-size">· ${MC.esc(MC.fmtLitros(b.tamanho_l))}</span></span>
           <span class="eng-chope">${MC.esc(MC.chopeLabel(b))}</span>
           <span class="eng-validade">${b.validade ? `Validade ${MC.fmtDia(b.validade)}` : "Sem validade informada"} ${MC.validadeBadge(b.situacao_validade)}${MC.saldoTexto(b) ? ` <span class="op-badge op-badge--disponivel">${MC.esc(MC.statusTexto(b))}</span>` : ""}</span>
         </label>`).join("")}</div>

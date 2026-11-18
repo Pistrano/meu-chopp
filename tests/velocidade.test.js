@@ -141,8 +141,7 @@ describe("troca de abas rápida", { skip: SEM_BANCO }, () => {
 
   test("torneiras: o quadro usa só o engate em andamento; os detalhes da unidade contam os usos", async () => {
     await admin.ok("taps:create", { unitId: u.centro, quantidade: 2 });
-    const estilo = await admin.ok("estilos:create", { nome: "Pilsen" });
-    const chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", estiloId: estilo.id })).id;
+    const chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", custoLitro: 12 })).id;
     const hoje = (await admin.ok("config:get")).hoje;
     const d = new Date(`${hoje}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 5);
     const validade = d.toISOString().slice(0, 10);

@@ -38,8 +38,7 @@ describe("aviso de validade", { skip: SEM_BANCO }, () => {
     u.centro = (await admin.ok("units:create", { razaoSocial: "Bar do Centro Bebidas Ltda", nome: "Bar do Centro", nomeCurto: "Centro", cnpj: "11.222.333/0001-81", endereco: "Av. Brasil, 100, Centro, Cuiabá - MT" })).id;
     u.porto = (await admin.ok("units:create", { razaoSocial: "Bar do Porto Bebidas Ltda", nome: "Bar do Porto", nomeCurto: "Porto", cnpj: "11.444.777/0001-61", endereco: "Rua do Porto, 200, Cuiabá - MT" })).id;
     await admin.ok("taps:create", { unitId: u.centro, quantidade: 2 });
-    const estilo = await admin.ok("estilos:create", { nome: "Pilsen" });
-    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", estiloId: estilo.id })).id;
+    chope = (await admin.ok("chopes:create", { nome: "Chopp Pilsen", custoLitro: 12 })).id;
     hoje = (await admin.ok("config:get")).hoje;
   });
   after(async () => { if (srv) await srv.stop(); });
