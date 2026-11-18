@@ -214,9 +214,11 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
 ## Validade e recolhimento
 
 - **Validade:** no cadastro do barril, a data de validade é obrigatória e começa em branco (a pessoa confere a data no
-  barril; normalmente são 5 dias a partir da chegada). Não aceita data no passado. A lista de barris e a aba Torneiras
-  mostram um selo amarelo quando o barril vence hoje ou amanhã e vermelho quando já venceu. O sino de alertas avisa
-  os mesmos casos, com os vencidos primeiro.
+  barril; normalmente são 5 dias a partir da chegada). Não aceita data no passado. A lista de barris e a lista para
+  engatar (aba Torneiras) mostram um selo amarelo quando o barril vence hoje ou amanhã e vermelho quando já venceu.
+  O sino de alertas avisa os mesmos casos, com os vencidos primeiro.
+- O aviso vale só para barril **disponível** ou **em transferência**. Barril **engatado** está na câmara fria sendo
+  consumido e não gera aviso: o cartão da aba Torneiras mostra a data, sem selo. Vazios e recolhidos também não avisam.
 - O sistema **só avisa, nunca bloqueia**: ao engatar um barril vencido, ele pede confirmação ("Engatar mesmo assim?").
   O engate confirmado fica registrado na *Auditoria* como `engate_barril_vencido`.
 - **Recolhimento:** os barris vazios esperam a fábrica. Em *Barris > Registrar recolhimento*, marque os vasilhames que
