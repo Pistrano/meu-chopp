@@ -353,9 +353,10 @@ const STATUS_TEXTO = {
 };
 
 /* Validade (conta a partir da chegada na loja). O sistema só avisa, nunca bloqueia.
-   Vazios e recolhidos não têm situação: o chope já saiu do barril. */
+   Engatados não têm situação (estão na câmara fria sendo consumidos), nem vazios e recolhidos (o chope já saiu
+   do barril). É a mesma regra da fn_alertas_validade, que alimenta o sino. */
 function situacaoValidade(validade, status, hoje = hojeTZ()) {
-  if (!validade || status === "esgotado" || status === "recolhido") return null;
+  if (!validade || status === "em_uso" || status === "esgotado" || status === "recolhido") return null;
   if (validade < hoje) return "vencido";
   if (validade === hoje) return "vence_hoje";
   if (validade === somaDias(hoje, 1)) return "vence_amanha";
