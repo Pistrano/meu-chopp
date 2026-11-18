@@ -122,8 +122,8 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Funcionários (administrador e gerente) e,
-  para o administrador, Unidades e Usuários.
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Funcionários (administrador e
+  gerente) e, para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
@@ -140,7 +140,7 @@ o resto depende da permissão do cargo:
 | `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
 | `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
 | `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
-| `catalogo:editar`: editar, desativar, reativar e apagar chopes e estilos | ✓ | ✓ | |
+| `catalogo:editar`: editar, desativar, reativar e apagar chopes, estilos e taras dos vasilhames | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
@@ -198,18 +198,18 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
 - **Engate:** em *Barris > Engatar na torneira*, o funcionário escolhe uma torneira livre da unidade do barril.
   Sem torneira livre, o engate não é feito.
 - **Retirada:** em *Barris > Retirar barril*, o sistema usa a torneira registrada no engate e a libera.
-  O barril retirado fica *Vazio* (aguardando recolhimento).
+  O barril retirado vazio fica *Vazio* (aguardando recolhimento); com chope, volta para o estoque (veja *Pesagem*).
 - O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
 - Aba **Torneiras** (todos os usuários com acesso à unidade): um cartão por torneira ativa, com o chope engatado, desde
   quando e por quem. Cada cartão tem dois botões:
   - Torneira livre: **Engatar barril** abre a lista dos barris disponíveis da unidade (o que vence primeiro fica em cima,
     com busca por código, chope ou estilo). Barril vencido pede a mesma confirmação da aba Barris.
-  - Torneira ocupada: **Retirar barril**, com a mesma confirmação e o mesmo aviso da aba Barris. O barril fica *Vazio*.
+  - Torneira ocupada: **Retirar barril**, com as mesmas perguntas e o mesmo aviso da aba Barris.
   - **Histórico**: os engates daquela torneira.
 - A tela se atualiza sozinha a cada minuto, menos enquanto uma janela estiver aberta. Se outro aparelho usou a torneira ou o
   barril nesse meio tempo, aparece o motivo e o quadro é recarregado.
-- Engatar e retirar ficam num só lugar, `src/renderer/js/acoes-barril.js` (`MCBarril.engatar` e `MCBarril.retirar`),
-  usado pelas abas Barris e Torneiras.
+- Engatar, retirar e pesar ficam num só lugar, `src/renderer/js/acoes-barril.js` (`MCBarril.engatar`, `MCBarril.retirar`,
+  `MCBarril.medir` e `MCBarril.pesar`), usado pelas abas Barris, Torneiras e Pesagem.
 
 ## Validade e recolhimento
 
@@ -226,6 +226,41 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
   mostra o histórico). Se o mesmo vasilhame voltar, é um cadastro novo com o mesmo código.
 - O Painel mostra quantos barris estão *Vazios para recolher*, e o sino avisa quando um vazio espera há mais de 3 dias.
 - Datas "de hoje" seguem o fuso `APP_TZ` (padrão `America/Cuiaba`), nunca o horário UTC do servidor.
+
+## Pesagem (cálculo de perdas, parte 1)
+
+Registra quantos litros cada barril tinha quando foi engatado e quando foi retirado, pela balança ou por estimativa.
+Ainda não há relatório de perda: esta parte só grava os dados.
+
+- **Retirada:** "Retirar barril" (abas Barris e Torneiras) pergunta primeiro *Este barril está vazio ou ainda tem chope?*
+  - **Vazio:** o fluxo de sempre. O barril fica *Vazio* até a fábrica recolher.
+  - **Ainda tem chope:** *Pesar na balança* (peso do barril em kg e a tara do vasilhame; os litros aparecem enquanto a
+    pessoa digita) ou *Sem balança, estimar* (*Cerca de 100%, 75%, 50% ou 25%*). Depois vem o *Quem está fazendo?* e a
+    confirmação (*Barril #BA5-1463 volta para o estoque com 18,2 L (pesado)*). A torneira é liberada e o barril volta a
+    ficar *Disponível*, com o saldo.
+  - Balança: litros = (peso − tara) ÷ densidade do chope. A densidade (1,01) fica só em `DENSIDADE_CHOPE`, em
+    `src/server/api.js`, e é copiada em cada pesagem. Peso menor que a tara é recusado; mais litros do que o tamanho
+    do barril + 5% também (*Confira o peso e a tara*). 0,5 L ou menos: a tela pergunta se retira como vazio.
+- **Saldo:** o barril que voltou com chope aparece como *Disponível · 18,2 L* (ou *≈ 37,5 L* quando estimado) na lista de
+  barris, na lista do engate, no CSV do estoque e nas movimentações recentes do Painel. Engatado de novo, o engate começa
+  com o saldo. Retirado vazio, o saldo zera.
+- **Taras dos vasilhames (Mais > Pesagem):** peso do barril vazio por tamanho. Qualquer cargo cadastra; editar, desativar e
+  apagar ficam com administrador e gerente (`catalogo:editar`). Pode haver mais de uma ativa por tamanho: a padrão é a
+  ativa mais recente, e o diálogo da balança deixa trocar. Sem tara para o tamanho, a primeira pesagem pede o peso do
+  vasilhame vazio e salva como tara. Tara usada em pesagem não é apagada, só desativada (a pesagem guarda uma cópia do peso).
+- **Inventário (Mais > Pesagem):** *Começar inventário* lista os barris engatados (com a torneira) e os disponíveis.
+  Cada engatado e cada disponível com saldo precisa ser pesado (balança ou estimativa); os disponíveis cheios entram como
+  100% sem pesar. *Concluir inventário* só habilita com todos pesados. O status dos barris não muda; o disponível pesado
+  passa a ter o saldo novo. Um inventário aberto por unidade.
+- **Pesagem avulsa (Mais > Pesagem):** pesa um barril engatado ou disponível fora do inventário.
+- Todos os cargos pesam; o operador escolhe o funcionário. Tudo vai para a *Auditoria*.
+- **Histórico:** operações novas *Retirado com chope* e *Pesagem* (com filtro), com data, quem, litros e *pesado* ou
+  *estimado*; também no CSV. O Painel não mostra as pesagens (um inventário encheria as movimentações recentes).
+- Banco: tabelas `taras`, `pesagens` e `inventarios`, colunas `barris.saldo_l`/`saldo_estimado` (nulo = cheio),
+  `engates.litros_inicio`/`inicio_estimado`/`litros_fim`/`fim_estimado` e `movimentacoes.pesagem_id`, e as funções
+  `fn_barril_retirar_com_chope`, `fn_pesagem_registrar`, `fn_inventario_iniciar` e `fn_inventario_concluir`, em
+  `supabase/migrations/20261118100000_pesagens_saldo.sql`. Os engates antigos ficam com `litros_inicio` = tamanho do barril
+  e, os já retirados, com `litros_fim` = 0.
 
 ## Relatório de barris
 

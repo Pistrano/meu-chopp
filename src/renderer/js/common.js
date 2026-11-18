@@ -1,6 +1,9 @@
 /* BarrilFacil — utilitários compartilhados pelas telas */
 const MC = (() => {
-  const OP_LABELS = { entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento" };
+  const OP_LABELS = {
+    entrada: "Entrada", transferencia: "Transferência", utilizacao: "Utilização", esgotado: "Vazio", recolhimento: "Recolhimento",
+    retirada_com_chope: "Retirado com chope", pesagem: "Pesagem",
+  };
   // Rótulo curto (badge). Nos detalhes, o vazio aparece como "Vazio (aguardando recolhimento)".
   const STATUS_LABELS = { disponivel: "Disponível", em_uso: "Em uso", em_transferencia: "Em transferência", esgotado: "Vazio", recolhido: "Recolhido" };
   const TRANSFER_LABELS = { pendente: "Pendente", confirmada: "Confirmada", cancelada: "Cancelada" };
@@ -46,6 +49,22 @@ const MC = (() => {
     const selo = VALIDADE_SELO[situacao];
     return selo ? `<span class="op-badge op-badge--${selo[0]}">${selo[1]}</span>` : "";
   }
+
+  /* Litros com uma casa: 18.217 -> "18,2 L"; 50 -> "50 L" */
+  const fmtLitros = (n) => `${Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`;
+  /* Saldo do barril disponível que voltou da torneira com chope: "18,2 L" (pesado) ou "≈ 37,5 L" (estimado).
+     "" quando o barril está cheio (sem saldo) ou não está disponível. */
+  function saldoTexto(b) {
+    if (!b || b.status !== "disponivel" || b.saldo_l === null || b.saldo_l === undefined) return "";
+    return `${b.saldo_estimado ? "≈ " : ""}${fmtLitros(b.saldo_l)}`;
+  }
+  /* Situação do barril para mostrar: "Disponível · 18,2 L" quando tem saldo; senão o rótulo de sempre */
+  function statusTexto(b) {
+    const saldo = saldoTexto(b);
+    return saldo ? `${STATUS_LABELS[b.status]} · ${saldo}` : STATUS_LABELS[b.status] || b.status;
+  }
+  /* Número digitado com vírgula ou ponto ("68,4" -> 68.4). Vazio ou inválido -> NaN. */
+  const numeroBR = (v) => (String(v ?? "").trim() === "" ? NaN : Number(String(v).trim().replace(",", ".")));
 
   /* "2026-10-06 14:32:10" -> "06/10 14:32" */
   function fmtDate(s) {
@@ -409,6 +428,7 @@ const MC = (() => {
 
   return {
     OP_LABELS, STATUS_LABELS, TRANSFER_LABELS, setUser, pode, call, esc, chopeLabel, fmtDate, fmtDia, validadeBadge, toast, run,
+    fmtLitros, saldoTexto, statusTexto, numeroBR,
     bindPasswordRules, dialog, showSecret, notice, confirm, openOverlay, maskCnpj, escolherFuncionario,
     rememberFields, sortable, clearRemembered,
   };

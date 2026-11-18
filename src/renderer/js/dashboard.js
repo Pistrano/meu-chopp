@@ -50,7 +50,8 @@
         const origem = m.origem || ctx.config.fornecedor;
         const route = (m.destino
           ? `${MC.esc(origem)} <span class="arrow">→</span> ${MC.esc(m.destino)}`
-          : MC.esc(origem)) + (m.torneira_numero ? ` <span class="arrow">·</span> Torneira ${m.torneira_numero}` : "");
+          : MC.esc(origem)) + (m.torneira_numero ? ` <span class="arrow">·</span> Torneira ${m.torneira_numero}` : "") +
+          (m.litros !== null && m.litros !== undefined ? ` <span class="arrow">·</span> ${m.estimado ? "≈ " : ""}${MC.fmtLitros(m.litros)}` : "");
         return `<div class="movement-row">
           <div><span class="m-barril">#${MC.esc(m.codigo)}</span><span class="m-estilo">${MC.esc(MC.chopeLabel(m))}</span></div>
           <span class="op-badge op-badge--${m.operacao}">${MC.OP_LABELS[m.operacao]}</span>

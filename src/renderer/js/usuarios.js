@@ -168,6 +168,8 @@
       ["Engates", plural(prev.engates, "engate", "engates")],
       ["Movimentações", plural(prev.movimentacoes, "movimentação", "movimentações")],
       ["Transferências", plural(prev.transferencias, "transferência", "transferências")],
+      ...(prev.pesagens ? [["Pesagens", plural(prev.pesagens, "pesagem", "pesagens")]] : []),
+      ...(prev.inventarios ? [["Inventários", plural(prev.inventarios, "inventário", "inventários")]] : []),
     ];
     const r = await MC.dialog({
       title: "Apagar usuário com histórico",

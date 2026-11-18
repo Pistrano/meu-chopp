@@ -18,7 +18,7 @@
   if (["disponivel", "em_uso", "em_transferencia", "esgotado", "recolhido"].includes(statusInicial)) status.value = statusInicial;
   const sorter = MC.sortable(document.querySelector(".table-card table"), {
     0: (b) => b.codigo, 1: (b) => MC.chopeLabel(b), 2: (b) => b.tamanho_l, 3: (b) => b.validade,
-    4: (b) => MC.STATUS_LABELS[b.status], 5: (b) => b.torneira_numero,
+    4: (b) => MC.statusTexto(b), 5: (b) => b.torneira_numero,
   }, { key: "barris", onChange: () => render() });
 
   /* ---------- Chope do barril (catálogo) ---------- */
@@ -111,7 +111,7 @@
             : MC.esc(b.estilo)}</td>
           <td>${b.tamanho_l} L</td>
           <td><span class="validade-cell">${MC.fmtDia(b.validade)} ${MC.validadeBadge(b.situacao_validade)}</span></td>
-          <td><span class="op-badge op-badge--${b.status}">${MC.STATUS_LABELS[b.status]}</span></td>
+          <td><span class="op-badge op-badge--${b.status}">${MC.esc(MC.statusTexto(b))}</span></td>
           <td>${tapCell(b)}</td>
           <td><div class="row-actions">${actions(b)}</div></td></tr>`).join("")
       : `<tr><td colspan="7" class="table-empty">Nenhum barril encontrado nesta unidade.</td></tr>`;
@@ -149,7 +149,8 @@
     const funcionario = await MC.escolherFuncionario(unidade.id);
     const result = await MC.dialog({
       title: `Engatar barril #${barril.codigo}`,
-      intro: `Unidade: ${unidade.nome}. Escolha a torneira em que o barril (${MC.chopeLabel(barril)}) será engatado.`,
+      intro: `Unidade: ${unidade.nome}. Escolha a torneira em que o barril (${MC.chopeLabel(barril)}) será engatado.` +
+        (MC.saldoTexto(barril) ? ` Ele voltou de outra torneira: ${MC.statusTexto(barril)}.` : ""),
       fields: [{
         id: "torneira",
         label: "Torneira",
