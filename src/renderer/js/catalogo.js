@@ -45,7 +45,7 @@
       : "";
   }
 
-  /* Preço de venda por litro (só leitura): vendas importadas da Teknisa nos últimos 30 dias, nas unidades da pessoa */
+  /* Preço de venda por litro (só leitura): vendas importadas nos últimos 30 dias, nas unidades da pessoa */
   const vendaTexto = (v) => (v
     ? `${MC.esc(`${MCPrecos.reais(v.precoLitro)}/L`)}<br><span class="t-muted small-note">${MC.esc(MC.fmtLitros(v.litros))} vendidos</span>`
     : '<span class="t-muted">Sem vendas importadas</span>');

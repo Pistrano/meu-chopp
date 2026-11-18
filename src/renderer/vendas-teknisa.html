@@ -10,7 +10,7 @@
   <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Vendas da Teknisa | BarrilFacil</title>
+  <title>Vendas | BarrilFacil</title>
   <link href="vendor/bootstrap-lite.css" rel="stylesheet">
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
@@ -22,10 +22,10 @@
   <header id="appHeader" class="app-header"></header>
   <main class="dashboard-main">
     <div class="page-head">
-      <div><h1>Vendas da Teknisa</h1><p>Importe o relatório de vendas da Teknisa para ter os litros de chope vendidos e o horário de cada venda. Só os itens de chope são gravados.</p></div>
+      <div><h1>Vendas</h1><p>Importe o relatório de vendas do sistema de caixa para ter os litros de chope vendidos e o horário de cada venda. Só os itens de chope são gravados.</p></div>
     </div>
 
-    <div class="tabs" role="tablist" aria-label="Vendas da Teknisa">
+    <div class="tabs" role="tablist" aria-label="Vendas">
       <button type="button" role="tab" id="abaImportar" class="active" aria-selected="true" aria-controls="painelImportar" data-aba="importar">Importar</button>
       <button type="button" role="tab" id="abaProdutos" aria-selected="false" aria-controls="painelProdutos" data-aba="produtos">Produtos</button>
     </div>
@@ -34,6 +34,7 @@
     <section id="painelImportar" role="tabpanel" aria-labelledby="abaImportar">
       <section class="panel">
         <h2 class="panel-title">1. Arquivo</h2>
+        <p class="vendas-formato"><span class="t-strong">Formato aceito:</span> Teknisa, relatório 'Vendas Realizadas no Período' (XLSX)</p>
         <p class="panel-note">Na Teknisa, exporte o relatório "Vendas Realizadas no Período" em XLSX (até 10 MB) e escolha o arquivo aqui. Nada é gravado antes de você conferir e tocar em Importar.</p>
         <div class="vendas-arquivo">
           <input type="file" id="arquivo" class="form-control" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -107,7 +108,7 @@
       </div>
     </section>
 
-    <!-- Produtos: o de-para da Teknisa para o chope do catálogo -->
+    <!-- Produtos: o de-para dos produtos do relatório para o chope do catálogo -->
     <section id="painelProdutos" role="tabpanel" aria-labelledby="abaProdutos" class="d-none">
       <div class="warn-note">Mudar o chope ou o volume vale para as próximas importações. As vendas já importadas continuam com o chope e o volume que tinham. Para refazer uma importação, cancele e importe o arquivo de novo.</div>
       <div class="filters">

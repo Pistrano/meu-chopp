@@ -14,7 +14,7 @@ const MCLayout = (() => {
     { id: "relatorio", label: "Relatório de barris", href: "relatorio-barris.html" },
     { id: "transferencias", label: "Transferências", href: "transferencias.html" },
     { id: "pesagem", label: "Pesagem", href: "pesagem.html" },
-    { id: "vendas", label: "Vendas da Teknisa", href: "vendas-teknisa.html", perm: "vendas" },
+    { id: "vendas", label: "Vendas", href: "vendas-teknisa.html", perm: "vendas" },
     { id: "funcionarios", label: "Funcionários", href: "funcionarios.html", perm: "funcionarios" },
     { id: "quiosques", label: "Unidades", href: "quiosques.html", perm: "unidades" },
     { id: "usuarios", label: "Usuários", href: "usuarios.html", perm: "usuarios" },

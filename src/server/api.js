@@ -784,13 +784,13 @@ function registerHandlers() {
   /* Razão social, nome fantasia (coluna nome: o nome mostrado no app), CNPJ e endereço são obrigatórios
      ao cadastrar e ao editar. */
   const likeEscape = (s) => s.replace(/[\\%_]/g, "\\$&");
-  /* Código da loja na Teknisa (opcional): o número antes do " - " na coluna Unidade do relatório de vendas (ex.: "0003") */
+  /* Código da loja no sistema de caixa (opcional): o número antes do " - " na coluna Unidade do relatório de vendas (ex.: "0003") */
   const cleanCodigoTeknisa = async (v, exceptId = 0) => {
     const cod = String(v ?? "").trim().toUpperCase();
     if (!cod) return null;
-    if (!/^[0-9A-Z]{1,10}$/.test(cod)) throw new AppError("O código Teknisa tem só números e letras, até 10 (ex.: 0003).");
+    if (!/^[0-9A-Z]{1,10}$/.test(cod)) throw new AppError("O código no sistema de caixa tem só números e letras, até 10 (ex.: 0003).");
     const outra = ok(await supabase.from("unidades").select("nome").eq("codigo_teknisa", cod).neq("id", exceptId).limit(1));
-    if (outra.length) throw new AppError(`O código Teknisa ${cod} já está na unidade "${outra[0].nome}".`);
+    if (outra.length) throw new AppError(`O código ${cod} no sistema de caixa já está na unidade "${outra[0].nome}".`);
     return cod;
   };
   const cleanUnitData = async ({ razaoSocial, nome, nomeCurto, cnpj, endereco }, exceptId = 0) => {
@@ -817,10 +817,10 @@ function registerHandlers() {
     const cod = await cleanCodigoTeknisa(p.codigoTeknisa);
     const row = ok(
       await supabase.from("unidades").insert({ razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end, codigo_teknisa: cod }).select("id").single(),
-      "Já existe uma unidade com esse nome fantasia, CNPJ ou código Teknisa."
+      "Já existe uma unidade com esse nome fantasia, CNPJ ou código no sistema de caixa."
     );
     esquecerUnidadesDasSessoes(); // o administrador vê todas as unidades ativas: a nova aparece já
-    await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código Teknisa ${cod}` : ""}`);
+    await audit(ctx, "unidade_criada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código no sistema de caixa ${cod}` : ""}`);
     return { id: row.id };
   }, { perm: "unidades" });
 
@@ -836,9 +836,9 @@ function registerHandlers() {
       (await supabase.from("unidades").update({
         razao_social: razao, nome: full, nome_curto: short, cnpj: doc, endereco: end, ...(mudaCodigo ? { codigo_teknisa: cod } : {}),
       }).eq("id", id)).error,
-      "Já existe uma unidade com esse nome fantasia, CNPJ ou código Teknisa."
+      "Já existe uma unidade com esse nome fantasia, CNPJ ou código no sistema de caixa."
     );
-    await audit(ctx, "unidade_editada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código Teknisa ${cod}` : ""}`);
+    await audit(ctx, "unidade_editada", `${full}, razão social ${razao} (CNPJ ${formatCnpj(doc)})${cod ? `, código no sistema de caixa ${cod}` : ""}`);
     return true;
   }, { perm: "unidades" });
 
@@ -1200,7 +1200,7 @@ function registerHandlers() {
     return { gravadas: novas.length, mudouModo };
   }
 
-  /* Preço de venda por litro de cada chope nas vendas importadas da Teknisa desde `desde`, nas unidades liberadas para a
+  /* Preço de venda por litro de cada chope nas vendas importadas desde `desde`, nas unidades liberadas para a
      pessoa: chope_id -> { litros, valor, precoLitro }. Sem o SQL das vendas no banco: vazio. */
   async function vendasPorLitro(ctx, desde) {
     const ids = await allowedUnitIds(ctx);
@@ -1215,7 +1215,7 @@ function registerHandlers() {
 
   /* Ativos por padrão (o cadastro de barril). todos: também os desativados (só quem edita).
      custos (só quem edita): o resumo do custo por litro de cada chope e o preço de venda por litro dos últimos 30 dias
-     (vendas importadas da Teknisa), para a tela Chopes. */
+     (vendas importadas), para a tela Chopes. */
   handle("chopes:list", async (p, ctx) => {
     const q = p || {};
     const editar = pode(ctx.session, "catalogo:editar");
@@ -1919,7 +1919,7 @@ function registerHandlers() {
     };
   }, { perm: "exportar" });
 
-  /* ======== Vendas da Teknisa ========
+  /* ======== Vendas (hoje só o relatório da Teknisa) ========
      Importa o relatório "Vendas Realizadas no Período" (XLSX) com o horário de cada venda (leitura em teknisa.js).
      Administrador e gerente (permissão "vendas"); o gerente só nas unidades dele.
      vendas:ler lê o arquivo e devolve a prévia (nada é gravado); vendas:importar lê de novo e grava, numa transação,
@@ -1973,7 +1973,7 @@ function registerHandlers() {
         if (!permitidas.includes(id)) throw new AppError("Você não tem acesso a esta unidade.", "FORBIDDEN", `unidade ${id}`);
         const r = ok(await supabase.from("unidades").select("id, nome, codigo_teknisa").eq("id", id).maybeSingle());
         if (!r) throw new AppError("Unidade não encontrada.");
-        if (r.codigo_teknisa) throw new AppError(`A unidade ${r.nome} já tem o código Teknisa ${r.codigo_teknisa}.`);
+        if (r.codigo_teknisa) throw new AppError(`A unidade ${r.nome} já tem o código ${r.codigo_teknisa} no sistema de caixa.`);
         if (usadas.has(id)) throw new AppError(`Escolha unidades diferentes para as lojas do arquivo (${r.nome} foi escolhida duas vezes).`);
         Object.assign(u, { unidadeId: id, unidadeNome: r.nome, nova: true, acesso: true });
       }
@@ -2024,7 +2024,7 @@ function registerHandlers() {
     return new Set(await rpc("fn_vendas_existentes", { p_unidade: unidadeId, p_chaves: chaves }));
   }
 
-  /* Prévia. Devolve o período do arquivo, as unidades (com os totais do arquivo para conferir com a Teknisa), os produtos
+  /* Prévia. Devolve o período do arquivo, as unidades (com os totais do arquivo para conferir com o sistema de caixa), os produtos
      (os conhecidos com o que está gravado; os novos com a sugestão) e, por unidade, grupos por produto e dia:
      q/v/n = quantidade, valor e itens; qr/vr/nr = o que já tinha sido importado (será pulado). A tela calcula os litros. */
   handle("vendas:ler", async (p, ctx) => {
@@ -2070,7 +2070,7 @@ function registerHandlers() {
     const [t0, t1] = extremos(itens.map((i) => i.vendidoEm.getTime()));
     const primeira = new Date(t0);
     const ultima = new Date(t1);
-    // Unidades que podem receber um código novo: as liberadas para a pessoa, ainda sem código Teknisa
+    // Unidades que podem receber um código novo: as liberadas para a pessoa, ainda sem código no sistema de caixa
     const permitidas = await allowedUnitIds(ctx);
     const livres = permitidas.length
       ? ok(await supabase.from("unidades").select("id, nome").in("id", permitidas).is("codigo_teknisa", null).order("nome"))
@@ -2123,7 +2123,7 @@ function registerHandlers() {
     const arquivo = nomeArquivo(q);
     const r = ok(await supabase.rpc("fn_vendas_importar", {
       p_usuario: ctx.session.id, p_arquivo: arquivo, p_de: periodo.de, p_ate: periodo.ate, p_produtos: produtos, p_lotes: lotes,
-    }), "Este código Teknisa já está em outra unidade.");
+    }), "Este código do sistema de caixa já está em outra unidade.");
 
     const resultado = r.map((x) => {
       const u = lotesUnidades.find((y) => y.unidadeId === Number(x.unidade_id));
@@ -2139,7 +2139,7 @@ function registerHandlers() {
         `${litrosVenda(x.litros)}${x.repetidas ? `, ${x.repetidas} já importado(s)` : ""} (arquivo ${arquivo})`);
     }
     for (const u of lotesUnidades.filter((y) => y.nova))
-      await audit(ctx, "unidade_codigo_teknisa", `${u.unidadeNome}: código Teknisa ${u.codigo} (na importação de vendas)`);
+      await audit(ctx, "unidade_codigo_teknisa", `${u.unidadeNome}: código no sistema de caixa ${u.codigo} (na importação de vendas)`);
     return {
       de: periodo.de, ate: periodo.ate, importacoes: resultado,
       semAcesso: unidades.filter((u) => !u.acesso).map((u) => `${u.codigo} - ${u.nomeTeknisa}`),

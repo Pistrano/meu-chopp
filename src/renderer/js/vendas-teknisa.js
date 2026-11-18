@@ -1,7 +1,7 @@
-/* BarrilFacil — Mais > Vendas da Teknisa (administrador e gerente; o gerente só nas unidades dele)
+/* BarrilFacil — Mais > Vendas (administrador e gerente; o gerente só nas unidades dele)
    1. Arquivo: o XLSX "Vendas Realizadas no Período" vai para o servidor, que lê e devolve a prévia (nada é gravado).
    2. Prévia: chope e volume de cada produto (os conhecidos com o que está gravado, os novos com a sugestão), os
-      ignorados recolhidos, os litros por chope e por dia e os totais para comparar com a Teknisa.
+      ignorados recolhidos, os litros por chope e por dia e os totais para comparar com o sistema de caixa.
    3. Importar: manda o arquivo de novo com as escolhas; o servidor grava tudo numa transação.
    Aba Produtos: o de-para gravado, editável (vale para as próximas importações). */
 (async () => {
@@ -34,7 +34,7 @@
   /* ---------- 1. Arquivo ---------- */
   let arquivo = null;   // { nome, base64 }
   let previa = null;    // resposta do vendas:ler
-  let escolhaUnidade = {}; // código da loja na Teknisa -> id da unidade (loja ainda sem código)
+  let escolhaUnidade = {}; // código da loja no relatório -> id da unidade (loja ainda sem código)
 
   const lerBase64 = (file) => new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -93,14 +93,14 @@
     ].map(([k, v]) => `<div><dt>${MC.esc(k)}</dt><dd>${MC.esc(v)}</dd></div>`).join("");
     $("unidadesArquivo").innerHTML = previa.unidades.map((u) => {
       const loja = `<span class="t-strong">${MC.esc(`${u.codigo} - ${u.nomeTeknisa}`)}</span>`;
-      if (u.unidadeId && !u.nova && u.acesso) return `<p class="vendas-loja">Loja da Teknisa ${loja}: <span class="t-strong">${MC.esc(u.unidadeNome)}</span></p>`;
+      if (u.unidadeId && !u.nova && u.acesso) return `<p class="vendas-loja">Loja no relatório ${loja}: <span class="t-strong">${MC.esc(u.unidadeNome)}</span></p>`;
       if (u.unidadeId && !u.acesso)
-        return `<p class="vendas-loja vendas-loja--fora">Loja da Teknisa ${loja}: ${MC.esc(u.unidadeNome)}. Você não tem acesso a esta unidade: as vendas dela não serão importadas.</p>`;
+        return `<p class="vendas-loja vendas-loja--fora">Loja no relatório ${loja}: ${MC.esc(u.unidadeNome)}. Você não tem acesso a esta unidade: as vendas dela não serão importadas.</p>`;
       if (!previa.unidadesLivres.length && !u.unidadeId)
-        return `<div class="warn-note">A loja ${loja} ainda não tem unidade, e todas as suas unidades já têm código Teknisa. Peça a um administrador para conferir o código na tela Unidades.</div>`;
+        return `<div class="warn-note">A loja ${loja} ainda não tem unidade, e todas as suas unidades já têm código no sistema de caixa. Peça a um administrador para conferir o código na tela Unidades.</div>`;
       const opcoes = previa.unidadesLivres.map((x) => `<option value="${x.id}" ${x.id === u.unidadeId ? "selected" : ""}>${MC.esc(x.nome)}</option>`).join("");
       return `<div class="vendas-loja vendas-loja--escolher">
-        <label class="form-label" for="un_${MC.esc(u.codigo)}">Loja da Teknisa ${loja}: qual é a unidade?</label>
+        <label class="form-label" for="un_${MC.esc(u.codigo)}">Loja no relatório ${loja}: qual é a unidade?</label>
         <select class="form-select" id="un_${MC.esc(u.codigo)}" data-codigo="${MC.esc(u.codigo)}"><option value="">Escolha a unidade</option>${opcoes}</select>
         <div class="t-muted small-note mt-1">Ao importar, o código ${MC.esc(u.codigo)} fica gravado nesta unidade e as próximas importações já vêm com ela.</div>
       </div>`;
