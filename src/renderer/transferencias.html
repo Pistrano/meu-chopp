@@ -26,18 +26,19 @@
     </div>
 
     <section class="panel">
-      <h2 class="panel-title">Nova transferência</h2>
-      <form id="formTransfer" class="row g-3 align-items-end" novalidate>
-        <div class="col-md-5">
-          <label class="form-label" for="barril">Barril disponível</label>
-          <select id="barril" class="form-select"></select>
-        </div>
-        <div class="col-md-4">
+      <h2 class="panel-title">Enviar barris</h2>
+      <p class="panel-note">Leia a etiqueta de cada barril que vai sair (câmera ou pistola) ou escolha da lista. Depois escolha o destino e envie todos juntos.</p>
+      <div class="envio">
+        <div class="envio-leitor" id="leitorEnvio"></div>
+        <div class="envio-grupo">
+          <div class="envio-grupo-head"><span class="t-strong">Barris para enviar</span><span class="envio-contador" id="contador" aria-live="polite">0 barris</span></div>
+          <div class="envio-lista" id="listaEnvio"></div>
+          <button type="button" class="btn-ghost envio-da-lista" id="btnDaLista">Escolher da lista</button>
           <label class="form-label" for="destino">Enviar para</label>
           <select id="destino" class="form-select"></select>
+          <button type="button" class="btn btn-mc envio-enviar" id="btnEnviar" disabled>Enviar barris</button>
         </div>
-        <div class="col-md-3"><button class="btn btn-mc btn-mc-sm w-100" type="submit">Iniciar transferência</button></div>
-      </form>
+      </div>
     </section>
 
     <div class="table-card">
@@ -53,6 +54,7 @@
   <script src="js/common.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/layout.js"></script>
+  <script src="js/leitor-codigo.js"></script>
   <script src="js/transferencias.js"></script>
 </body>
 </html>

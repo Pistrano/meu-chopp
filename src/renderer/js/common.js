@@ -223,13 +223,13 @@ const MC = (() => {
     });
   }
 
-  /* Pergunta com dois botões. Resolve true se a pessoa confirmar.
+  /* Pergunta com dois botões. Resolve true se a pessoa confirmar. html: conteúdo extra já escapado, depois do texto.
      funcionario: a escolha de MC.escolherFuncionario (ou null); o confirmar só habilita depois da escolha
      e quem chamou lê o escolhido em funcionario.id. */
-  function confirm({ title, text, confirmLabel = "Confirmar", cancelLabel = "Cancelar", type = "plain", funcionario = null }) {
+  function confirm({ title, text, html = "", confirmLabel = "Confirmar", cancelLabel = "Cancelar", type = "plain", funcionario = null }) {
     return new Promise((resolve) => {
       const overlay = openOverlay(`<h2 class="notice-title notice-title--${type}">${esc(title)}</h2>
-        ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}${funcionario ? funcionario.html : ""}
+        ${text ? `<p class="mc-modal-intro">${esc(text)}</p>` : ""}${html}${funcionario ? funcionario.html : ""}
         <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>${esc(cancelLabel)}</button>
         <button type="button" class="btn btn-mc btn-mc-sm" data-ok${funcionario ? " disabled" : ""}>${esc(confirmLabel)}</button></div>`);
       const close = (v) => { overlay.remove(); resolve(v); };

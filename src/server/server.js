@@ -80,7 +80,8 @@ function createServer({ trustProxy = false } = {}) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "no-referrer");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    // Câmera só nas telas do próprio app (leitura da etiqueta do barril); microfone e localização continuam bloqueados
+    res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
     if (isSecure(req)) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
 

@@ -82,3 +82,7 @@
 /* Pesagem */
 :root[data-tema="escuro"] .op-badge--retirada_com_chope { background: #143532; color: #8bd8cd; }
 :root[data-tema="escuro"] .op-badge--pesagem { background: #2c2442; color: #c4b2f0; }
+
+/* Torneiras no celular e leitura da etiqueta */
+:root[data-tema="escuro"] .tap-row-num { background: #0b0d11; border: 1px solid var(--mc-line); }
+:root[data-tema="escuro"] .tap-row-age { color: var(--mc-gold-dark); }
