@@ -578,9 +578,12 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
     max-width: none; max-height: 92vh; border-radius: 16px 16px 0 0;
     padding: 1.1rem max(16px, env(safe-area-inset-right, 0px)) calc(1.2rem + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
-  /* Engatar: os botões ficam sempre à vista, presos embaixo da folha */
+  /* Engatar: os botões ficam sempre à vista, presos embaixo da folha. O bottom e a margem negativos (o tamanho do
+     espaço de baixo da folha) colam a barra na borda: nada da lista aparece por baixo dela. */
   .tela-torneiras .mc-modal--engate .mc-modal-actions {
-    position: sticky; bottom: 0; z-index: 1; margin: 1rem -16px 0; padding: .75rem 16px;
+    --folha-pe: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+    position: sticky; bottom: calc(-1 * var(--folha-pe)); z-index: 1;
+    margin: 1rem -16px calc(-1 * var(--folha-pe)); padding: .75rem 16px calc(.75rem + var(--folha-pe));
     background: var(--mc-surface); border-top: 1px solid var(--mc-line);
   }
   .tela-torneiras .mc-modal--engate .eng-ok { flex: 1 1 auto; min-height: 52px; font-size: 1.02rem; }
