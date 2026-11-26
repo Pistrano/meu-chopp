@@ -1415,6 +1415,73 @@ function registerHandlers() {
     });
   });
 
+  /* Leitura da etiqueta (Torneiras e Transferências): o barril pelo código, em qualquer situação, para a tela dizer
+     por que não dá para usar (outra unidade, engatado, em transferência, vazio, recolhido) em vez de só "não achei".
+     codigo: o código inteiro ("BA5-2630"); numero: só os números ("2630" = todo barril cujo código termina em -2630).
+     A unidade aberta na tela (unitId) precisa estar liberada para a pessoa. Barril de unidade sem acesso: só o código e
+     o nome da unidade (acesso: false); a situação só quando ele está em transferência para uma unidade da pessoa.
+     O mesmo código pode ter ciclos antigos recolhidos: com um ciclo em andamento, os recolhidos não aparecem. */
+  const CODIGO_LIDO_RE = /^[A-Z]{1,4}\d-\d{1,6}$/;
+  handle("barris:porCodigo", async ({ unitId, codigo, numero }, ctx) => {
+    const unit = await resolveUnit(ctx, unitId);
+    const cod = String(codigo || "").trim().toUpperCase();
+    const num = String(numero || "").trim();
+    if (cod && !CODIGO_LIDO_RE.test(cod)) throw new AppError(`"${cod.slice(0, 30)}" não parece um código de barril. O formato é BA5-1234.`);
+    if (!cod && !/^\d{2,6}$/.test(num)) throw new AppError("Leia ou digite o código do barril (ex.: BA5-2630 ou só 2630).");
+    let query = supabase
+      .from("barris")
+      .select("id, codigo, chope_nome, estilo, tamanho_l, status, validade, saldo_l, saldo_estimado, unidade_id," +
+        " unidades(nome), engates(retirado_em, torneiras(numero))")
+      .order("id", { ascending: false })
+      .limit(50);
+    // Código inteiro: também o mesmo código gravado sem o hífen (cadastro digitado à mão)
+    query = cod ? query.in("codigo", [cod, cod.replace("-", "")]) : query.like("codigo", `*-${num}`);
+    const rows = ok(await query);
+
+    // Por código: o ciclo em andamento; sem nenhum, só o recolhido mais recente (as linhas vêm do mais novo)
+    const porCodigo = new Map();
+    rows.forEach((b) => porCodigo.set(b.codigo, [...(porCodigo.get(b.codigo) || []), b]));
+    const escolhidos = [];
+    porCodigo.forEach((lista) => {
+      const andamento = lista.filter((b) => b.status !== "recolhido");
+      escolhidos.push(...(andamento.length ? andamento : [lista[0]]));
+    });
+
+    // Em transferência: o destino (a tela avisa "está vindo para esta loja")
+    const emTransf = escolhidos.filter((b) => b.status === "em_transferencia").map((b) => b.id);
+    const destinos = new Map();
+    if (emTransf.length) {
+      ok(await supabase.from("transferencias").select("barril_id, destino_id, destino:unidades!destino_id(nome)")
+        .in("barril_id", emTransf).eq("status", "pendente"))
+        .forEach((t) => destinos.set(t.barril_id, { destino_id: t.destino_id, destino: t.destino ? t.destino.nome : null }));
+    }
+
+    const permitidas = await allowedUnitIds(ctx);
+    const hoje = hojeTZ();
+    return escolhidos
+      .map(({ unidades, engates, ...b }) => {
+        const unidade = unidades ? unidades.nome : null;
+        const transf = destinos.get(b.id) || null;
+        if (!permitidas.includes(b.unidade_id)) {
+          const vemParaMim = transf && permitidas.includes(transf.destino_id);
+          return { codigo: b.codigo, unidade_id: b.unidade_id, unidade, acesso: false,
+            ...(vemParaMim ? { status: b.status, ...transf } : {}) };
+        }
+        const ativo = (engates || []).find((e) => e.retirado_em === null);
+        return {
+          ...b,
+          ...(transf || {}),
+          unidade,
+          acesso: true,
+          situacao_validade: situacaoValidade(b.validade, b.status, hoje),
+          torneira_numero: ativo && ativo.torneiras ? ativo.torneiras.numero : null,
+        };
+      })
+      // A unidade aberta primeiro, depois as outras; dentro delas, pelo código
+      .sort((a, b) => (b.unidade_id === unit) - (a.unidade_id === unit) ||
+        String(a.codigo).localeCompare(String(b.codigo), "pt-BR", { numeric: true }));
+  });
+
   handle("barris:exportStock", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const rows = ok(await supabase.from("barris")

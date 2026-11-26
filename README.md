@@ -203,14 +203,50 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
 - O histórico guarda o número da torneira usado em cada operação; renumerar ou desativar uma torneira não muda o passado.
 - Aba **Torneiras** (todos os usuários com acesso à unidade): um cartão por torneira ativa, com o chope engatado, desde
   quando e por quem. Cada cartão tem dois botões:
-  - Torneira livre: **Engatar barril** abre a lista dos barris disponíveis da unidade (o que vence primeiro fica em cima,
-    com busca por código ou chope). Barril vencido pede a mesma confirmação da aba Barris.
+  - Torneira livre: **Engatar barril** abre a janela do engate: em cima, a leitura da etiqueta do barril (veja *Leitura
+    da etiqueta*); embaixo, a lista dos barris disponíveis da unidade (o que vence primeiro fica em cima, com busca por
+    código ou chope). Barril vencido pede a mesma confirmação da aba Barris.
   - Torneira ocupada: **Retirar barril**, com as mesmas perguntas e o mesmo aviso da aba Barris.
   - **Histórico**: os engates daquela torneira.
+- **No celular** (menos de 768 px), cada torneira vira uma linha compacta, para caberem todas na tela: o número num círculo,
+  o chope com `#código · tamanho` e *há quanto tempo*, e à direita **Engatar barril** ou **Retirar** e o botão do histórico
+  (relógio). As janelas sobem da parte de baixo da tela. No computador e no tablet continua o cartão.
+- O lado direito do título (`.page-head-acoes`) guarda os botões da página (o próximo é *Lançar com horário*).
 - A tela se atualiza sozinha a cada minuto, menos enquanto uma janela estiver aberta. Se outro aparelho usou a torneira ou o
   barril nesse meio tempo, aparece o motivo e o quadro é recarregado.
 - Engatar, retirar e pesar ficam num só lugar, `src/renderer/js/acoes-barril.js` (`MCBarril.engatar`, `MCBarril.retirar`,
   `MCBarril.medir` e `MCBarril.pesar`), usado pelas abas Barris, Torneiras e Pesagem.
+
+## Leitura da etiqueta do barril (engatar e transferir)
+
+A etiqueta do barril é um código de barras 1D só com o código, no formato `BA5-1463` (`BA2` = 20 L, `BA3` = 30 L,
+`BA5` = 50 L). O bloco de leitura (`src/renderer/js/leitor-codigo.js`, `MCLeitor`) fica no engate da aba Torneiras e no
+envio da aba Transferências, com três jeitos de ler:
+
+- **Câmera:** o botão *Ler código com a câmera* abre a câmera traseira na própria janela e lê continuamente, sem tirar
+  foto. Ao ler, vibra (quando o aparelho deixa), desliga a câmera e procura o barril. Usa o `BarcodeDetector` do
+  navegador quando existe (Android/Chrome); senão, a ZXing (`src/renderer/vendor/zxing-0.21.3.min.js`, versão fixa,
+  licença Apache 2.0), baixada só quando precisa (iPhone). Formatos 1D comuns: Code 128, Code 39, Code 93, Codabar, ITF
+  e EAN-13. O mesmo código precisa sair em dois quadros seguidos (evita leitura errada de imagem tremida); outro código de
+  barras (de um produto, por exemplo) só gera um aviso e a leitura continua. A câmera desliga ao fechar a janela, ao
+  trocar de aba ou com a tela apagada, e só funciona em HTTPS (o servidor manda `Permissions-Policy: camera=(self)`).
+- **Pistola leitora** (USB ou Bluetooth): ela "digita" o código e manda Enter no campo *Digite ou use a pistola*. No
+  computador o campo já abre com o foco; no celular, um toque nele basta. Depois de cada leitura o foco volta ao campo
+  (na transferência, para bipar em sequência).
+- **Digitação:** o código inteiro (`BA5-2630`, `BA52630`, `ba5 2630`) ou só os números (`2630`). Só os números com mais
+  de um barril (ex.: `BA2-1810` e `BA3-1810`): a tela pergunta qual é.
+
+O barril lido vem de `barris:porCodigo`, em qualquer situação, para a tela explicar o que houve: em outra unidade,
+já engatado (e em qual torneira), em transferência (ou vindo para esta loja), vazio, recolhido ou não cadastrado (com o
+link para a aba Barris). Barril de unidade sem acesso mostra só o código e o nome da unidade.
+
+- **Engatar:** barril disponível nesta unidade aparece em destaque (*Barril encontrado*, código, chope, tamanho e
+  validade) e fica marcado na lista; o botão **Engatar na Torneira N** segue o fluxo de sempre (*Quem está fazendo?*,
+  aviso de vencido). Retirar não muda.
+- **Transferir:** cada leitura entra em *Barris para enviar* (com contador e *Tirar*); a mesma leitura de novo avisa que
+  já está na lista. *Escolher da lista* adiciona barris sem etiqueta legível. Com o destino escolhido, **Enviar N barris**
+  mostra uma confirmação com todos e cria uma transferência por barril (`transfer:create`): se uma falhar, as outras
+  seguem e a tela mostra quais falharam e por quê (essas continuam na lista). O recebimento no destino não mudou.
 
 ## Validade e recolhimento
 
@@ -430,6 +466,8 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 - O banco só é acessado pelo servidor, com a chave secreta. As tabelas têm RLS ligado e as funções SQL só podem ser
   executadas pelo servidor.
 - Proteções do servidor: cabeçalhos de segurança, bloqueio de pedidos vindos de outros sites e de acesso a arquivos internos.
+  A câmera só pode ser usada pelas telas do próprio app (`Permissions-Policy: camera=(self)`, para ler a etiqueta do
+  barril); microfone e localização ficam bloqueados.
   A Content-Security-Policy só permite arquivos do próprio servidor (as fontes também); o único script inline aceito são
   as regras de pré-carregamento (`'inline-speculation-rules'`).
 - Esqueceu a senha? O administrador gera uma senha temporária em *Usuários*.

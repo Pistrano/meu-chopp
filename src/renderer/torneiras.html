@@ -18,12 +18,13 @@
   <link href="css/tema-escuro.css" rel="stylesheet">
   <script src="js/tema.js"></script>
 </head>
-<body>
+<body class="tela-torneiras">
   <header id="appHeader" class="app-header"></header>
   <main class="dashboard-main">
-    <div class="page-head">
-      <div><h1>Torneiras</h1><p id="subtitle">O que está engatado em cada torneira da unidade.</p></div>
-      <p class="t-muted small-note mb-0" id="updated" aria-live="polite"></p>
+    <div class="page-head page-head--torneiras">
+      <div class="page-head-titulo"><h1>Torneiras</h1><p id="subtitle">O que está engatado em cada torneira da unidade.</p></div>
+      <!-- Lado direito do título: lugar dos botões da página (o próximo é "Lançar com horário"), no celular e no computador -->
+      <div class="page-head-acoes" id="acoesTopo"><p class="t-muted small-note mb-0" id="updated" aria-live="polite"></p></div>
     </div>
 
     <div id="board" class="tap-grid"></div>
@@ -35,6 +36,7 @@
   <script src="js/auth.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/acoes-barril.js"></script>
+  <script src="js/leitor-codigo.js"></script>
   <script src="js/torneiras.js"></script>
 </body>
 </html>

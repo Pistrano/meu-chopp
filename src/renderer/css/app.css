@@ -454,3 +454,138 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
   .vendas-previa select { min-width: 0; max-width: 62%; margin-left: auto; }
   .vendas-volume { display: inline-block; max-width: 7rem; }
 }
+
+/* ==========================================================
+   Leitura da etiqueta do barril (js/leitor-codigo.js): engatar e transferir
+   ========================================================== */
+.leitor { display: flex; flex-direction: column; gap: .6rem; }
+.leitor-cam { width: 100%; min-height: 56px; font-size: 1.05rem; }
+.leitor-cam svg { flex: none; }
+.leitor-video { position: relative; border-radius: var(--mc-radius); overflow: hidden; background: #000; }
+.leitor-video video { display: block; width: 100%; max-height: 46vh; aspect-ratio: 4 / 3; object-fit: cover; }
+/* Mira: a faixa do meio, que é a parte do quadro que a ZXing lê */
+.leitor-mira {
+  position: absolute; left: 8%; right: 8%; top: 20%; bottom: 20%; pointer-events: none;
+  border: 3px solid var(--mc-gold); border-radius: 12px; box-shadow: 0 0 0 999px rgba(0, 0, 0, .28);
+}
+.leitor-video-dica {
+  position: absolute; left: 0; right: 0; top: 0; margin: 0; padding: .45rem .75rem;
+  color: #fff; font-size: .85rem; font-weight: 700; text-align: center; background: rgba(0, 0, 0, .45);
+}
+.leitor-fechar { position: absolute; right: .5rem; bottom: .5rem; min-height: 44px; }
+.leitor-manual { display: flex; gap: .5rem; margin: 0; }
+.leitor-campo { flex: 1 1 auto; min-width: 0; font-family: Consolas, "Courier New", monospace; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.leitor-campo::placeholder { font-family: var(--mc-font-body); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.leitor-ok { flex: none; min-height: 44px; min-width: 64px; font-size: .95rem; }
+.leitor-dica { margin: 0; font-size: .8rem; color: var(--mc-muted); }
+.leitor-saida:empty { display: none; }
+.leitor-msg { border-radius: var(--mc-radius); padding: .7rem .85rem; font-size: .9rem; background: var(--mc-info-soft); color: var(--mc-text); }
+.leitor-msg--erro { background: var(--mc-danger-soft); color: var(--mc-danger); font-weight: 600; }
+.leitor-msg--erro a { color: inherit; font-weight: 700; }
+.leitor-msg--ok { background: var(--mc-success-soft); color: var(--mc-success); font-weight: 600; }
+.leitor-codigo { font-family: Consolas, "Courier New", monospace; font-weight: 700; letter-spacing: .03em; }
+.leitor-codigo--grande { font-size: 1.4rem; }
+.leitor-achado {
+  display: flex; flex-direction: column; gap: .15rem; padding: .8rem .9rem;
+  border: 2px solid var(--mc-success); border-radius: var(--mc-radius); background: var(--mc-success-soft);
+}
+.leitor-achado-titulo { font-size: .8rem; font-weight: 700; color: var(--mc-success); }
+.leitor-achado-chope { font-weight: 700; }
+.leitor-achado-validade { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: .85rem; color: var(--mc-muted); }
+.leitor-escolha { display: flex; flex-direction: column; gap: .4rem; margin-top: .5rem; }
+.leitor-opcao {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .6rem; min-height: 48px; padding: .55rem .8rem; text-align: left;
+  background: var(--mc-surface); color: var(--mc-text); border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius);
+}
+.leitor-opcao:hover { border-color: var(--mc-gold-dark); }
+.leitor-opcao-info { color: var(--mc-muted); font-size: .9rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .leitor-achado, .leitor-msg { animation: leitor-pop .18s ease-out; }
+  @keyframes leitor-pop { from { transform: scale(.97); opacity: .6; } to { transform: none; opacity: 1; } }
+}
+
+/* Engatar: a lista com busca vira alternativa, embaixo da leitura */
+.eng-lista-box { margin-top: 1rem; border-top: 1px solid var(--mc-line); padding-top: .75rem; }
+.eng-lista-box > summary { cursor: pointer; font-weight: 700; padding: .35rem 0; min-height: 40px; }
+.eng-lista-box[open] > summary { margin-bottom: .6rem; }
+
+/* Transferências: enviar vários barris de uma vez */
+.envio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.envio-grupo { display: flex; flex-direction: column; gap: .6rem; }
+.envio-grupo-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.envio-contador { font-family: var(--mc-font-display); font-weight: 700; }
+.envio-lista { display: flex; flex-direction: column; border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: 0 .85rem; }
+.envio-item { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .55rem 0; border-top: 1px solid var(--mc-line); }
+.envio-item:first-child { border-top: 0; }
+.envio-item-info { display: flex; flex-direction: column; min-width: 0; }
+.envio-item-chope { font-size: .88rem; color: var(--mc-muted); }
+.envio-item-falha { font-size: .82rem; color: var(--mc-danger); font-weight: 600; }
+.envio-item--falha .leitor-codigo { color: var(--mc-danger); }
+.envio-tirar { flex: none; min-height: 40px; }
+.envio-vazio { margin: 0; padding: .9rem 0; text-align: center; color: var(--mc-muted); font-size: .9rem; }
+.envio-da-lista { align-self: flex-start; min-height: 40px; }
+.envio-grupo .form-label { margin: .4rem 0 0; }
+.envio-enviar { width: 100%; }
+.envio-confirma { list-style: none; margin: 0 0 1rem; padding: 0; max-height: 40vh; overflow-y: auto; border: 1px solid var(--mc-line); border-radius: var(--mc-radius); }
+.envio-confirma li { padding: .45rem .8rem; border-top: 1px solid var(--mc-line); font-size: .9rem; }
+.envio-confirma li:first-child { border-top: 0; }
+@media (max-width: 767.98px) {
+  .envio { grid-template-columns: 1fr; gap: 1.25rem; }
+}
+
+/* ==========================================================
+   Aba Torneiras no celular (menos de 768 px): uma linha compacta por torneira
+   No computador e no tablet continua o cartão (as linhas ficam escondidas).
+   ========================================================== */
+.tap-rows { display: none; }
+/* Cabeçalho: o lado direito do título guarda os botões da página (hoje só o "Atualizado às") */
+.page-head-acoes { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; }
+@media (max-width: 767.98px) {
+  .tap-grid .tap-card { display: none; }
+  .tap-rows { display: flex; flex-direction: column; gap: .5rem; grid-column: 1 / -1; }
+  .tap-row {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .5rem;
+    padding: .55rem .55rem .55rem .6rem; background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius);
+  }
+  .tap-row-num {
+    width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none;
+    font-family: var(--mc-font-display); font-weight: 700; font-size: 1.05rem; background: var(--mc-ink); color: var(--mc-gold);
+  }
+  .tap-row-info { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+  .tap-row-chope { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .tap-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .15rem .4rem; font-size: .8rem; font-weight: 700; color: var(--mc-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tap-row-age { font-size: .76rem; color: #7a5a16; font-weight: 700; }
+  .tap-row-livre {
+    align-self: flex-start; font-size: .78rem; font-weight: 800; padding: .2rem .6rem; border-radius: 99px;
+    background: var(--mc-success-soft); color: var(--mc-success);
+  }
+  .tap-row-acoes { display: flex; align-items: center; gap: .3rem; }
+  .tap-row-btn { min-height: 44px; padding: 0 .7rem; font-size: .86rem; white-space: nowrap; }
+  .tap-row-hist {
+    display: grid; place-items: center; width: 38px; height: 44px; padding: 0; flex: none;
+    background: transparent; color: var(--mc-muted); border: 1.5px solid var(--mc-line); border-radius: 8px;
+  }
+  .tap-row-hist:hover { color: var(--mc-text); border-color: var(--mc-gold-dark); }
+  /* Título e o lado direito numa linha só; o subtítulo some (a unidade já está no topo) */
+  .page-head--torneiras { flex-wrap: nowrap; align-items: center; margin-bottom: 1rem; }
+  .page-head--torneiras .page-head-titulo { min-width: 0; }
+  .page-head--torneiras .page-head-titulo h1 { margin: 0; }
+  .page-head--torneiras #subtitle { display: none; }
+  .page-head--torneiras .page-head-acoes { flex: none; }
+  /* As janelas sobem da parte de baixo da tela, como uma folha */
+  .tela-torneiras .mc-overlay { align-items: flex-end; padding: 0; }
+  .tela-torneiras .mc-modal {
+    max-width: none; max-height: 92vh; border-radius: 16px 16px 0 0;
+    padding: 1.1rem max(16px, env(safe-area-inset-right, 0px)) calc(1.2rem + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  /* Engatar: os botões ficam sempre à vista, presos embaixo da folha */
+  .tela-torneiras .mc-modal--engate .mc-modal-actions {
+    position: sticky; bottom: 0; z-index: 1; margin: 1rem -16px 0; padding: .75rem 16px;
+    background: var(--mc-surface); border-top: 1px solid var(--mc-line);
+  }
+  .tela-torneiras .mc-modal--engate .eng-ok { flex: 1 1 auto; min-height: 52px; font-size: 1.02rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tela-torneiras .mc-modal { animation: folha-sobe .2s ease-out; }
+    @keyframes folha-sobe { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+  }
+}
