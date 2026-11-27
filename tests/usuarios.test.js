@@ -67,11 +67,11 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
   test("a sessão traz o cargo, o rótulo e as permissões de cada um", async () => {
     const a = await admin.ok("auth:me");
     assert.equal(a.cargoLabel, "Administrador");
-    assert.deepEqual(a.permissoes, ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios", "vendas"]);
+    assert.deepEqual(a.permissoes, ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios", "vendas", "torneiras:horario"]);
     const g = await gerente.ok("auth:me");
     assert.equal(g.cargo, "gerente");
     assert.equal(g.cargoLabel, "Gerente");
-    assert.deepEqual(g.permissoes, ["catalogo:editar", "funcionarios", "vendas"]);
+    assert.deepEqual(g.permissoes, ["catalogo:editar", "funcionarios", "vendas", "torneiras:horario"]);
     const o = await operador.ok("auth:me");
     assert.equal(o.cargoLabel, "Operador");
     assert.deepEqual(o.permissoes, []);
@@ -163,7 +163,7 @@ describe("cargos, permissões, trocar cargo e apagar usuário", { skip: SEM_BANC
     await admin.ok("users:setRole", { id, cargo: "gerente", unidadeIds: [u.centro, u.pantanal] });
     const me = await paula.ok("auth:me");
     assert.equal(me.cargo, "gerente");
-    assert.deepEqual(me.permissoes, ["catalogo:editar", "funcionarios", "vendas"]);
+    assert.deepEqual(me.permissoes, ["catalogo:editar", "funcionarios", "vendas", "torneiras:horario"]);
     await paula.ok("chopes:update", { id: ids.pilsen, nome: "Louvada Pilsen" });
     assert.deepEqual((await paula.ok("units:list")).map((x) => x.id), [u.centro, u.pantanal]);
     const audit = await consulta(banco().from("auditoria").select("detalhe").eq("acao", "cargo_alterado").order("id"));

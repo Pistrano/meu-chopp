@@ -143,6 +143,7 @@ o resto depende da permissão do cargo:
 | `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
 | `vendas`: Vendas (importar, cancelar e o de-para dos produtos; o gerente só nas unidades dele) | ✓ | ✓ | |
+| `torneiras:horario`: *Lançar com horário* na aba Torneiras (engate e retirada com o horário em que aconteceram) | ✓ | ✓ | |
 | Unidades que vê | todas | as liberadas | as liberadas |
 
 - A tabela fica num lugar só: `PERMISSOES` em `src/server/api.js`. As rotas pedem uma permissão com
@@ -161,7 +162,8 @@ o resto depende da permissão do cargo:
 - **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade, torneira e o funcionário da última ação.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
-  para as linhas carregadas (até 300), não para o banco inteiro.
+  para as linhas carregadas (até 300), não para o banco inteiro. A ordem inicial é a do horário da movimentação, do mais
+  novo para o mais antigo (um lançamento com horário entra no lugar dele, não no topo).
 - **Filtros lembrados:** a busca e o filtro de Barris e do Histórico, e a ordem escolhida, continuam ao trocar de aba e voltar.
   Ficam só enquanto a janela estiver aberta e são apagados ao entrar e ao sair do sistema. Para usar em outra tela, chame
   `MC.rememberFields("nome-da-tela", { q, status })` antes da primeira carga e `MC.sortable(tabela, colunas, opções)` ao desenhar a lista.
@@ -211,11 +213,52 @@ A troca de abas não baixa de novo CSS e JS. Cada aba continua sendo uma página
 - **No celular** (menos de 768 px), cada torneira vira uma linha compacta, para caberem todas na tela: o número num círculo,
   o chope com `#código · tamanho` e *há quanto tempo*, e à direita **Engatar barril** ou **Retirar** e o botão do histórico
   (relógio). As janelas sobem da parte de baixo da tela. No computador e no tablet continua o cartão.
-- O lado direito do título (`.page-head-acoes`) guarda os botões da página (o próximo é *Lançar com horário*).
+- O lado direito do título (`.page-head-acoes`) guarda os botões da página: hoje, *Lançar com horário* (veja abaixo).
 - A tela se atualiza sozinha a cada minuto, menos enquanto uma janela estiver aberta. Se outro aparelho usou a torneira ou o
   barril nesse meio tempo, aparece o motivo e o quadro é recarregado.
 - Engatar, retirar e pesar ficam num só lugar, `src/renderer/js/acoes-barril.js` (`MCBarril.engatar`, `MCBarril.retirar`,
   `MCBarril.medir` e `MCBarril.pesar`), usado pelas abas Barris, Torneiras e Pesagem.
+
+## Lançar com horário (engate e retirada que não foram lançados na hora)
+
+Os botões de cada torneira gravam o horário de agora. Quando uma troca de barril não foi lançada na hora, lançar depois com
+o horário de agora estraga a conta de perdas, que casa as vendas com os barris e os períodos de inventário. Para isso, a
+aba Torneiras tem o botão **Lançar com horário** (administrador e gerente, permissão `torneiras:horario`; o operador não vê
+o botão e a rota recusa).
+
+- **Onde fica:** no computador, à direita do título e acima do *Atualizado às ...* (contorno azul, ícone de relógio). No
+  celular (menos de 768 px), vira um botão flutuante no canto de baixo, acima da barra de abas, e a lista ganha espaço
+  embaixo para ele não cobrir a última torneira. A janela sobe de baixo, como as outras do celular.
+- **Janela** (`src/renderer/js/lancar-horario.js`, `MCLancarHorario.abrir`):
+  - *O que aconteceu*: **Troca de barril** (já vem marcada), **Só retirada** ou **Só engate**.
+  - *Torneira*: as torneiras ativas da unidade com o que está nelas; vem escolhida a primeira ocupada. Retirada ou troca
+    numa torneira livre, ou só engate numa ocupada, mostram um aviso e o salvar fica desativado.
+  - *Retirada*: o barril que sai e quando foi engatado, o dia (até hoje) e a hora, com os atalhos Hoje, Ontem e
+    Anteontem, e *Como saiu*: **Vazio** ou **Ainda tinha chope** (abre a mesma medição da retirada normal, balança ou
+    estimativa, com a mesma pergunta do quase vazio).
+  - *Engate*: o barril que entrou (leitura da etiqueta ou lista dos disponíveis da unidade), o dia e a hora e, na troca,
+    **Usar o horário da retirada**.
+  - *Quem fez*: os funcionários ativos da unidade, com *Não sei* (fica sem funcionário). O usuário logado fica gravado
+    como quem lançou, com o horário real do lançamento.
+  - O resumo (*Vai ficar registrado na Torneira N*) aparece antes de salvar. Erro aparece na própria janela, em vermelho,
+    com o campo marcado. Ao salvar, o quadro é recarregado e aparece o aviso verde com o que foi gravado.
+- **Regras** (no servidor, numa transação só; a tela repete as mesmas mensagens). Horário de `APP_TZ`
+  (America/Cuiaba):
+  - nada no futuro e no máximo 30 dias para trás;
+  - retirada depois do engate do barril e depois do último registro dele (pesagem, inclusive de inventário, ou
+    movimentação);
+  - engate só de barril disponível agora na unidade, depois do último registro dele (entrada, transferência recebida,
+    pesagem, retirada de outra torneira);
+  - engate numa torneira livre depois da última retirada dela; na troca, no mesmo minuto da retirada ou depois.
+  - Assim, um lançamento nunca fica antes de um inventário que já registrou aquele barril em outra situação.
+- **Banco** (`supabase/migrations/20261126000000_lancamento_com_horario.sql`): `fn_lancamento_com_horario` usa por
+  dentro `fn_barril_esgotar`, `fn_barril_retirar_com_chope` e `fn_barril_engatar` (que não mudaram) e acerta os horários
+  das linhas criadas. Colunas novas: `engates.engate_lancado_por/em` e `retirada_lancada_por/em`, `movimentacoes.lancado_em`
+  e `pesagens.lancado_em` (nulas = lançado na hora). Auditoria *lancamento_com_horario* com o que foi feito, os horários
+  informados e o funcionário. Apagar um usuário leva também os lançamentos dele para o destino escolhido.
+- **Onde aparece:** no cartão ou na linha da torneira, a etiqueta azul *horário informado* ao lado de *Engatado em ...*;
+  no histórico da torneira, *Engate lançado com horário por X em ...* (e o mesmo para a retirada); na aba Histórico, a
+  etiqueta *horário informado* na data; no CSV do Histórico, *(horário informado; lançado em ...)* na observação.
 
 ## Leitura da etiqueta do barril (engatar e transferir)
 
