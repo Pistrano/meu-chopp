@@ -129,6 +129,41 @@ registrado está no banco.
 - Clicar na logo leva ao Painel. Depois do login, o sistema abre no Painel.
 - No celular e no tablet, o menu fica numa barra embaixo e o Mais vira ☰.
 
+## Painel
+
+O Painel tem duas versões na mesma página (`src/renderer/dashboard.html` e `js/dashboard.js`). O CSS mostra uma ou a
+outra pela largura da tela, e girar o tablet ou mudar o tamanho da janela troca a versão sem recarregar.
+
+- **Computador** (1024 px ou mais): a saudação, o botão *Relatório de barris*, os cinco cartões de estoque e as
+  movimentações recentes.
+- **Celular e tablet** (menos de 1024 px): uma tela de ações rápidas para o funcionário do quiosque. É igual para todos
+  os cargos e **não mostra perda nem dinheiro**, porque o celular do quiosque é usado por qualquer funcionário.
+  - **Faixa escura** logo abaixo do topo, com *Olá, nome* e a unidade. Quem tem mais de uma unidade troca por ali, com a
+    mesma troca do topo.
+  - **Quatro botões grandes** na faixa:
+    - **Engatar** abre a janela de engatar da aba Torneiras, começando pela leitura da etiqueta, com a escolha da
+      torneira livre embaixo (`MCBarril.janelaEngatar`, em `acoes-barril.js`);
+    - **Retirar** mostra as torneiras com barril e segue a retirada de sempre (vazio ou com chope);
+    - **Receber barris** abre a aba Barris com o cursor no código do cadastro (`barris.html?cadastrar=1`);
+    - **Pesar** abre *Mais > Pesagem*.
+  - Sem torneira livre, sem barril disponível ou sem nada engatado, aparece a mesma mensagem das outras abas. Depois de
+    engatar ou retirar, os números são recarregados.
+  - **Sua loja agora**: *Disponíveis*, *Engatados* e *Vazios para recolher*. Cada linha abre a aba Barris filtrada.
+  - **Precisa de atenção**: os alertas do sino, na mesma ordem, cada um com uma etiqueta curta. As cores são:
+    - vermelho para *Vencido* e *Sem estoque*;
+    - amarelo para *Acabando*;
+    - azul para *Vence hoje*, *Vence amanhã* e as transferências;
+    - neutro para os vazios.
+
+    Aparecem no máximo 5, e *e mais N* abre o sino. Sem nenhum alerta, a caixa mostra *Tudo em ordem por aqui.* A
+    versão curta vem do servidor junto com o texto do sino, em `src/server/alertas.js` (campos `tipo`, `titulo`,
+    `detalhe` e `etiqueta`). A tela recebe os alertas pelo próprio sino, com o evento `mc:alertas` de `layout.js`, sem
+    pedir de novo ao servidor.
+  - **Últimas movimentações**: as 3 mais recentes, sem as pesagens, com a etiqueta, o código, o chope, o detalhe e a hora
+    (*ontem* ou o dia, se não forem de hoje). O link *Ver todas* abre o Histórico.
+  - No celular (menos de 768 px), as janelas sobem da parte de baixo da tela, como na aba Torneiras.
+- As duas versões usam `dashboard:get` e são atualizadas a cada minuto e quando a tela volta a ficar visível.
+
 ## Cargos e permissões
 
 Três cargos. O dia a dia (barris, engates e retiradas, transferências, histórico e Relatório de barris) é de todos;
@@ -474,7 +509,8 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 
 ## Estrutura
 
-- `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`; `teknisa.js` lê o XLSX de vendas da Teknisa)
+- `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`; `teknisa.js` lê o XLSX de vendas da Teknisa;
+  `alertas.js` monta os alertas do sino)
 - `src/renderer/` — as telas (servidas pelo servidor)
 - `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
 - `supabase/migrations/` — schema e mudanças do banco (`supabase/config.toml` é do Supabase local dos testes)

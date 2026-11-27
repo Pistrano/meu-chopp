@@ -163,3 +163,162 @@
   .movement-row .op-badge { order: -1; align-self: flex-start; }
   .movement-hora { text-align: left; }
 }
+
+/* ==========================================================
+   Painel no celular e no tablet (menos de 1024 px): ações rápidas para o funcionário do quiosque
+   A página tem as duas versões; o CSS mostra uma ou a outra pela largura (girar o tablet troca sem recarregar).
+   Nada de perda ou dinheiro aqui (o celular do quiosque é usado por qualquer funcionário).
+   ========================================================== */
+.tela-painel {
+  /* Amarelo do "Acabando" e da linha dos vazios (o tema escuro troca em tema-escuro.css) */
+  --pc-aviso: #7a5a16;
+  --pc-aviso-soft: #fff1c7;
+  --pc-neutro-soft: #ececee;
+}
+@media (min-width: 1024px) {
+  .painel-celular { display: none !important; }
+}
+@media (max-width: 1023.98px) {
+  .painel-computador { display: none !important; }
+  .tela-painel .dashboard-main { max-width: 672px; padding: 14px 16px 2rem; }
+  .tela-painel .warn-note { margin-bottom: 12px; }
+}
+
+/* ---------- Faixa escura: saudação, unidade e as quatro ações ---------- */
+.pc-faixa {
+  background: var(--mc-ink);
+  color: #fff;
+  display: grid;
+  gap: .7rem;
+  /* no tablet, o conteúdo fica com a mesma largura das caixas de baixo */
+  padding: 14px max(16px, calc((100% - 640px) / 2), env(safe-area-inset-right, 0px)) 18px max(16px, calc((100% - 640px) / 2), env(safe-area-inset-left, 0px));
+}
+.pc-ola { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.2rem; margin: 0; overflow-wrap: anywhere; }
+.pc-unidade-box { justify-self: start; max-width: 100%; }
+.pc-unidade {
+  display: inline-flex; align-items: center; gap: .4rem; max-width: 100%; min-height: 40px; padding: .45rem .75rem;
+  background: rgba(255, 255, 255, .1); border: 0; border-radius: 10px;
+  color: var(--mc-gold); font: inherit; font-size: .88rem; font-weight: 700; cursor: default;
+}
+.pc-unidade span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-unidade--varias { cursor: pointer; }
+.pc-unidade--varias::after { content: "▾"; flex: none; font-size: .8rem; }
+.pc-unidade--varias:hover { background: rgba(255, 255, 255, .16); }
+.pc-unidade:focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+.pc-unidade-opcao { display: flex; align-items: center; gap: .4rem; min-height: 44px; white-space: normal; }
+.pc-unidade-opcao .unit-check { width: 1rem; flex: none; color: var(--mc-gold-dark); font-weight: 700; }
+
+.pc-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pc-acao {
+  display: grid; justify-items: center; align-content: center; gap: .4rem; min-height: 88px; padding: 14px 8px;
+  border-radius: var(--mc-radius); border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .08);
+  color: #fff; font: inherit; font-weight: 800; font-size: .95rem; line-height: 1.2; text-align: center;
+  text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pc-acao svg { width: 28px; height: 28px; flex: none; }
+.pc-acao:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+.pc-acao:active { transform: scale(.98); }
+.pc-acao:focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+.pc-acao--principal, .pc-acao--principal:hover { background: var(--mc-gold); border-color: var(--mc-gold); color: var(--mc-ink); }
+.pc-acao--principal:hover { filter: brightness(1.05); }
+
+/* ---------- Caixas ---------- */
+.pc-caixas { display: grid; gap: 12px; }
+.pc-caixa { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: 12px 14px; min-width: 0; }
+.pc-caixa-topo { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.pc-caixa-topo h2 { font-size: 1rem; font-weight: 800; margin: 0; }
+.pc-caixa-topo a {
+  display: inline-flex; align-items: center; min-height: 40px; margin: -.4rem 0;
+  color: var(--mc-info); font-weight: 700; font-size: .86rem; text-decoration: none; white-space: nowrap;
+}
+.pc-caixa-topo a:hover { text-decoration: underline; }
+
+/* Sua loja agora: linhas tocáveis */
+.pc-linha {
+  display: flex; align-items: center; gap: .75rem; min-height: 52px; padding: .45rem 0;
+  border-top: 1px solid var(--mc-line); color: var(--mc-text); text-decoration: none;
+}
+.pc-linha:first-child { border-top: 0; }
+.pc-linha:hover .pc-linha-nome { text-decoration: underline; }
+.pc-linha:focus-visible { outline: 3px solid var(--mc-gold-dark); outline-offset: 2px; border-radius: 8px; }
+.pc-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.pc-ic--ok { background: var(--mc-success-soft); color: var(--mc-success); }
+.pc-ic--info { background: var(--mc-info-soft); color: var(--mc-info); }
+.pc-ic--aviso { background: var(--pc-aviso-soft); color: var(--pc-aviso); }
+.pc-linha-nome { flex: 1 1 auto; min-width: 0; font-size: .95rem; font-weight: 600; }
+.pc-num { font-family: var(--mc-font-display); font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pc-seta { color: var(--mc-muted); font-size: 1.2rem; line-height: 1; }
+
+/* Precisa de atenção e Últimas movimentações */
+.pc-lista { list-style: none; margin: 0; padding: 0; }
+.pc-lista li { display: flex; align-items: center; gap: .55rem; min-height: 44px; padding: .4rem 0; border-top: 1px solid var(--mc-line); font-size: .9rem; }
+.pc-lista li:first-child { border-top: 0; }
+.pc-lista-txt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-detalhe { color: var(--mc-muted); }
+.pc-hora { flex: none; color: var(--mc-muted); font-size: .8rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pc-pill { flex: none; padding: .15rem .55rem; border-radius: 999px; font-size: .75rem; font-weight: 800; white-space: nowrap; }
+.pc-pill--ruim { background: var(--mc-danger-soft); color: var(--mc-danger); }
+.pc-pill--aviso { background: var(--pc-aviso-soft); color: var(--pc-aviso); box-shadow: inset 0 0 0 1px var(--mc-gold); }
+.pc-pill--info { background: var(--mc-info-soft); color: var(--mc-info); }
+.pc-pill--neutro { background: var(--pc-neutro-soft); color: var(--mc-muted); }
+.pc-op { flex: none; padding: .15rem .5rem; font-size: .72rem; }
+.pc-op::before { display: none; }
+.pc-mais {
+  display: block; width: 100%; min-height: 44px; margin-top: .25rem; padding: .4rem 0; border: 0; border-top: 1px solid var(--mc-line);
+  background: none; color: var(--mc-info); font: inherit; font-size: .88rem; font-weight: 700; text-align: left; cursor: pointer;
+}
+.pc-mais:hover { text-decoration: underline; }
+.pc-vazio { margin: .25rem 0; color: var(--mc-muted); font-size: .9rem; }
+.pc-vazio--ok { display: flex; align-items: center; gap: .5rem; color: var(--mc-success); font-weight: 700; }
+
+/* Retirar pelo Painel: escolher a torneira com barril */
+.pc-torneiras { display: flex; flex-direction: column; gap: .5rem; max-height: 55vh; overflow-y: auto; }
+.pc-torneira {
+  display: flex; align-items: center; gap: .7rem; width: 100%; min-height: 60px; padding: .6rem .75rem;
+  background: var(--mc-surface); border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius);
+  color: var(--mc-text); font: inherit; text-align: left; cursor: pointer;
+}
+.pc-torneira:hover { border-color: var(--mc-gold-dark); }
+.pc-torneira:focus-visible { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+.pc-torneira-num {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font-family: var(--mc-font-display); font-weight: 700; font-size: 1.05rem; background: var(--mc-ink); color: var(--mc-gold);
+}
+.pc-torneira-info { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; line-height: 1.3; }
+.pc-torneira-info span { color: var(--mc-muted); font-size: .85rem; font-weight: 600; }
+.pc-torneira-info .pc-sem-quebra { white-space: nowrap; }
+
+/* Engatar pelo Painel: a escolha da torneira livre, embaixo da lista de barris */
+.eng-torneiras { border: 0; margin: 1rem 0 0; padding: .75rem 0 0; border-top: 1px solid var(--mc-line); min-width: 0; }
+.eng-torneiras legend { float: none; width: auto; margin-bottom: .5rem; font-size: inherit; }
+.eng-torneiras-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+.eng-torneira {
+  position: relative; display: flex; align-items: center; justify-content: center; min-height: 48px; padding: .4rem .6rem;
+  border: 1.5px solid var(--mc-line); border-radius: var(--mc-radius); background: var(--mc-surface);
+  font-weight: 700; cursor: pointer;
+}
+.eng-torneira input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.eng-torneira:hover { border-color: var(--mc-gold-dark); }
+.eng-torneira:has(input:checked) { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
+.eng-torneira:has(input:focus-visible) { outline: 3px solid var(--mc-gold); outline-offset: 2px; }
+
+/* No celular (menos de 768 px) as janelas sobem da parte de baixo da tela, como na aba Torneiras */
+@media (max-width: 767.98px) {
+  .tela-painel .mc-overlay { align-items: flex-end; padding: 0; }
+  .tela-painel .mc-modal {
+    max-width: none; max-height: 92vh; border-radius: 16px 16px 0 0;
+    padding: 1.1rem max(16px, env(safe-area-inset-right, 0px)) calc(1.2rem + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  /* Engatar: os botões ficam sempre à vista, colados na borda de baixo da folha */
+  .tela-painel .mc-modal--engate .mc-modal-actions {
+    --folha-pe: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+    position: sticky; bottom: calc(-1 * var(--folha-pe)); z-index: 1;
+    margin: 1rem -16px calc(-1 * var(--folha-pe)); padding: .75rem 16px calc(.75rem + var(--folha-pe));
+    background: var(--mc-surface); border-top: 1px solid var(--mc-line);
+  }
+  .tela-painel .mc-modal--engate .eng-ok { flex: 1 1 auto; min-height: 52px; font-size: 1.02rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tela-painel .mc-modal { animation: folha-sobe-painel .2s ease-out; }
+    @keyframes folha-sobe-painel { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+  }
+}

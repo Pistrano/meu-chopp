@@ -15,6 +15,7 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { supabase } = require("./supabase");
 const teknisa = require("./teknisa");
+const { montarAlertas } = require("./alertas");
 
 const handlers = new Map();   // canal -> { fn, auth, perm }
 
@@ -1323,15 +1324,15 @@ function registerHandlers() {
     return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8, semPesagens: true }), semFuncionarios };
   });
 
-  /* Ordem: validade (vencidos primeiro), transferências pendentes, vazios aguardando recolhimento.
-     nivel "erro" = barril vencido (a tela destaca em vermelho). */
+  /* Alertas do sino e do "Precisa de atenção" do Painel do celular (montados em alertas.js, na ordem: validade, com os
+     vencidos primeiro; transferências pendentes; vazios aguardando recolhimento; estoque baixo).
+     nivel "erro" = barril vencido ou chope sem estoque (a tela destaca em vermelho). */
   handle("alerts:list", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
-    const alerts = [];
 
-    // As quatro consultas saem juntas; os alertas são montados depois, na mesma ordem de antes
+    // As quatro consultas saem juntas; os alertas são montados depois
     const hoje = hojeTZ();
-    const [validade, pend, vazios, estoque] = await Promise.all([
+    const [validade, pendentes, vazios, estoque] = await Promise.all([
       rpc("fn_alertas_validade", { p_unit: unit, p_hoje: hoje }),
       supabase.from("transferencias")
         .select("id, origem_id, destino_id, barris(codigo), origem:unidades!origem_id(nome), destino:unidades!destino_id(nome)")
@@ -1347,43 +1348,7 @@ function registerHandlers() {
         .limit(5000)
         .then((r) => ok(r)),
     ]);
-    validade.forEach((b) => {
-      const quem = `Barril #${b.codigo}${b.chope ? ` (${b.chope})` : ""}`;
-      if (b.validade < hoje)
-        alerts.push({ nivel: "erro", texto: `${quem} venceu em ${diaMes(b.validade)}. Confira se estava na câmara fria.` });
-      else if (b.validade === hoje) alerts.push({ texto: `${quem} vence hoje.` });
-      else alerts.push({ texto: `${quem} vence amanhã (${diaMes(b.validade)}).` });
-    });
-
-    pend.forEach((t) => {
-      const codigo = t.barris ? t.barris.codigo : "?";
-      alerts.push({
-        texto:
-          t.destino_id === unit
-            ? `Barril #${codigo} vindo de ${t.origem.nome} aguardando seu recebimento.`
-            : `Barril #${codigo} aguardando confirmação de ${t.destino.nome}.`,
-      });
-    });
-
-    vazios.forEach((v) => alerts.push({ texto: `Barril #${v.codigo} vazio aguardando recolhimento há ${v.dias} dias` }));
-
-    const porChope = new Map();
-    estoque.forEach((b) => {
-      const chave = b.chope_id || `${b.chope_nome || ""}|${b.estilo || ""}`;
-      const item = porChope.get(chave) || { nome: b.chope_nome || b.estilo || "Chope", disponiveis: 0 };
-      if (b.status === "disponivel") item.disponiveis += 1;
-      porChope.set(chave, item);
-    });
-    porChope.forEach((b) => {
-      if (b.disponiveis <= 2) alerts.push({
-        nivel: b.disponiveis === 0 ? "erro" : "aviso",
-        texto: b.disponiveis === 0
-          ? `Estoque baixo: nenhum barril disponível de ${b.nome} nesta unidade.`
-          : `Estoque baixo: restam ${b.disponiveis} barris disponíveis de ${b.nome} nesta unidade.`,
-      });
-    });
-
-    return alerts;
+    return montarAlertas({ unit, hoje, validade, pendentes, vazios, estoque });
   });
 
   /* ======== Barris ======== */

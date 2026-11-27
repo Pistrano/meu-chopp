@@ -3,8 +3,9 @@
    Engatar numa torneira (com a confirmação de barril vencido), retirar da torneira (vazio ou ainda com chope) e
    pesar (balança ou estimativa, usado também em Mais > Pesagem). Fica num lugar só: mudanças no fluxo valem para
    todas as abas. Depende de common.js (MC) e layout.js (MCLayout).
-   Quem está fazendo: a escolha (MC.escolherFuncionario) vai na confirmação. Na retirada, a janela é daqui;
-   no engate, cada aba tem a própria janela de escolha (torneira ou barril) e passa a escolha em `funcionario`.
+   Quem está fazendo: a escolha (MC.escolherFuncionario) vai na confirmação. Na retirada, a janela é daqui; no engate,
+   a aba Barris tem a própria janela (escolhe a torneira) e a aba Torneiras e o Painel do celular usam a janelaEngatar
+   (leitura da etiqueta ou lista); as duas passam a escolha em `funcionario`.
    ========================================================== */
 const MCBarril = (() => {
   /* Engate: barris:use. Barril vencido só gera aviso: a pessoa confirma e o engate fica na auditoria.
@@ -33,6 +34,140 @@ const MCBarril = (() => {
     MC.toast(`Barril #${result.codigo} engatado na Torneira ${result.torneira}.`);
     MCLayout.refreshAlerts();
     return result;
+  }
+
+  /* ---------- Janela de engatar: leitura da etiqueta e a lista dos barris disponíveis ----------
+     Aba Torneiras: a torneira já vem escolhida (torneira = { id, numero }). Painel do celular: sem torneira, a janela
+     mostra as torneiras livres da unidade (livres = [{ id, numero }]) para a pessoa escolher.
+     No topo, a leitura da etiqueta (câmera, pistola ou digitação, em leitor-codigo.js, que a página carrega); embaixo, a
+     lista com busca, como alternativa (no celular ela começa fechada). O barril lido ou escolhido na lista segue o mesmo
+     fluxo: "Quem está fazendo?", aviso de vencido e barris:use (engatar).
+     Resolve com o resultado do engate; false quando o servidor recusou (o motivo já apareceu: a tela deve recarregar);
+     null quando não engatou nada (sem barril disponível ou a pessoa cancelou). */
+  const semAcento = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  async function janelaEngatar({ unitId, unidade, torneira = null, livres = [] }) {
+    const lista = await MC.run(() => MC.call("barris:list", { unitId, status: "disponivel" }));
+    if (!lista) return null;
+    if (!lista.length) {
+      await MC.notice({
+        title: "Nenhum barril disponível nesta unidade",
+        text: "Cadastre o barril (ou confirme a transferência que chegou) na aba Barris e volte para engatar.",
+        html: '<p class="mb-0"><a href="barris.html">Ir para a aba Barris</a></p>',
+        type: "plain",
+        buttonLabel: "Fechar",
+      });
+      return null;
+    }
+    // Vence primeiro em cima; sem validade (barris antigos) no fim
+    const barris = [...lista].sort((a, b) =>
+      (a.validade || "9999-99-99").localeCompare(b.validade || "9999-99-99") || String(a.codigo).localeCompare(String(b.codigo), "pt-BR", { numeric: true }));
+    const funcionario = await MC.escolherFuncionario(unitId);
+    const celular = window.matchMedia("(max-width: 767.98px)").matches;
+    // A torneira: a que veio escolhida ou, sem ela, a única livre (com mais de uma, a pessoa escolhe)
+    let torneiraId = torneira ? torneira.id : livres.length === 1 ? livres[0].id : null;
+    const numeroDe = (id) => (torneira ? torneira.numero : (livres.find((t) => t.id === id) || {}).numero);
+    const rotuloOk = () => (torneiraId ? `Engatar na Torneira ${numeroDe(torneiraId)}` : "Engatar");
+    const escolhaTorneira = torneira ? "" : `<fieldset class="eng-torneiras">
+        <legend class="form-label">Em qual torneira?</legend>
+        <div class="eng-torneiras-lista" role="radiogroup" aria-label="Torneiras livres">${livres.map((t) => `
+          <label class="eng-torneira"><input type="radio" name="engTorneira" value="${t.id}"${t.id === torneiraId ? " checked" : ""}><span>Torneira ${t.numero}</span></label>`).join("")}</div>
+      </fieldset>`;
+    const overlay = MC.openOverlay(`<h2>${torneira ? `Engatar na Torneira ${torneira.numero}` : "Engatar barril"}</h2>
+      <p class="mc-modal-intro">Unidade: ${MC.esc(unidade)}. Leia a etiqueta do barril ou escolha da lista.</p>
+      <div id="engLeitor"></div>
+      <details class="eng-lista-box"${celular ? "" : " open"}>
+        <summary>Escolher da lista <span class="t-muted">(${barris.length} ${barris.length === 1 ? "disponível" : "disponíveis"})</span></summary>
+        <input type="search" class="form-control mb-3" id="engBusca" placeholder="Buscar por código ou chope" aria-label="Buscar barril por código ou chope" autocomplete="off">
+        <div class="eng-list" role="radiogroup" aria-label="Barris disponíveis">${barris.map((b) => `
+          <label class="eng-item" data-busca="${MC.esc(semAcento(`${b.codigo} ${MC.chopeLabel(b)}`))}">
+            <input type="radio" name="engBarril" value="${b.id}"${barris.length === 1 ? " checked" : ""}>
+            <span class="eng-main">#${MC.esc(b.codigo)} <span class="eng-size">· ${MC.esc(MC.fmtLitros(b.tamanho_l))}</span></span>
+            <span class="eng-chope">${MC.esc(MC.chopeLabel(b))}</span>
+            <span class="eng-validade">${b.validade ? `Validade ${MC.fmtDia(b.validade)}` : "Sem validade informada"} ${MC.validadeBadge(b.situacao_validade)}${MC.saldoTexto(b) ? ` <span class="op-badge op-badge--disponivel">${MC.esc(MC.statusTexto(b))}</span>` : ""}</span>
+          </label>`).join("")}</div>
+        <p class="t-muted small-note eng-nada d-none" id="engNada">Nenhum barril encontrado com essa busca.</p>
+      </details>
+      ${escolhaTorneira}
+      ${funcionario ? `<div class="mt-3">${funcionario.html}</div>` : ""}
+      <div class="field-error" id="engErr" aria-live="polite"></div>
+      <div class="mc-modal-actions"><button type="button" class="btn-ghost" data-cancel>Cancelar</button>
+        <button type="button" class="btn btn-mc btn-mc-sm eng-ok" data-ok${funcionario ? " disabled" : ""}>${rotuloOk()}</button></div>`);
+    overlay.querySelector(".mc-modal").classList.add("mc-modal--engate");
+    const caixaLista = overlay.querySelector(".eng-lista-box");
+    const caixaTorneiras = overlay.querySelector(".eng-torneiras");
+    const busca = overlay.querySelector("#engBusca");
+    const itens = [...overlay.querySelectorAll(".eng-item")];
+    const erro = overlay.querySelector("#engErr");
+    const okBtn = overlay.querySelector("[data-ok]");
+    if (funcionario) funcionario.ligar(overlay, () => { okBtn.disabled = false; erro.textContent = ""; });
+
+    // O barril escolhido: o lido na etiqueta ou o marcado na lista (o último que a pessoa fez vale)
+    let escolhido = barris.length === 1 ? barris[0].id : null;
+    const marcar = (id) => itens.forEach((it) => { const r = it.querySelector("input"); r.checked = Number(r.value) === id; });
+    const filtrar = () => {
+      const termo = semAcento(busca.value.replace("#", "").trim());
+      let visiveis = 0;
+      itens.forEach((it) => {
+        const mostra = !termo || it.dataset.busca.includes(termo);
+        it.classList.toggle("d-none", !mostra);
+        if (mostra) visiveis += 1;
+        else if (it.querySelector("input").checked) { it.querySelector("input").checked = false; escolhido = null; } // não engata um barril que a busca escondeu
+      });
+      overlay.querySelector("#engNada").classList.toggle("d-none", visiveis > 0);
+    };
+    // O que falta depois de achar o barril: a torneira, "Quem está fazendo?" ou só o botão
+    const proximoPasso = () => (!torneiraId && caixaTorneiras) || (funcionario && !funcionario.id ? overlay.querySelector(".func-pick") : okBtn);
+
+    const leitor = MCLeitor.montar(overlay.querySelector("#engLeitor"), {
+      unitId: () => unitId,
+      aoAchar: (b) => {
+        erro.textContent = "";
+        const porque = MCLeitor.motivo(b, { unitId, acao: "engatar" });
+        if (porque) { escolhido = null; marcar(null); leitor.erro(porque); return; }
+        escolhido = b.id;
+        busca.value = "";
+        filtrar();
+        marcar(b.id);
+        if (celular) caixaLista.open = false; // no celular, o botão de engatar fica logo embaixo
+        leitor.mostrar(MCLeitor.cartaoAchado(b));
+        if (window.matchMedia("(pointer: coarse)").matches && document.activeElement) document.activeElement.blur(); // fecha o teclado
+        proximoPasso().scrollIntoView({ block: "nearest", behavior: "smooth" });
+      },
+    });
+
+    return new Promise((resolve) => {
+      const fechar = (r) => { leitor.destruir(); overlay.remove(); resolve(r); };
+      busca.addEventListener("input", filtrar);
+      itens.forEach((it) => it.querySelector("input").addEventListener("change", (e) => {
+        escolhido = Number(e.target.value);
+        leitor.limpar(); // o cartão do barril lido não vale mais
+        erro.textContent = "";
+      }));
+      overlay.querySelectorAll('input[name="engTorneira"]').forEach((r) => r.addEventListener("change", (e) => {
+        torneiraId = Number(e.target.value);
+        okBtn.textContent = rotuloOk();
+        erro.textContent = "";
+      }));
+      overlay.querySelector("[data-cancel]").addEventListener("click", () => fechar(null));
+      overlay.addEventListener("keydown", (e) => { if (e.key === "Escape") fechar(null); });
+      okBtn.addEventListener("click", async () => {
+        if (!escolhido) { erro.textContent = "Leia a etiqueta do barril ou escolha o barril na lista."; return; }
+        if (!torneiraId) { erro.textContent = "Escolha a torneira em que o barril vai ser engatado."; return; }
+        if (funcionario && !funcionario.id) { erro.textContent = "Toque no seu nome em \"Quem está fazendo?\"."; return; }
+        erro.textContent = "";
+        okBtn.disabled = true;
+        leitor.parar();
+        try {
+          const r = await engatar({ barrilId: escolhido, torneiraId, unitId, funcionario });
+          if (r === false) { okBtn.disabled = false; return; } // desistiu do barril vencido: escolhe outro
+          fechar(r);
+        } catch (err) {
+          fechar(false);
+          await MC.notice({ title: "Não foi possível engatar", text: err.message, type: "err" });
+        }
+      });
+    });
   }
 
   /* ---------- Medir o chope que sobrou: balança ou estimativa ----------
@@ -339,5 +474,5 @@ const MCBarril = (() => {
     return r;
   }
 
-  return { engatar, retirar, medir, pesar };
+  return { engatar, janelaEngatar, retirar, medir, pesar };
 })();

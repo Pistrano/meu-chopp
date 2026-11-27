@@ -138,8 +138,10 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
 
 /* Janelas mais estreitas: cabeçalho compacto para não estourar a largura */
 .app-header { min-width: 0; }
+@media (min-width: 992px) and (max-width: 1280px) {
+  .app-nav { margin-left: .5rem; } /* abaixo de 992 px o menu é a barra de baixo, que vai de ponta a ponta */
+}
 @media (max-width: 1280px) {
-  .app-nav { margin-left: .5rem; }
   .app-nav .nav-tab { padding: .45rem .55rem; font-size: .86rem; }
   .unit-select { max-width: 210px; }
 }

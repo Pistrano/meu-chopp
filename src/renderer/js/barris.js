@@ -309,6 +309,12 @@
     }
   });
 
+  // "Receber barris" do Painel do celular (barris.html?cadastrar=1): o cadastro à vista, com o cursor no código
+  if (new URLSearchParams(location.search).has("cadastrar")) {
+    document.getElementById("formBarril").closest(".panel").scrollIntoView({ block: "start" });
+    document.getElementById("codigo").focus({ preventScroll: true });
+  }
+
   let t;
   q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(load, 250); });
   status.addEventListener("change", load);
