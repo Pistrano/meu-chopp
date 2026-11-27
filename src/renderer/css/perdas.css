@@ -1,0 +1,136 @@
+/* ==========================================================
+   BarrilFacil — Relatório de perdas (Mais > Relatório de perdas)
+   Usa os filtros e a impressão do relatorio.css (carregue depois dele). Só tokens --mc-*: tema claro e escuro.
+   ========================================================== */
+
+/* Filtros: unidade, inventário do início e do fim */
+.pd-campos { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; }
+.pd-campos .rel-campo { min-width: 0; }
+.pd-campos .form-select { width: 100%; }
+.pd-campos .form-select.is-invalid { border-color: var(--mc-danger); }
+@media (max-width: 640px) { .pd-campos { grid-template-columns: minmax(0, 1fr); } }
+.pd-atalhos { align-items: center; }
+.pd-atalhos .btn-ghost { min-height: 44px; padding: 0 .85rem; font-size: .88rem; }
+.pd-atalhos-rotulo { color: var(--mc-muted); font-size: .85rem; margin-right: .2rem; }
+.pd-andamento {
+  display: flex; gap: .6rem; align-items: flex-start; margin-top: .85rem; padding: .6rem .8rem;
+  border: 1px dashed var(--mc-info); background: var(--mc-info-soft); color: var(--mc-text); border-radius: var(--mc-radius); font-size: .88rem;
+}
+.pd-andamento b { color: var(--mc-info); }
+.pd-andamento a, .pd-aviso a, .pd-vazio a { color: inherit; font-weight: 700; }
+
+.pd-conteudo { margin-bottom: 1.5rem; display: grid; gap: .9rem; min-width: 0; }
+.pd-conteudo > .panel { margin-bottom: 0; }
+.pd-dica { color: var(--mc-muted); font-size: .85rem; }
+.pd-periodo { display: flex; gap: .4rem 1rem; flex-wrap: wrap; align-items: baseline; justify-content: space-between; }
+.pd-periodo b { font-family: var(--mc-font-display); }
+
+/* Avisos de vendas faltando */
+.pd-aviso { display: grid; gap: .25rem; padding: .8rem 1rem; border: 1px solid var(--mc-gold); background: var(--mc-gold-soft); border-radius: var(--mc-radius); }
+.pd-aviso b { font-family: var(--mc-font-display); }
+
+/* Caixinhas do resumo */
+.pd-resumo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+.pd-resumo--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 860px) { .pd-resumo, .pd-resumo--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pd-kpi { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: .85rem 1rem; min-width: 0; }
+.pd-kpi small { display: block; color: var(--mc-muted); font-weight: 700; font-size: .8rem; }
+.pd-kpi strong { display: block; font-family: var(--mc-font-display); font-size: 1.45rem; line-height: 1.2; margin-top: .2rem; font-variant-numeric: tabular-nums; }
+.pd-kpi span { display: block; color: var(--mc-muted); font-size: .82rem; margin-top: .15rem; }
+.pd-kpi--perda.pd-pos { border-left: 5px solid var(--mc-danger); }
+.pd-kpi--perda.pd-neg { border-left: 5px solid var(--mc-info); }
+.pd-kpi--perda.pd-pos strong { color: var(--mc-danger); }
+.pd-kpi--perda.pd-neg strong { color: var(--mc-info); }
+
+/* Tabela por chope (e a do barril por barril) */
+.pd-tabela { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); overflow-x: auto; min-width: 0; }
+.pd-tabela table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.pd-tabela th, .pd-tabela td { padding: .65rem .8rem; text-align: right; border-bottom: 1px solid var(--mc-line); white-space: nowrap; vertical-align: middle; }
+.pd-tabela th { font-size: .8rem; color: var(--mc-muted); font-weight: 800; background: var(--mc-bg); }
+.pd-tabela th:first-child, .pd-tabela td:first-child { text-align: left; }
+.pd-tabela tbody tr:last-child td { border-bottom: 0; }
+.pd-tabela tfoot td { font-weight: 800; background: var(--mc-bg); border-top: 2px solid var(--mc-line); border-bottom: 0; }
+.pd-vazio-linha { text-align: center !important; color: var(--mc-muted); padding: 2rem 1rem !important; white-space: normal !important; }
+.pd-link {
+  padding: 0; border: 0; background: none; font: inherit; font-weight: 800; color: var(--mc-text); text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--mc-line); text-underline-offset: 3px;
+}
+.pd-link:hover { text-decoration-color: var(--mc-gold-dark); }
+.pd-link:focus-visible { outline: 3px solid var(--mc-info); outline-offset: 2px; border-radius: 4px; }
+.pd-pos { color: var(--mc-danger); font-weight: 800; }
+.pd-neg { color: var(--mc-info); font-weight: 800; }
+.pd-kpi.pd-pos, .pd-kpi.pd-neg { color: inherit; font-weight: inherit; }
+.pd-pct { display: inline-flex; align-items: center; gap: .45rem; justify-content: flex-end; }
+.pd-barra { width: 64px; height: 8px; border-radius: 4px; background: var(--mc-line); overflow: hidden; display: inline-block; }
+.pd-barra i { display: block; height: 100%; background: var(--mc-danger); border-radius: 4px; }
+.pd-tag { display: inline-block; margin-left: .35rem; padding: .05rem .45rem; border-radius: 999px; font-size: .72rem; font-weight: 800; white-space: nowrap; vertical-align: 1px; }
+.pd-tag--est { background: var(--mc-gold-soft); color: var(--mc-gold-dark); }
+.pd-tag--novo, .pd-tag--transf { margin: 0 .3rem 0 0; }
+.pd-tag--novo { background: var(--mc-success-soft); color: var(--mc-success); }
+.pd-tag--transf { background: var(--mc-info-soft); color: var(--mc-info); }
+.pd-periodo .pd-tag, .pd-dica .pd-tag { margin: 0; }
+.pd-nota { color: var(--mc-muted); font-size: .86rem; margin: 0; max-width: 80ch; }
+.pd-vazio { text-align: center; color: var(--mc-muted); }
+
+/* Como a conta é feita */
+.pd-explica { display: grid; gap: .45rem; }
+.pd-explica h2 { font-family: var(--mc-font-display); font-size: 1rem; font-weight: 700; margin: 0; }
+.pd-explica ul { margin: 0; padding-left: 1.1rem; color: var(--mc-muted); font-size: .88rem; display: grid; gap: .25rem; }
+.pd-explica b { color: var(--mc-text); }
+
+/* Janela do chope (barril por barril) */
+.mc-modal--perdas { max-width: 720px; display: grid; gap: .9rem; }
+.mc-modal--perdas .notice-title { margin-bottom: 0; }
+.mc-modal--perdas .pd-detalhe-periodo { margin: -.5rem 0 0; }
+.mc-modal--perdas .pd-tabela { border-radius: 8px; }
+.mc-modal--perdas .pd-tabela td, .mc-modal--perdas .pd-tabela th { padding: .5rem .6rem; font-size: .88rem; }
+.mc-modal--perdas .mc-modal-actions { margin-top: 0; }
+
+/* Telas estreitas: a coluna do custo do litro sai da tabela (volta no cartão abaixo de 640 px).
+   As janelas sobem da parte de baixo da tela, como nas outras telas no celular. */
+@media (max-width: 767.98px) {
+  .pd-col-custo { display: none; }
+  .tela-perdas .mc-overlay { align-items: flex-end; padding: 0; }
+  .tela-perdas .mc-modal {
+    max-width: none; max-height: 92vh; overflow-y: auto; border-radius: 16px 16px 0 0;
+    padding: 1.1rem max(16px, env(safe-area-inset-right, 0px)) calc(1.2rem + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tela-perdas .mc-modal { animation: folha-sobe-perdas .2s ease-out; }
+    @keyframes folha-sobe-perdas { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+  }
+}
+
+/* Celular (abaixo de 640 px): cada linha vira um cartão, com o nome da coluna em cima de cada número */
+@media screen and (max-width: 640px) {
+  .pd-tabela { overflow: visible; }
+  .pd-stack thead { display: none; }
+  .pd-stack, .pd-stack tbody, .pd-stack tfoot { display: block; }
+  .pd-stack tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem .75rem; padding: .7rem .85rem; border-bottom: 1px solid var(--mc-line); }
+  .pd-stack tbody tr:last-child { border-bottom: 0; }
+  .pd-stack tfoot tr { background: var(--mc-bg); border-top: 2px solid var(--mc-line); border-bottom: 0; border-radius: 0 0 var(--mc-radius) var(--mc-radius); }
+  .pd-stack td { display: block; padding: 0; border: 0; text-align: left; white-space: normal; background: none; min-width: 0; }
+  .pd-tabela tfoot td { background: none; border: 0; }
+  .pd-stack td:first-child { grid-column: 1 / -1; font-size: 1.02rem; }
+  .pd-stack td:empty { display: none; }
+  .pd-stack td[data-l]::before { content: attr(data-l); display: block; color: var(--mc-muted); font-size: .74rem; font-weight: 700; }
+  .pd-stack .pd-pct { justify-content: flex-start; }
+  .pd-stack .pd-col-custo { display: block; }
+  .pd-stack .pd-vazio-linha { grid-column: 1 / -1; }
+  .mc-modal--perdas .pd-stack td, .mc-modal--perdas .pd-tabela tfoot td { padding: 0; }
+}
+
+/* Impressão: tabela de verdade, cores do tema claro e sem a janela */
+@media print {
+  :root, :root[data-tema="escuro"] {
+    --mc-danger: #b3372f; --mc-danger-soft: #fbeceb; --mc-info: #3d6b8c; --mc-info-soft: #e7eef2;
+    --mc-success: #1f7a4d; --mc-success-soft: #e6f4ec; --mc-gold: #d9a441;
+  }
+  .pd-explica { break-inside: avoid; }
+  .pd-periodo > span:first-child { display: none; } /* o período já está no cabeçalho da impressão */
+  .pd-tabela { overflow: visible; }
+  .pd-col-custo { display: table-cell !important; }
+  .pd-link { text-decoration: none; }
+  .pd-resumo { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pd-resumo--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

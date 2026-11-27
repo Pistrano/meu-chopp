@@ -122,7 +122,7 @@ registrado está no banco.
 ## Menu
 
 - Abas principais, sempre visíveis: **Painel**, **Barris**, **Torneiras** e **Histórico**.
-- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Transferências, Pesagem, Vendas e
+- O botão **Mais** abre as outras telas: Chopes, Relatório de barris, Relatório de perdas, Transferências, Pesagem, Vendas e
   Funcionários (administrador e gerente) e, para o administrador, Unidades e Usuários.
   Quando a tela aberta está dentro do Mais, o botão fica destacado com o nome dela. Toda tela nova entra no Mais por padrão
   (em `src/renderer/js/layout.js`, `principal: true` coloca uma tela nas abas principais).
@@ -166,7 +166,7 @@ outra pela largura da tela, e girar o tablet ou mudar o tamanho da janela troca 
 
 ## Cargos e permissões
 
-Três cargos. O dia a dia (barris, engates e retiradas, transferências, histórico e Relatório de barris) é de todos;
+Três cargos. O dia a dia (barris, engates e retiradas, transferências, histórico e os relatórios de barris e de perdas) é de todos;
 o resto depende da permissão do cargo:
 
 | Permissão | Administrador | Gerente | Operador |
@@ -174,8 +174,8 @@ o resto depende da permissão do cargo:
 | `usuarios`: criar, trocar cargo, desativar e apagar usuários | ✓ | | |
 | `unidades`: aba Unidades e cadastro de torneiras | ✓ | | |
 | `auditoria`: aba Auditoria do sistema, no Histórico | ✓ | | |
-| `exportar`: CSV de estoque, de movimentações e do Relatório de barris | ✓ | | |
-| `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames | ✓ | ✓ | |
+| `exportar`: CSV de estoque, de movimentações e dos relatórios de barris e de perdas | ✓ | | |
+| `catalogo:editar`: editar, desativar, reativar e apagar chopes; ver e mudar o custo por litro; cadastrar e desativar tamanhos de barril; editar, desativar e apagar taras dos vasilhames; custo do litro e R$ no Relatório de perdas | ✓ | ✓ | |
 | `funcionarios`: funcionários do quiosque | ✓ | ✓ | |
 | `vendas`: Vendas (importar, cancelar e o de-para dos produtos; o gerente só nas unidades dele) | ✓ | ✓ | |
 | `torneiras:horario`: *Lançar com horário* na aba Torneiras (engate e retirada com o horário em que aconteceram) | ✓ | ✓ | |
@@ -468,6 +468,39 @@ as pesagens.
   últimos 30 dias, nas unidades da pessoa (só leitura).
 - Chope com venda importada não é apagado (como chope com barril).
 
+## Relatório de perdas (cálculo de perdas, parte 3)
+
+Quanto chope saiu dos barris e quanto o caixa vendeu entre dois inventários concluídos da unidade (Pesagem + Vendas).
+
+- Em **Mais > Relatório de perdas**. Todos os cargos abrem, cada um nas unidades liberadas. Escolhe a unidade, o inventário
+  do início e o do fim (só concluídos; o do fim depois do do início). Abre no último período; os atalhos *Entre inventários*
+  são o último período, até 4 anteriores e *Tudo* (do primeiro ao último inventário concluído). Um aviso mostra o inventário
+  em andamento ou desde quando o período atual está aberto.
+- A conta é por barril, de um inventário ao outro (de tA a tB, pela hora em que cada inventário foi concluído):
+  - **Saiu dos barris** = no início + chegou + recebido de outra loja − enviado para outra loja − no fim.
+    *No início* e *no fim*: a última pesagem do barril naquele inventário; barril que não está no inventário do fim acabou
+    (0 L). *Chegou*: barril cadastrado na unidade depois de tA até tB, inclusive (entra cheio). *Recebido* e *enviado*:
+    transferência não cancelada no período, com o nível do barril naquela hora (última pesagem antes dela; sem pesagem, cheio).
+  - **Vendido no caixa**: itens de chope das importações não canceladas, de tA (inclusive) até tB (sem incluir).
+  - **Perda** = saiu − vendido, e o % do que saiu. Perda negativa (vendeu mais do que saiu) aparece negativa; em geral é
+    pesagem ou de-para de produto errado.
+  - **Custo do litro**: o custo dos barris que saíram (`fn_custo_litro`, pela data de cadastro de cada barril), pesado pelos
+    litros. **Perda (R$)** = perda × custo do litro. Chope sem preço fica sem R$ e aparece em *Fora da conta*.
+  - **Estimado**: algum barril aberto do chope foi medido a olho (estimativa abaixo de 100%) num dos dois inventários. O
+    barril cheio fechado (100%) não marca.
+  - Barril antigo sem chope do catálogo cai na linha do chope de mesmo nome.
+- Sem venda importada para nenhum dia do período: *Faltam as vendas deste período* e a perda não é calculada (o que saiu
+  continua aparecendo). Com alguns dias sem importação, o aviso lista os dias (a perda aparece maior do que é).
+- Clicar no nome do chope mostra barril por barril (no início, chegou ou recebido, enviado, no fim e o que saiu).
+- **Dinheiro** (custo do litro e R$): só administrador e gerente (`catalogo:editar`); para o operador esses campos nem saem
+  do servidor. *Exportar CSV* (mesmo formato do Relatório de barris): só o administrador (`exportar`), com auditoria
+  *relatorio_perdas_exportado*. *Imprimir*: todos.
+- No celular (abaixo de 640 px) cada chope vira um cartão, com o nome da coluna em cima de cada número.
+- As contas ficam no banco: `fn_perdas_periodo(unidade, inventário do início, inventário do fim)` e
+  `fn_perdas_periodos(unidade, limite)` (os inventários concluídos, o aberto e os totais dos últimos pares seguidos, com a
+  mesma função), em `supabase/migrations/20261127000000_relatorio_perdas.sql`. Rotas `perdas:periodos`, `perdas:relatorio`
+  e `perdas:csv` em `src/server/api.js`; a montagem das respostas e o CSV em `src/server/perdas.js`.
+
 ## Usuários
 
 - Aba **Usuários** (administrador): cria a conta com uma senha temporária, escolhe o cargo e as unidades de gerentes e operadores.
@@ -553,9 +586,10 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 ## Estrutura
 
 - `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`; `teknisa.js` lê o XLSX de vendas da Teknisa;
-  `alertas.js` monta os alertas do sino)
+  `alertas.js` monta os alertas do sino; `perdas.js` monta o Relatório de perdas e o CSV dele)
 - `src/renderer/` — as telas (servidas pelo servidor)
 - `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
 - `supabase/migrations/` — schema e mudanças do banco (`supabase/config.toml` é do Supabase local dos testes)
-- `tests/` — testes automáticos (veja *Rodar os testes*); `tests/fixtures/` tem os arquivos inventados da Teknisa
+- `tests/` — testes automáticos (veja *Rodar os testes*); `tests/fixtures/` tem os arquivos inventados da Teknisa e o
+  cenário inventado do Relatório de perdas
 - `deploy/` — arquivos de implantação (Linux + HTTPS)

@@ -13,6 +13,8 @@ const BASICOS = [
   "js/api.js", "js/common.js", "js/auth.js", "js/layout.js", "js/tema.js",
   // Leitura da etiqueta do barril (Torneiras e Transferências); a ZXing é o leitor da câmera dos aparelhos sem o nativo
   "js/leitor-codigo.js", "js/lancar-horario.js", "vendor/zxing-0.21.3.min.js",
+  // Relatório de perdas (Mais > Relatório de perdas)
+  "css/relatorio.css", "css/perdas.css", "js/relatorio-perdas.js",
   "assets/icon-64.png", "assets/icon-192.png", "assets/icone-32.png", "assets/icone.svg",
 ].map((f) => `${f}?v=${VERSAO}`).concat([
   // as fontes são pedidas pelo CSS, sem ?v=

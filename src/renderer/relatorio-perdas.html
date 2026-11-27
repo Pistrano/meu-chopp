@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="icon" href="assets/icone-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/icone.svg" type="image/svg+xml">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Relatório de perdas | BarrilFacil</title>
+  <link href="vendor/bootstrap-lite.css" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <link href="css/tema-escuro.css" rel="stylesheet">
+  <link href="css/relatorio.css" rel="stylesheet">
+  <link href="css/perdas.css" rel="stylesheet">
+  <script src="js/tema.js"></script>
+</head>
+<body class="tela-perdas">
+  <header id="appHeader" class="app-header"></header>
+  <main class="dashboard-main">
+    <div class="page-head">
+      <div><h1>Relatório de perdas</h1><p>Quanto chope saiu dos barris e quanto foi vendido no caixa entre dois inventários. A diferença é a perda.</p></div>
+      <div class="row-actions rel-acoes">
+        <button id="btnCsv" class="btn-ghost" type="button" data-perm="exportar" disabled>Exportar CSV</button>
+        <button id="btnPrint" class="btn btn-mc btn-mc-sm" type="button">Imprimir</button>
+      </div>
+    </div>
+
+    <!-- Só aparece na impressão: o filtro fica escondido no papel -->
+    <div id="printHead" class="rel-print-head"></div>
+
+    <section class="panel rel-filtros pd-filtros" aria-label="Filtros do relatório">
+      <div class="pd-campos">
+        <div class="rel-campo">
+          <label class="form-label" for="fUnidade">Unidade</label>
+          <select id="fUnidade" class="form-select"></select>
+        </div>
+        <div class="rel-campo" data-precisa-inventarios>
+          <label class="form-label" for="fDe">Do inventário de</label>
+          <select id="fDe" class="form-select"></select>
+        </div>
+        <div class="rel-campo" data-precisa-inventarios>
+          <label class="form-label" for="fAte">Até o inventário de</label>
+          <select id="fAte" class="form-select" aria-describedby="pdErro"></select>
+        </div>
+      </div>
+      <div id="atalhos" class="rel-atalhos pd-atalhos" role="group" aria-label="Períodos entre inventários" data-precisa-inventarios></div>
+      <p id="pdErro" class="rel-erro d-none" role="alert"></p>
+      <div id="pdAndamento" class="pd-andamento d-none"></div>
+    </section>
+
+    <div id="pdConteudo" class="pd-conteudo"><p class="t-muted">Carregando…</p></div>
+
+    <section class="panel pd-explica" aria-labelledby="pdExplicaTitulo">
+      <h2 id="pdExplicaTitulo">Como a conta é feita</h2>
+      <ul>
+        <li><b>Saiu dos barris</b> = o que tinha nos barris no inventário do início + os barris que chegaram cheios no período − o que sobrou nos barris no inventário do fim. Barris recebidos de outra loja entram com o que tinham; barris enviados saem com o que tinham.</li>
+        <li><b>Vendido</b> = litros das vendas do caixa (Mais &gt; Vendas) entre o fim de um inventário e o fim do outro.</li>
+        <li><b>Perda</b> = saiu − vendido. A % é sobre o que saiu.</li>
+        <li data-dinheiro hidden><b>Perda em R$</b> = litros perdidos × custo médio do litro do que saiu, com o custo de cada barril pelo tamanho e pela data de chegada (Mais &gt; Chopes).</li>
+        <li><b>estimado</b>: algum barril aberto desse chope foi medido a olho (estimativa) num dos dois inventários, então o número é aproximado. Barril fechado conta como cheio e não deixa estimado.</li>
+        <li>Perda negativa (azul) quer dizer que o caixa vendeu mais do que saiu dos barris. Quase sempre é uma estimativa alta no inventário; pesar na balança resolve.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/relatorio-perdas.js"></script>
+</body>
+</html>
