@@ -18,10 +18,28 @@
   <link href="css/tema-escuro.css" rel="stylesheet">
   <script src="js/tema.js"></script>
 </head>
-<body>
+<body class="tela-painel">
   <header id="appHeader" class="app-header"></header>
+  <!-- Celular e tablet (menos de 1024 px): faixa escura com a saudação, a unidade e as quatro ações -->
+  <section class="pc-faixa painel-celular" aria-label="Ações rápidas">
+    <p class="pc-ola" id="pcOla">Olá</p>
+    <div class="dropdown pc-unidade-box">
+      <button id="pcUnidade" class="pc-unidade" type="button" aria-expanded="false"><span id="pcUnidadeNome">Unidade</span></button>
+      <ul id="pcUnidades" class="dropdown-menu unit-menu"></ul>
+    </div>
+    <div class="pc-acoes">
+      <button type="button" class="pc-acao pc-acao--principal" data-acao="engatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M12 3v6M6 9h12l-1 12H7L6 9z"/></svg>Engatar</button>
+      <button type="button" class="pc-acao" data-acao="retirar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21V9M7 14l5-5 5 5M5 3h14"/></svg>Retirar</button>
+      <a class="pc-acao" href="barris.html?cadastrar=1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.01M17 19a2 2 0 1 0 0-.01"/></svg>Receber barris</a>
+      <a class="pc-acao" href="pesagem.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14l-2-11H7L5 20zM9 9a3 3 0 0 1 6 0"/></svg>Pesar</a>
+    </div>
+  </section>
   <main class="dashboard-main">
-    <section class="greeting greeting--acoes">
+    <section class="greeting greeting--acoes painel-computador">
       <div>
         <h1 id="greetingTitle">Olá</h1>
         <p id="greetingText">Confira o resumo da operação da sua unidade.</p>
@@ -31,9 +49,25 @@
 
     <div id="avisoFuncionarios" class="warn-note d-none" role="status"></div>
 
-    <section id="statsGrid" class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3" aria-label="Indicadores da unidade"></section>
+    <!-- Celular e tablet: a loja agora, o que precisa de atenção e as últimas movimentações -->
+    <div class="pc-caixas painel-celular">
+      <section class="pc-caixa" aria-labelledby="pcLojaTitulo">
+        <div class="pc-caixa-topo"><h2 id="pcLojaTitulo">Sua loja agora</h2></div>
+        <div id="pcLoja" class="pc-linhas"></div>
+      </section>
+      <section class="pc-caixa" aria-labelledby="pcAtencaoTitulo">
+        <div class="pc-caixa-topo"><h2 id="pcAtencaoTitulo">Precisa de atenção</h2><a href="barris.html">Ver estoque ›</a></div>
+        <div id="pcAtencao" aria-live="polite"><p class="pc-vazio">Carregando…</p></div>
+      </section>
+      <section class="pc-caixa" aria-labelledby="pcMovTitulo">
+        <div class="pc-caixa-topo"><h2 id="pcMovTitulo">Últimas movimentações</h2><a href="historico.html">Ver todas ›</a></div>
+        <div id="pcMov"></div>
+      </section>
+    </div>
 
-    <section>
+    <section id="statsGrid" class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 painel-computador" aria-label="Indicadores da unidade"></section>
+
+    <section class="painel-computador">
       <h2 class="section-title">Movimentações Recentes</h2>
       <div id="movementList" class="movement-list" aria-live="polite"></div>
     </section>
@@ -44,6 +78,8 @@
   <script src="js/common.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/layout.js"></script>
+  <script src="js/acoes-barril.js"></script>
+  <script src="js/leitor-codigo.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

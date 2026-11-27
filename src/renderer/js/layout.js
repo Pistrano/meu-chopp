@@ -188,11 +188,17 @@ const MCLayout = (() => {
     );
   }
 
+  /* O sino. A mesma lista vai para quem quiser mostrar os alertas na tela (o Painel do celular, em "Precisa de
+     atenção"), pelo evento "mc:alertas" (só quando o servidor respondeu: sem conexão, a tela não mostra "tudo em ordem") */
   async function renderAlerts() {
     const badge = document.getElementById("alertsBadge");
     const menu = document.getElementById("alertsMenu");
     let alerts = [];
-    try { alerts = await MC.call("alerts:list", { unitId: ctx.unitId }); } catch (_) {}
+    try {
+      alerts = await MC.call("alerts:list", { unitId: ctx.unitId });
+      ctx.alertas = alerts;
+      document.dispatchEvent(new CustomEvent("mc:alertas", { detail: alerts }));
+    } catch (_) {}
 
     if (!alerts.length) {
       badge.classList.add("d-none");
@@ -204,6 +210,13 @@ const MCLayout = (() => {
     menu.innerHTML =
       `<div class="alerts-menu-header">Alertas</div>` +
       alerts.map((a) => `<div class="alert-item${a.nivel === "erro" ? " alert-item--erro" : a.nivel === "aviso" ? " alert-item--aviso" : ""}"><span class="alert-icon">${ICON_WARN}</span><span>${MC.esc(a.texto)}</span></div>`).join("");
+  }
+
+  /* Abre a lista do sino (o "e mais N" do Painel do celular). O cabeçalho fica sempre no topo da tela. Abre depois do
+     clique terminar: o clique fora de um menu fecha os menus abertos (Bootstrap), e fecharia este também. */
+  function abrirAlertas() {
+    const btn = document.querySelector(".alerts-btn");
+    if (btn && window.bootstrap) setTimeout(() => window.bootstrap.Dropdown.getOrCreateInstance(btn).show(), 0);
   }
 
   function selectUnit(id) {
@@ -324,5 +337,5 @@ const MCLayout = (() => {
     return ctx;
   }
 
-  return { init, ctx, refreshAlerts: renderAlerts };
+  return { init, ctx, refreshAlerts: renderAlerts, selectUnit, abrirAlertas };
 })();

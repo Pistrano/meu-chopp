@@ -362,6 +362,19 @@ body {
   max-width: 90vw;
   padding: .5rem 0;
 }
+/* Os menus do topo já abrem alinhados pela direita, antes de o Bootstrap (Popper) posicionar. Sem isso, no celular o menu
+   aparecia por um instante à direita do botão, passava da tela e o navegador alargava a página (a barra de baixo saía
+   do lugar). Depois de posicionado, fica no mesmo lugar de antes. */
+.app-header-actions .dropdown-menu-end { right: 0; }
+/* Celular e tablet: a lista cabe entre o topo e a barra de baixo e rola por dentro (com muitos alertas, ela passava da
+   tela e não dava para ver o fim, porque o topo fica parado) */
+@media (max-width: 1023.98px) {
+  .alerts-menu {
+    max-height: calc(100vh - var(--mc-header-h) - 84px);
+    max-height: calc(100dvh - var(--mc-header-h) - 84px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+}
 .alerts-menu-header {
   padding: .4rem 1rem .6rem;
   font-weight: 700;
