@@ -12,6 +12,25 @@ const diaMes = (dia) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`; // "2026-10-22
 /* Estoque baixo: 2 ou menos barris disponíveis de um chope que tem algum barril (não recolhido) na unidade */
 const ESTOQUE_BAIXO = 2;
 
+/* Situação do estoque de um chope pelos barris disponíveis: a mesma regra no aviso do sino e na tabela
+   "Estoque por chope" do Painel do computador. 0 = sem estoque; 1 ou 2 = acabando; 3 ou mais = ok. */
+const situacaoEstoque = (disponiveis) => (disponiveis === 0 ? "sem_estoque" : disponiveis <= ESTOQUE_BAIXO ? "acabando" : "ok");
+
+/* Barris não recolhidos da unidade ({ chope_id, chope_nome, estilo, status }) agrupados por chope, na ordem em que
+   aparecem: { chope_id, nome, disponiveis, engatados, situacao }. Barril antigo sem chope do catálogo agrupa pelo nome
+   (ou pelo estilo) gravado nele. Entram os chopes com algum barril na unidade, mesmo sem nenhum disponível. */
+function estoquePorChope(estoque = []) {
+  const porChope = new Map();
+  estoque.forEach((b) => {
+    const chave = b.chope_id || `${b.chope_nome || ""}|${b.estilo || ""}`;
+    const item = porChope.get(chave) || { chope_id: b.chope_id || null, nome: b.chope_nome || b.estilo || "Chope", disponiveis: 0, engatados: 0 };
+    if (b.status === "disponivel") item.disponiveis += 1;
+    else if (b.status === "em_uso") item.engatados += 1;
+    porChope.set(chave, item);
+  });
+  return [...porChope.values()].map((c) => ({ ...c, situacao: situacaoEstoque(c.disponiveis) }));
+}
+
 /* unit: id da unidade; hoje: "AAAA-MM-DD" no fuso da operação.
    validade: fn_alertas_validade ({ codigo, chope, validade }); pendentes: transferências pendentes da unidade, com
    barris(codigo), origem(nome), destino(nome); vazios: fn_alertas_vazios ({ codigo, dias });
@@ -44,16 +63,9 @@ function montarAlertas({ unit, hoje, validade = [], pendentes = [], vazios = [],
     tipo: "vazio", titulo: `#${v.codigo}`, detalhe: null, etiqueta: `Vazio há ${v.dias} dias`,
   }));
 
-  const porChope = new Map();
-  estoque.forEach((b) => {
-    const chave = b.chope_id || `${b.chope_nome || ""}|${b.estilo || ""}`;
-    const item = porChope.get(chave) || { nome: b.chope_nome || b.estilo || "Chope", disponiveis: 0 };
-    if (b.status === "disponivel") item.disponiveis += 1;
-    porChope.set(chave, item);
-  });
-  porChope.forEach((b) => {
-    if (b.disponiveis > ESTOQUE_BAIXO) return;
-    alerts.push(b.disponiveis === 0
+  estoquePorChope(estoque).forEach((b) => {
+    if (b.situacao === "ok") return;
+    alerts.push(b.situacao === "sem_estoque"
       ? { nivel: "erro", texto: `Estoque baixo: nenhum barril disponível de ${b.nome} nesta unidade.`,
         tipo: "sem_estoque", titulo: b.nome, detalhe: null, etiqueta: "Sem estoque" }
       : { nivel: "aviso", texto: `Estoque baixo: restam ${b.disponiveis} barris disponíveis de ${b.nome} nesta unidade.`,
@@ -63,4 +75,4 @@ function montarAlertas({ unit, hoje, validade = [], pendentes = [], vazios = [],
   return alerts;
 }
 
-module.exports = { montarAlertas, ESTOQUE_BAIXO };
+module.exports = { montarAlertas, estoquePorChope, situacaoEstoque, ESTOQUE_BAIXO };

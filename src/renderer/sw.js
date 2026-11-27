@@ -15,6 +15,8 @@ const BASICOS = [
   "js/leitor-codigo.js", "js/lancar-horario.js", "vendor/zxing-0.21.3.min.js",
   // Relatório de perdas (Mais > Relatório de perdas)
   "css/relatorio.css", "css/perdas.css", "js/relatorio-perdas.js",
+  // Painel do computador (1024 px ou mais)
+  "css/painel-computador.css", "js/painel-computador.js",
   "assets/icon-64.png", "assets/icon-192.png", "assets/icone-32.png", "assets/icone.svg",
 ].map((f) => `${f}?v=${VERSAO}`).concat([
   // as fontes são pedidas pelo CSS, sem ?v=

@@ -1,0 +1,129 @@
+/* ==========================================================
+   BarrilFacil — Painel do computador (1024 px ou mais)
+   A perda do período (caixinhas e gráfico de linhas), o estoque por chope, as movimentações recentes e os chopes que
+   mais saíram. Prefixo pp-. O Painel do celular (pc-, em dashboard.css) não muda. Só tokens --mc-* (claro e escuro);
+   o tema escuro troca --pp-grade em tema-escuro.css. Os gráficos são SVG feitos em js/painel-computador.js.
+   ========================================================== */
+.tela-painel { --pp-grade: #e9ecf0; }
+
+@media (min-width: 1024px) {
+  .tela-painel .dashboard-main { max-width: 1280px; }
+  .tela-painel .greeting { margin-bottom: 1.1rem; align-items: flex-end; }
+  .tela-painel .greeting p { margin-bottom: 0; }
+  .tela-painel .warn-note { margin-bottom: 1.1rem; }
+}
+
+/* Saudação: a escolha do inventário e o Relatório de barris, na mesma linha */
+.pp-ferramentas { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.greeting--acoes .pp-ferramentas .btn-ghost { margin-bottom: 0; }
+.pp-periodo { display: flex; align-items: center; gap: .45rem; margin: 0; font-size: .82rem; font-weight: 700; color: var(--mc-muted); }
+.pp-periodo .form-select { width: auto; min-height: 44px; font-weight: 700; color: var(--mc-text); }
+
+.pp { display: grid; gap: 1.1rem; }
+.pp-card { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-radius); padding: 1.1rem 1.2rem; min-width: 0; }
+.pp-card-topo { display: flex; gap: .75rem; flex-wrap: wrap; align-items: baseline; justify-content: space-between; margin-bottom: .8rem; }
+.pp-card h2 { font-family: var(--mc-font-display); font-weight: 700; font-size: 1.02rem; margin: 0; }
+.pp-sub { color: var(--mc-muted); font-size: .82rem; }
+.pp-link { color: var(--mc-info); font-weight: 700; font-size: .85rem; text-decoration: none; }
+.pp-link:hover { text-decoration: underline; }
+.pp a:focus-visible, .pp [tabindex]:focus-visible, .pp-periodo .form-select:focus-visible { outline: 3px solid var(--mc-info); outline-offset: 2px; }
+
+/* ---------- Linha 1: as duas caixinhas de perda e o gráfico ---------- */
+.pp-linha1 { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2.6fr); gap: 1.1rem; }
+.pp-kpis { display: grid; gap: 1.1rem; grid-template-rows: 1fr 1fr; }
+.pp-kpi { display: flex; flex-direction: column; justify-content: center; gap: .2rem; border-left: 5px solid var(--mc-danger); }
+.pp-kpi-rotulo { font-size: .78rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--mc-muted); }
+.pp-kpi-valor { font-family: var(--mc-font-display); font-size: 2.1rem; font-weight: 700; color: var(--mc-danger); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pp-kpi-valor small { font-size: 1rem; color: var(--mc-text); font-weight: 600; margin-left: .35rem; }
+.pp-delta { font-size: .84rem; font-weight: 700; }
+.pp-delta--sobe { color: var(--mc-danger); }
+.pp-delta--desce { color: var(--mc-success); }
+.pp-delta--igual { color: var(--mc-muted); }
+.pp-per { font-size: .8rem; color: var(--mc-muted); }
+.pp-falta { font-size: .8rem; font-weight: 700; color: var(--pc-aviso); }
+/* Perda negativa (o caixa vendeu mais do que saiu): azul, como no Relatório de perdas */
+.pp-kpi--neg { border-left-color: var(--mc-info); }
+.pp-kpi--neg .pp-kpi-valor { color: var(--mc-info); }
+/* Operador (sem dinheiro) e período sem vendas: a caixinha fica neutra, com o texto no lugar do número */
+.pp-kpi--neutro { border-left-color: var(--mc-line); }
+.pp-kpi-msg { font-size: 1rem; font-weight: 700; color: var(--mc-muted); line-height: 1.35; }
+.pp-kpi-msg a { color: var(--mc-info); }
+.pp-kpi-saiu { font-size: .88rem; font-weight: 700; }
+
+.pp-legenda { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .82rem; color: var(--mc-muted); font-weight: 700; }
+.pp-legenda i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: .35rem; }
+.pp-leg-saiu { background: var(--mc-gold); }
+.pp-leg-vend { background: var(--mc-info); }
+.pp-legenda i.pp-leg-perda { height: 10px; background: var(--mc-danger-soft); border: 1px solid var(--mc-danger); }
+#ppBarrasBox .pp-legenda i { height: 10px; }
+
+#ppLinha svg { width: 100%; height: auto; display: block; }
+#ppLinha text { fill: var(--mc-muted); font-family: var(--mc-font-body); font-size: 11px; }
+#ppLinha .pp-ponto { cursor: pointer; outline: none; }
+#ppLinha .pp-ponto:hover .pp-ponto-area { fill: var(--mc-gold-soft); fill-opacity: .35; }
+#ppLinha .pp-ponto:focus-visible .pp-ponto-area { stroke: var(--mc-info); stroke-width: 3; }
+#ppLinha text.pp-rotulo-perda { font-weight: 800; font-size: 12px; fill: var(--mc-danger); }
+#ppLinha text.pp-rotulo-perda--neg { fill: var(--mc-info); }
+#ppLinha text.pp-rotulo-sem { font-weight: 700; font-size: 11px; fill: var(--mc-muted); }
+#ppLinha text.pp-eixo-x--on { fill: var(--mc-text); font-weight: 800; }
+.pp-dica { color: var(--mc-muted); font-size: .82rem; margin: .4rem 0 0; }
+
+/* Menos de dois inventários ou o relatório de perdas ainda não instalado */
+.pp-aviso { padding: .9rem 1.1rem; border: 1px dashed var(--mc-info); background: var(--mc-info-soft); color: var(--mc-text); border-radius: var(--mc-radius); font-weight: 600; }
+.pp-aviso a { color: inherit; font-weight: 800; }
+
+/* ---------- Linha 2: estoque por chope e movimentações, cada caixa com a própria rolagem ---------- */
+.pp-linha2 { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1.1rem; align-items: stretch; }
+.pp-minis { display: flex; gap: .6rem; flex-wrap: wrap; }
+.pp-mini {
+  display: flex; align-items: baseline; gap: .45rem; padding: .35rem .75rem; border-radius: 8px;
+  border: 1px solid var(--mc-line); background: var(--mc-bg); color: var(--mc-text); text-decoration: none;
+}
+.pp-mini b { font-family: var(--mc-font-display); font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.pp-mini span { font-size: .8rem; color: var(--mc-muted); font-weight: 700; }
+.pp-mini:hover { border-color: var(--mc-gold-dark); color: var(--mc-text); }
+.pp-rolagem { max-height: 330px; overflow: auto; border: 1px solid var(--mc-line); border-radius: 8px; overscroll-behavior: contain; }
+
+.pp-tabela { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.pp-tabela th {
+  position: sticky; top: 0; z-index: 1; background: var(--mc-surface); text-align: left; white-space: nowrap;
+  font-size: .76rem; color: var(--mc-muted); font-weight: 800; padding: .6rem .8rem; border-bottom: 1px solid var(--mc-line);
+}
+.pp-tabela td { padding: .55rem .8rem; border-top: 1px solid var(--pp-grade); font-variant-numeric: tabular-nums; vertical-align: middle; }
+.pp-tabela tbody tr:first-child td { border-top: 0; }
+.pp-tabela .pp-num { text-align: right; }
+.pp-tabela .pp-nome { font-weight: 800; }
+.pp-zero { color: var(--mc-muted); }
+.pp-sem-periodo .pp-col-saiu { display: none; }
+.pp-sit { display: inline-block; padding: .14rem .6rem; border-radius: 999px; font-size: .76rem; font-weight: 800; white-space: nowrap; }
+.pp-sit--sem_estoque { background: var(--mc-danger-soft); color: var(--mc-danger); }
+.pp-sit--acabando { background: var(--pc-aviso-soft); color: var(--pc-aviso); box-shadow: inset 0 0 0 1px var(--mc-gold); }
+.pp-sit--ok { background: var(--mc-success-soft); color: var(--mc-success); }
+.pp-nota { font-size: .78rem; color: var(--mc-muted); margin: .4rem 0 0; }
+.pp-vazio { padding: 1.5rem 1rem; text-align: center; color: var(--mc-muted); }
+
+.pp-mov { list-style: none; margin: 0; padding: 0; }
+.pp-mov li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .15rem .6rem; align-items: center;
+  padding: .5rem .75rem; border-top: 1px solid var(--pp-grade); font-size: .85rem;
+}
+.pp-mov li:first-child { border-top: 0; }
+.pp-mov .op-badge { padding: .1rem .45rem; border-radius: 6px; font-size: .7rem; font-weight: 800; }
+.pp-mov .op-badge::before { display: none; }
+.pp-mov-o-que { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-mov-o-que b { font-weight: 800; }
+.pp-mov-quando { color: var(--mc-muted); font-size: .78rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pp-mov-quem { grid-column: 2 / 4; color: var(--mc-muted); font-size: .78rem; }
+
+/* ---------- Linha 3: chopes que mais saíram (saiu × vendido) ---------- */
+.pp-barras { display: grid; gap: .55rem; }
+.pp-barra-linha { display: grid; grid-template-columns: 150px minmax(0, 1fr) 250px; gap: .8rem; align-items: center; }
+.pp-barra-nome { font-weight: 800; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-barra-par { display: grid; gap: 3px; }
+.pp-barra { height: 11px; border-radius: 0 4px 4px 0; min-width: 2px; }
+.pp-barra--saiu { background: var(--mc-gold); }
+.pp-barra--vend { background: var(--mc-info); }
+.pp-barra-valor { font-size: .8rem; text-align: right; font-variant-numeric: tabular-nums; }
+.pp-barra-valor b { color: var(--mc-danger); }
+.pp-barra-valor b.pp-neg { color: var(--mc-info); }
+.pp-barra-valor .pp-muted { color: var(--mc-muted); }
