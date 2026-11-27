@@ -578,9 +578,12 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
     max-width: none; max-height: 92vh; border-radius: 16px 16px 0 0;
     padding: 1.1rem max(16px, env(safe-area-inset-right, 0px)) calc(1.2rem + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
-  /* Engatar: os botões ficam sempre à vista, presos embaixo da folha */
+  /* Engatar: os botões ficam sempre à vista, presos embaixo da folha. O bottom e a margem negativos (o tamanho do
+     espaço de baixo da folha) colam a barra na borda: nada da lista aparece por baixo dela. */
   .tela-torneiras .mc-modal--engate .mc-modal-actions {
-    position: sticky; bottom: 0; z-index: 1; margin: 1rem -16px 0; padding: .75rem 16px;
+    --folha-pe: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+    position: sticky; bottom: calc(-1 * var(--folha-pe)); z-index: 1;
+    margin: 1rem -16px calc(-1 * var(--folha-pe)); padding: .75rem 16px calc(.75rem + var(--folha-pe));
     background: var(--mc-surface); border-top: 1px solid var(--mc-line);
   }
   .tela-torneiras .mc-modal--engate .eng-ok { flex: 1 1 auto; min-height: 52px; font-size: 1.02rem; }
@@ -588,4 +591,89 @@ th[aria-sort="descending"] .th-sort::after { content: "\25BC"; font-size: .65em;
     .tela-torneiras .mc-modal { animation: folha-sobe .2s ease-out; }
     @keyframes folha-sobe { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
   }
+}
+
+/* ==========================================================
+   Aba Torneiras: "Lançar com horário" (administrador e gerente)
+   No computador, o botão fica à direita do título; no celular, flutua no canto de baixo, acima do menu.
+   ========================================================== */
+.btn-horario {
+  display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: 0 1rem; white-space: nowrap;
+  border: 1.5px solid var(--mc-info); border-radius: var(--mc-radius); background: var(--mc-info-soft); color: var(--mc-info);
+  font: inherit; font-weight: 800; cursor: pointer;
+}
+.btn-horario svg { flex: none; }
+.btn-horario:hover { border-color: var(--mc-text); }
+.btn-horario:focus-visible, .lh-chip:focus-visible, .lh-link:focus-visible { outline: 3px solid var(--mc-info); outline-offset: 2px; }
+.btn-horario[hidden] { display: none; }
+/* "horário informado": no cartão, na linha do celular e no Histórico */
+.tag-horario {
+  display: inline-block; margin-left: .35rem; padding: .05rem .45rem; border-radius: 999px; vertical-align: 1px;
+  font-size: .72rem; font-weight: 800; line-height: 1.5; white-space: nowrap; background: var(--mc-info-soft); color: var(--mc-info);
+}
+.tag-horario--hist { margin-left: 0; margin-top: .2rem; }
+.tap-history .th-manual { color: var(--mc-info); font-size: .8rem; font-weight: 700; margin-top: .15rem; }
+
+/* Janela */
+.mc-modal--horario { max-width: 600px; }
+.lh-tipos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.lh-tipos .escolha-btn { min-height: 64px; }
+.lh-tipos .escolha-titulo { font-size: .98rem; }
+.lh-aviso {
+  margin: 0 0 1rem; padding: .6rem .8rem; font-size: .88rem; border-radius: var(--mc-radius);
+  background: var(--mc-gold-soft); border: 1px solid var(--mc-gold);
+}
+.mc-modal .lh-parte {
+  display: grid; gap: .85rem; min-width: 0; margin: 0 0 1rem; padding: .8rem 1rem 1rem;
+  border: 1px solid var(--mc-line); border-radius: var(--mc-radius);
+}
+.lh-parte[hidden] { display: none; }
+.mc-modal .lh-parte legend { float: none; width: auto; margin: 0; padding: 0 .35rem; font-family: var(--mc-font-display); font-weight: 700; font-size: 1rem; }
+.lh-parte .form-label { margin-bottom: .35rem; }
+.lh-sai { font-weight: 700; }
+.lh-sai:empty { display: none; }
+.lh-sai small { display: block; color: var(--mc-muted); font-weight: 500; font-size: .84rem; }
+.lh-quando-campos { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: .6rem; }
+.lh-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .45rem; }
+.lh-chip {
+  min-height: 36px; padding: .2rem .75rem; border: 1.5px solid var(--mc-line); border-radius: 999px; cursor: pointer;
+  background: var(--mc-surface); color: var(--mc-text); font: inherit; font-size: .84rem; font-weight: 700;
+}
+.lh-chip:hover { border-color: var(--mc-gold-dark); }
+.lh-chip[aria-pressed="true"], .lh-chip[aria-checked="true"] { border-color: var(--mc-gold-dark); background: var(--mc-gold-soft); }
+.lh-igual { justify-self: start; }
+.lh-igual[hidden] { display: none; }
+.lh-medida { margin-top: .5rem; font-weight: 700; font-size: .9rem; }
+.lh-medida[hidden] { display: none; }
+.lh-link { padding: 0; border: 0; background: none; color: var(--mc-info); font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.lh-ou { color: var(--mc-muted); font-weight: 600; font-size: .84rem; }
+.lh-leitor .leitor-cam { min-height: 44px; font-size: .95rem; }
+.lh-resumo {
+  padding: .7rem .9rem; font-size: .9rem; border: 1px dashed var(--mc-info); border-radius: var(--mc-radius); background: var(--mc-info-soft);
+}
+.lh-resumo[hidden] { display: none; }
+.lh-resumo b { display: block; margin-bottom: .2rem; color: var(--mc-info); }
+.lh-resumo ul { margin: 0; padding-left: 1.1rem; }
+.lh-resumo-quem { margin-top: .3rem; color: var(--mc-muted); font-size: .84rem; }
+.mc-modal--horario .form-select.is-invalid { border-color: var(--mc-danger); }
+@media (max-width: 479.98px) {
+  .lh-tipos { grid-template-columns: 1fr; }
+  .lh-tipos .escolha-btn { min-height: 52px; flex-direction: row; justify-content: space-between; gap: .5rem; text-align: left; }
+}
+@media (max-width: 767.98px) {
+  .tela-torneiras .btn-horario {
+    position: fixed; z-index: 44; right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(68px + 14px + env(safe-area-inset-bottom, 0px));
+    min-height: 52px; padding: 0 1.1rem; border-radius: 999px;
+    background: var(--mc-info); border-color: var(--mc-info); color: var(--mc-surface); box-shadow: 0 6px 18px rgba(10, 12, 16, .28);
+  }
+  .tela-torneiras.tem-horario .dashboard-main { padding-bottom: 5.5rem; }
+  /* Os botões da janela ficam sempre à vista, colados embaixo da folha (como no engate) */
+  .tela-torneiras .mc-modal--horario .mc-modal-actions {
+    --folha-pe: calc(1.2rem + env(safe-area-inset-bottom, 0px));
+    position: sticky; bottom: calc(-1 * var(--folha-pe)); z-index: 1;
+    margin: 1rem -16px calc(-1 * var(--folha-pe)); padding: .75rem 16px calc(.75rem + var(--folha-pe));
+    background: var(--mc-surface); border-top: 1px solid var(--mc-line);
+  }
+  .tela-torneiras .mc-modal--horario .lh-ok { flex: 1 1 auto; min-height: 52px; font-size: 1.02rem; }
 }

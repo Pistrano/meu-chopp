@@ -29,6 +29,9 @@
     return `${dia} às ${hora}`;
   }
 
+  // Engate lançado com horário ("Lançar com horário"): a etiqueta azul ao lado de quando foi engatado
+  const TAG_HORARIO = '<span class="tag-horario">horário informado</span>';
+
   /* O cartão é um container com dois botões (não pode haver botão dentro de botão) */
   const botaoHistorico = (t) => `<button type="button" class="btn-ghost" data-act="historico" data-id="${t.id}" aria-label="Histórico da Torneira ${t.numero}">Histórico</button>`;
 
@@ -48,7 +51,7 @@
         <span class="tap-chope">${MC.esc(nome)}</span>
         <span class="tap-meta">#${MC.esc(t.codigo)}${t.tamanho_l ? ` · ${MC.esc(MC.fmtLitros(t.tamanho_l))}` : ""}</span>
         ${t.validade ? `<span class="tap-validade">Validade ${MC.fmtDia(t.validade)} ${MC.validadeBadge(t.situacao_validade)}</span>` : ""}
-        <span class="tap-since">Engatado em ${diaHora(t.engatado_em)}${t.engatado_por ? ` por ${MC.esc(t.engatado_por)}` : ""}</span>
+        <span class="tap-since">Engatado em ${diaHora(t.engatado_em)}${t.engatado_por ? ` por ${MC.esc(t.engatado_por)}` : ""}${t.engate_lancado ? TAG_HORARIO : ""}</span>
         <span class="tap-age">${desde(t.engatado_em_iso)}</span>
         <div class="tap-actions">
           <button type="button" class="btn-ghost btn-ghost--danger" data-act="retirar" data-id="${t.id}" aria-label="Retirar barril da Torneira ${t.numero}">Retirar barril</button>
@@ -77,7 +80,7 @@
         <span class="tap-row-info">
           <span class="tap-row-chope">${MC.esc(nome)}</span>
           <span class="tap-row-meta">#${MC.esc(t.codigo)}${t.tamanho_l ? ` · ${MC.esc(MC.fmtLitros(t.tamanho_l))}` : ""}${MC.validadeBadge(t.situacao_validade)}</span>
-          <span class="tap-row-age">${desde(t.engatado_em_iso)}</span>
+          <span class="tap-row-age">${desde(t.engatado_em_iso)}${t.engate_lancado ? TAG_HORARIO : ""}</span>
         </span>
         <span class="tap-row-acoes">
           <button type="button" class="btn-ghost btn-ghost--danger tap-row-btn" data-act="retirar" data-id="${t.id}" aria-label="Retirar barril da Torneira ${t.numero}">Retirar</button>${hist}
@@ -127,12 +130,17 @@
       const fim = e.retirado_em_iso ? new Date(e.retirado_em_iso).getTime() : agora();
       const dur = duracao(fim - new Date(e.engatado_em_iso).getTime());
       const chope = MC.chopeLabel(e) || "—";
+      // Linha azul: engate ou retirada lançados com horário, por quem e quando
+      const lancados = [
+        e.engate_lancado ? `Engate lançado com horário${e.engate_lancado.por ? ` por ${MC.esc(e.engate_lancado.por)}` : ""} em ${diaHora(e.engate_lancado.em)}` : "",
+        e.retirada_lancada ? `Retirada lançada com horário${e.retirada_lancada.por ? ` por ${MC.esc(e.retirada_lancada.por)}` : ""} em ${diaHora(e.retirada_lancada.em)}` : "",
+      ].filter(Boolean).map((txt) => `<div class="th-manual">${txt}</div>`).join("");
       return `<li class="${e.retirado_em ? "" : "is-current"}">
           <div class="th-title">#${MC.esc(e.codigo)} <span class="th-chope">${MC.esc(chope)}</span></div>
           <div class="th-line">Engatado em ${diaHora(e.engatado_em)}${e.engatado_por ? ` por ${MC.esc(e.engatado_por)}` : ""}</div>
           <div class="th-line">${e.retirado_em
             ? `Retirado em ${diaHora(e.retirado_em)}${e.retirado_por ? ` por ${MC.esc(e.retirado_por)}` : ""} · ficou ${dur}`
-            : `<strong>Engatado agora</strong> · há ${dur}`}</div>
+            : `<strong>Engatado agora</strong> · há ${dur}`}</div>${lancados}
         </li>`;
     });
     const html = itens.length
@@ -281,6 +289,17 @@
     } catch (err) {
       await falhou("Não foi possível retirar", err);
     }
+  }
+
+  /* ---------- Lançar com horário (administrador e gerente) ---------- */
+  const btnHorario = document.getElementById("btnHorario");
+  if (MC.pode("torneiras:horario")) {
+    btnHorario.hidden = false;
+    document.body.classList.add("tem-horario"); // no celular, a lista ganha espaço embaixo para o botão flutuante
+    btnHorario.addEventListener("click", () => {
+      if (janelaAberta()) return;
+      MCLancarHorario.abrir({ unitId: ctx.unitId, usuario: ctx.user.nome, aoSalvar: () => load() });
+    });
   }
 
   board.addEventListener("click", (e) => {

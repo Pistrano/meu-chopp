@@ -23,8 +23,12 @@
   <main class="dashboard-main">
     <div class="page-head page-head--torneiras">
       <div class="page-head-titulo"><h1>Torneiras</h1><p id="subtitle">O que está engatado em cada torneira da unidade.</p></div>
-      <!-- Lado direito do título: lugar dos botões da página (o próximo é "Lançar com horário"), no celular e no computador -->
-      <div class="page-head-acoes" id="acoesTopo"><p class="t-muted small-note mb-0" id="updated" aria-live="polite"></p></div>
+      <!-- Lado direito do título: os botões da página. "Lançar com horário" só para quem tem a permissão (no celular ele
+           flutua no canto de baixo, à direita) -->
+      <div class="page-head-acoes" id="acoesTopo">
+        <button type="button" class="btn-horario" id="btnHorario" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span>Lançar com horário</span></button>
+        <p class="t-muted small-note mb-0" id="updated" aria-live="polite"></p>
+      </div>
     </div>
 
     <div id="board" class="tap-grid"></div>
@@ -37,6 +41,7 @@
   <script src="js/layout.js"></script>
   <script src="js/acoes-barril.js"></script>
   <script src="js/leitor-codigo.js"></script>
+  <script src="js/lancar-horario.js"></script>
   <script src="js/torneiras.js"></script>
 </body>
 </html>

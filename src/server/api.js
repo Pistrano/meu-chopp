@@ -23,10 +23,10 @@ const CARGO_LABEL = { admin: "Administrador", gerente: "Gerente", operador: "Ope
 /* ---------- Permissões (num lugar só) ----------
    O que cada cargo pode fazer além do dia a dia (barris, engates, transferências, histórico e relatório),
    que é de todos. As rotas pedem uma permissão com handle(canal, fn, { perm }) e as telas perguntam com MC.pode(). */
-const PERMISSOES_TODAS = ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios", "vendas"];
+const PERMISSOES_TODAS = ["usuarios", "unidades", "auditoria", "exportar", "catalogo:editar", "funcionarios", "vendas", "torneiras:horario"];
 const PERMISSOES = {
   admin: PERMISSOES_TODAS,
-  gerente: ["catalogo:editar", "funcionarios", "vendas"],
+  gerente: ["catalogo:editar", "funcionarios", "vendas", "torneiras:horario"],
   operador: [],
 };
 const pode = (user, perm) => !!user && (PERMISSOES[user.cargo] || []).includes(perm);
@@ -62,6 +62,16 @@ const inicioDoDia = (dia) => {
   const lidoNoFuso = new Date(tsFmt.format(meiaNoiteUTC).replace(" ", "T") + "Z");
   return new Date(meiaNoiteUTC.getTime() - (lidoNoFuso - meiaNoiteUTC));
 };
+/* "AAAA-MM-DDTHH:MM" lido no fuso da operação -> instante (Date). Formato ou data inválidos -> null.
+   Usado no "Lançar com horário": a pessoa informa o dia e a hora como no relógio da loja. */
+const instanteNoFuso = (texto) => {
+  const m = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})$/.exec(String(texto || "").trim());
+  if (!m) return null;
+  const alvo = new Date(`${m[1]}T${m[2]}:00Z`);
+  if (Number.isNaN(alvo.getTime()) || alvo.toISOString().slice(0, 16) !== `${m[1]}T${m[2]}`) return null; // 31/02, 25:00...
+  const lidoNoFuso = new Date(tsFmt.format(alvo).replace(" ", "T") + "Z");
+  return new Date(alvo.getTime() - (lidoNoFuso - alvo));
+};
 // Quem entrega os barris: aparece como origem das entradas no histórico (NOME_FORNECEDOR no .env)
 const FORNECEDOR = String(process.env.NOME_FORNECEDOR || "").trim() || "Fornecedor";
 // APP_ENV=beta marca o ambiente de testes (as telas mostram a faixa amarela). Sem APP_ENV: servidor das lojas.
@@ -95,6 +105,9 @@ function dbError(error, dupMsg) {
     // Retirada com chope que deu 0,5 L ou menos: a tela pergunta se marca o barril como vazio
     const quase = /^QUASE_VAZIO:([\d.]+)$/.exec(error.hint || "");
     if (quase) throw new AppError(error.message, "QUASE_VAZIO", null, { litros: Number(quase[1]) });
+    // Erro de um campo do lançamento com horário: a tela marca o campo (ret, eng, barril, torneira, funcionario)
+    const campo = /^CAMPO:(\w+)$/.exec(error.hint || "");
+    if (campo) throw new AppError(error.message, "CAMPO", null, { campo: campo[1] });
     throw new AppError(error.message);
   }
   console.error("[supabase]", error);
@@ -425,7 +438,7 @@ async function getUserById(id) {
    (engates.retirado_em IS NULL). */
 // "ativos": só o engate em andamento de cada torneira (filtro retirado_em nulo em tapsOfUnit), não o histórico inteiro
 const TAPS_SELECT =
-  "id, unidade_id, numero, ativo, ativos:engates(id, barril_id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status)," +
+  "id, unidade_id, numero, ativo, ativos:engates(id, barril_id, engatado_em, retirado_em, engate_lancado_em, barris(codigo, estilo, chope_nome, tamanho_l, validade, status)," +
   " usuarios!engatado_por(nome), funcionarios!engatado_func_id(nome))";
 
 function tapRow(t) {
@@ -438,7 +451,8 @@ function tapRow(t) {
     engate_id: e ? e.id : null,
     engatado_em: e ? fmtTs(e.engatado_em) : null,
     engatado_em_iso: e ? e.engatado_em : null,
-    engatado_por: e ? quemFez(e.funcionarios, e.usuarios) : null,
+    engatado_por: e ? quemFezEngate(e) : null,
+    engate_lancado: !!(e && e.engate_lancado_em), // engate lançado com horário (o cartão mostra "horário informado")
     barril_id: e ? e.barril_id : null,
     codigo: e && e.barris ? e.barris.codigo : null,
     estilo: e && e.barris ? e.barris.estilo : null,
@@ -541,6 +555,10 @@ async function funcionarioDaAcao(ctx, unitId, funcionarioId) {
 }
 // Nome de quem fez: o funcionário escolhido ou, sem funcionário, o usuário da conta (como antes)
 const quemFez = (func, usuario) => (func && func.nome) || (usuario && usuario.nome) || null;
+/* Engate e retirada lançados com horário: quem fez é só o funcionário escolhido ("Não sei" = ninguém). A conta que lançou
+   aparece à parte ("Engate lançado com horário por ..."), porque ela não fez o engate. */
+const quemFezEngate = (e) => (e.engate_lancado_em ? (e.funcionarios && e.funcionarios.nome) || null : quemFez(e.funcionarios, e.usuarios));
+const quemFezRetirada = (e) => (e.retirada_lancada_em ? (e.func_retirou && e.func_retirou.nome) || null : quemFez(e.func_retirou, e.retirou));
 
 function publicUser(u) {
   return {
@@ -564,10 +582,12 @@ async function queryMovements({ unitId, q, operacao, funcionarioId, limit, semPe
   let query = supabase
     .from("movimentacoes")
     .select(
-      "id, operacao, criado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome), funcionarios(nome)," +
+      "id, operacao, criado_em, lancado_em, observacao, torneira_numero, barris!inner(codigo, estilo, chope_nome), usuarios(nome), funcionarios(nome)," +
       " origem:unidades!origem_unidade_id(nome), destino:unidades!destino_unidade_id(nome), pesagens(litros, metodo)"
     )
     .or(`origem_unidade_id.eq.${unit},destino_unidade_id.eq.${unit}`)
+    // Pelo horário: um engate ou uma retirada lançados com horário ficam no lugar certo da lista
+    .order("criado_em", { ascending: false })
     .order("id", { ascending: false })
     .limit(Math.min(Number(limit) || 5000, 5000));
   const termo = cleanTerm(q);
@@ -580,6 +600,7 @@ async function queryMovements({ unitId, q, operacao, funcionarioId, limit, semPe
     id: m.id,
     operacao: m.operacao,
     criado_em: fmtTs(m.criado_em),
+    lancado_em: fmtTs(m.lancado_em), // lançado com horário (o Histórico mostra "horário informado"); nulo = na hora
     observacao: m.observacao,
     torneira_numero: m.torneira_numero,
     codigo: m.barris ? m.barris.codigo : null,
@@ -964,7 +985,8 @@ function registerHandlers() {
         engatado_em_iso: t.engatado_em_iso,
         engatado_por: t.engatado_por,
       }));
-    return { agora: new Date().toISOString(), torneiras }; // "agora" = relógio do servidor, para o "há quanto tempo"
+    // "agora" = relógio do servidor, para o "há quanto tempo"; "fuso" = fuso da operação (o "Lançar com horário" usa)
+    return { agora: new Date().toISOString(), fuso: TZ, torneiras };
   });
 
   // Últimos 50 engates de uma torneira, do mais recente para o mais antigo
@@ -974,7 +996,8 @@ function registerHandlers() {
     const rows = ok(
       await supabase.from("engates")
         .select("id, engatado_em, retirado_em, barris(codigo, estilo, chope_nome), usuarios!engatado_por(nome)," +
-          " retirou:usuarios!retirado_por(nome), funcionarios!engatado_func_id(nome), func_retirou:funcionarios!retirado_func_id(nome)")
+          " retirou:usuarios!retirado_por(nome), funcionarios!engatado_func_id(nome), func_retirou:funcionarios!retirado_func_id(nome)," +
+          " engate_lancado_em, retirada_lancada_em, eng_lancou:usuarios!engate_lancado_por(nome), ret_lancou:usuarios!retirada_lancada_por(nome)")
         .eq("torneira_id", t.id)
         .order("engatado_em", { ascending: false })
         .order("id", { ascending: false })
@@ -991,11 +1014,66 @@ function registerHandlers() {
         engatado_em_iso: e.engatado_em,
         retirado_em: fmtTs(e.retirado_em),
         retirado_em_iso: e.retirado_em || null,
-        engatado_por: quemFez(e.funcionarios, e.usuarios),
-        retirado_por: e.retirado_em ? quemFez(e.func_retirou, e.retirou) : null,
+        engatado_por: quemFezEngate(e),
+        retirado_por: e.retirado_em ? quemFezRetirada(e) : null,
+        // Lançados com horário: quem lançou e quando (nulo = lançado na hora)
+        engate_lancado: e.engate_lancado_em ? { por: e.eng_lancou ? e.eng_lancou.nome : null, em: fmtTs(e.engate_lancado_em) } : null,
+        retirada_lancada: e.retirada_lancada_em ? { por: e.ret_lancou ? e.ret_lancou.nome : null, em: fmtTs(e.retirada_lancada_em) } : null,
       })),
     };
   });
+
+  /* Lançar com horário (administrador e gerente, permissão torneiras:horario): troca de barril, só retirada ou só
+     engate que não foram lançados na hora, gravados com o horário em que aconteceram (dia e hora no fuso da operação,
+     "AAAA-MM-DDTHH:MM"). retirada: { quando, vazio, medida } (medida como na retirada com chope: balança ou estimativa);
+     engate: { barrilId, quando }; funcionarioId: quem fez (vazio = "Não sei"). As regras (nada no futuro nem de mais de
+     30 dias, depois do engate e do último registro do barril, depois da última retirada da torneira...) ficam no banco,
+     em fn_lancamento_com_horario, numa transação só. Erro de um campo vem com code CAMPO e info.campo. */
+  handle("taps:lancarComHorario", async ({ unitId, torneiraId, tipo, retirada, engate, funcionarioId }, ctx) => {
+    const t = await loadTap(torneiraId);
+    await assertUnit(ctx, t.unidade_id);
+    if (unitId && Number(unitId) !== t.unidade_id) throw new AppError("Esta torneira não é da unidade selecionada. Atualize a tela.");
+    if (!["troca", "retirada", "engate"].includes(tipo))
+      throw new AppError("Escolha o que aconteceu: troca de barril, só retirada ou só engate.");
+    const erroCampo = (msg, campo) => new AppError(msg, "CAMPO", null, { campo });
+    const instante = (v, msg, campo) => {
+      const d = instanteNoFuso(v);
+      if (!d) throw erroCampo(msg, campo);
+      return d.toISOString();
+    };
+    const temRet = tipo !== "engate";
+    const temEng = tipo !== "retirada";
+    const ret = retirada || {};
+    const eng = engate || {};
+
+    let pRet = null;
+    let medida = { p_metodo: null, p_peso_bruto: null, p_tara: null, p_nivel: null, p_densidade: null, p_tara_nova: null };
+    if (temRet) {
+      pRet = instante(ret.quando, "Informe o dia e a hora da retirada.", "ret");
+      if (typeof ret.vazio !== "boolean") throw erroCampo("Escolha como o barril saiu: vazio ou ainda com chope.", "ret");
+      if (!ret.vazio) medida = argsMedida(ret.medida || {});
+    }
+    let barril = null;
+    let pEng = null;
+    if (temEng) {
+      if (!Number(eng.barrilId)) throw erroCampo("Escolha o barril que foi engatado.", "barril");
+      barril = await loadBarril(ctx, eng.barrilId); // acesso à unidade do barril; o banco confere que é a da torneira
+      pEng = instante(eng.quando, "Informe o dia e a hora do engate.", "eng");
+    }
+
+    const r = await rpc("fn_lancamento_com_horario", {
+      p_torneira: t.id, p_usuario: ctx.session.id, p_funcionario: Number(funcionarioId) || null, p_tipo: tipo,
+      p_ret_quando: pRet, p_ret_vazio: temRet ? ret.vazio : null, ...medida,
+      p_eng_barril: barril ? barril.id : null, p_eng_quando: pEng, p_tz: TZ,
+    });
+    // Barril vencido no dia do engate: a mesma auditoria do engate de sempre (aqui não há o que confirmar: já foi engatado)
+    if (r.engate && barril.validade && barril.validade < dayFmt.format(new Date(pEng))) {
+      const [ano, mes, dia] = barril.validade.split("-");
+      await audit(ctx, "engate_barril_vencido",
+        `Barril #${barril.codigo} (validade ${dia}/${mes}/${ano}) engatado vencido na Torneira ${r.torneira} (${r.unidade}), lançado com horário (${r.engate.quando})`);
+    }
+    return r;
+  }, { perm: "torneiras:horario" });
 
   /* ======== Chopes, tamanhos de barril e custo por litro ========
      O chope tem só o nome. A tabela estilos e a coluna barris.estilo ficam no banco: barris.estilo recebe o nome do
@@ -1851,7 +1929,8 @@ function registerHandlers() {
     const header = ["Data/Hora", "Barril", "Chope", "Operação", "Origem", "Destino", "Torneira", "Responsável", "Funcionário", "Observação"];
     const lines = rows.map((r) =>
       [r.criado_em, "#" + r.codigo, r.chope_nome || r.estilo || "", labels[r.operacao], r.origem || FORNECEDOR, r.destino || "",
-       r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.usuario, r.funcionario || "", r.observacao]
+       r.torneira_numero ? `Torneira ${r.torneira_numero}` : "", r.usuario, r.funcionario || "",
+       r.lancado_em ? `${r.observacao || ""} (horário informado; lançado em ${r.lancado_em})`.trim() : r.observacao]
         .map(esc)
         .join(";")
     );
