@@ -15,6 +15,7 @@
   <link href="css/style.css" rel="stylesheet">
   <link href="css/dashboard.css" rel="stylesheet">
   <link href="css/app.css" rel="stylesheet">
+  <link href="css/painel-computador.css" rel="stylesheet">
   <link href="css/tema-escuro.css" rel="stylesheet">
   <script src="js/tema.js"></script>
 </head>
@@ -44,7 +45,11 @@
         <h1 id="greetingTitle">Olá</h1>
         <p id="greetingText">Confira o resumo da operação da sua unidade.</p>
       </div>
-      <a class="btn-ghost" href="relatorio-barris.html?periodo=este-mes">Relatório de barris</a>
+      <div class="pp-ferramentas">
+        <label class="pp-periodo d-none" id="ppPeriodoBox" for="ppPeriodo">Inventário
+          <select id="ppPeriodo" class="form-select"></select></label>
+        <a class="btn-ghost" href="relatorio-barris.html?periodo=este-mes">Relatório de barris</a>
+      </div>
     </section>
 
     <div id="avisoFuncionarios" class="warn-note d-none" role="status"></div>
@@ -65,12 +70,56 @@
       </section>
     </div>
 
-    <section id="statsGrid" class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-3 painel-computador" aria-label="Indicadores da unidade"></section>
+    <!-- Computador (1024 px ou mais): a perda do período, o estoque por chope, as movimentações e os chopes que mais saíram -->
+    <div class="pp painel-computador">
+      <section class="pp-linha1" id="ppPerdas" aria-label="Perda do período">
+        <div class="pp-kpis">
+          <div class="pp-card pp-kpi" id="ppKpiDinheiro"></div>
+          <div class="pp-card pp-kpi" id="ppKpiLitros"></div>
+        </div>
+        <div class="pp-card pp-grafico">
+          <div class="pp-card-topo">
+            <div><h2>Litros perdidos a cada inventário</h2><div class="pp-sub">Saiu dos barris (pela pesagem) × vendido (pela Teknisa)</div></div>
+            <div class="pp-legenda" aria-hidden="true"><span><i class="pp-leg-saiu"></i>Saiu dos barris</span><span><i class="pp-leg-vend"></i>Vendido</span><span><i class="pp-leg-perda"></i>Perda</span></div>
+          </div>
+          <div id="ppLinha"></div>
+          <p class="pp-dica">Cada ponto é um inventário com todos os barris pesados. Clique num ponto para ver aquele período no Painel inteiro.</p>
+        </div>
+      </section>
+      <div class="pp-aviso d-none" id="ppAviso" role="status"></div>
 
-    <section class="painel-computador">
-      <h2 class="section-title">Movimentações Recentes</h2>
-      <div id="movementList" class="movement-list" aria-live="polite"></div>
-    </section>
+      <div class="pp-linha2">
+        <section class="pp-card" aria-labelledby="ppEstoqueTitulo">
+          <div class="pp-card-topo">
+            <h2 id="ppEstoqueTitulo">Estoque por chope</h2>
+            <div class="pp-minis">
+              <a class="pp-mini" href="barris.html" id="ppNoEstoque"><b>0</b><span>barris no estoque</span></a>
+              <a class="pp-mini" href="barris.html?status=esgotado" id="ppVazios"><b>0</b><span>vazios para recolher</span></a>
+            </div>
+          </div>
+          <div class="pp-rolagem" tabindex="0" aria-label="Tabela de estoque por chope (role dentro da caixa)">
+            <table class="pp-tabela">
+              <thead><tr><th scope="col">Chope</th><th scope="col" class="pp-num">Engatados</th><th scope="col" class="pp-num">Disponíveis</th>
+                <th scope="col" class="pp-num pp-col-saiu">Saiu no período</th><th scope="col">Situação</th></tr></thead>
+              <tbody id="ppEstoque"></tbody>
+            </table>
+          </div>
+          <p class="pp-nota">Role dentro da caixa para ver todos os chopes. Os que precisam de atenção aparecem primeiro.</p>
+        </section>
+        <section class="pp-card" aria-labelledby="ppMovTitulo">
+          <div class="pp-card-topo"><h2 id="ppMovTitulo">Movimentações recentes</h2><a class="pp-link" href="historico.html">Ver histórico</a></div>
+          <div class="pp-rolagem" tabindex="0" aria-label="Movimentações recentes (role dentro da caixa)"><ul class="pp-mov" id="ppMov"></ul></div>
+        </section>
+      </div>
+
+      <section class="pp-card" id="ppBarrasBox" aria-labelledby="ppBarrasTitulo">
+        <div class="pp-card-topo">
+          <div><h2 id="ppBarrasTitulo">Chopes que mais saíram</h2><div class="pp-sub" id="ppBarrasSub"></div></div>
+          <div class="pp-legenda" aria-hidden="true"><span><i class="pp-leg-saiu"></i>Saiu dos barris</span><span><i class="pp-leg-vend"></i>Vendido</span></div>
+        </div>
+        <div class="pp-barras" id="ppBarras"></div>
+      </section>
+    </div>
   </main>
 
   <script src="js/api.js"></script>
@@ -80,6 +129,7 @@
   <script src="js/layout.js"></script>
   <script src="js/acoes-barril.js"></script>
   <script src="js/leitor-codigo.js"></script>
+  <script src="js/painel-computador.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
 </html>

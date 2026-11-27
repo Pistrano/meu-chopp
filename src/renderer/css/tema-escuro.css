@@ -68,10 +68,6 @@
 :root[data-tema="escuro"] .op-badge--recolhimento { background: #2a2f39; color: var(--mc-muted); }
 :root[data-tema="escuro"] .op-badge--vence { background: #4a3a10; color: #f2cf7a; }
 
-/* Painel: cartões de indicadores */
-:root[data-tema="escuro"] .stat-card--total { --mc-accent: #aab2c0; --mc-accent-soft: #2a2f39; }
-:root[data-tema="escuro"] .stat-card--uso { --mc-accent-soft: var(--mc-gold-soft); }
-
 /* Tabelas, avisos e listas */
 :root[data-tema="escuro"] .table-card tr.is-selected td { background: #2a2519; }
 :root[data-tema="escuro"] .warn-note { color: #f0d9a0; border-color: #5a4619; }
@@ -88,5 +84,6 @@
 :root[data-tema="escuro"] .tap-row-age { color: var(--mc-gold-dark); }
 
 /* Painel do celular: amarelo do "Acabando", etiqueta neutra e o número da torneira no Retirar */
-:root[data-tema="escuro"] .tela-painel { --pc-aviso: var(--mc-gold-dark); --pc-aviso-soft: var(--mc-gold-soft); --pc-neutro-soft: #2a2f39; }
+/* Painel do computador: as linhas entre as linhas das tabelas e do gráfico */
+:root[data-tema="escuro"] .tela-painel { --pc-aviso: var(--mc-gold-dark); --pc-aviso-soft: var(--mc-gold-soft); --pc-neutro-soft: #2a2f39; --pp-grade: #262b34; }
 :root[data-tema="escuro"] .pc-torneira-num { background: #0b0d11; border: 1px solid var(--mc-line); }

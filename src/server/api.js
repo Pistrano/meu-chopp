@@ -17,6 +17,7 @@ const { supabase } = require("./supabase");
 const teknisa = require("./teknisa");
 const { montarAlertas } = require("./alertas");
 const perdas = require("./perdas");
+const painel = require("./painel");
 
 const handlers = new Map();   // canal -> { fn, auth, perm }
 
@@ -1391,15 +1392,18 @@ function registerHandlers() {
   /* ======== Dashboard ======== */
   /* semFuncionarios (só para quem cadastra funcionários): nome da unidade que ainda não tem nenhum funcionário ativo.
      O Painel mostra o aviso para cadastrar, senão ninguém escolhe quem fez cada ação. */
+  async function semFuncionariosDe(ctx, unit) {
+    if (!pode(ctx.session, "funcionarios")) return null;
+    const ativos = ok(await supabase.from("funcionario_unidades").select("funcionario_id, funcionarios!inner(ativo)")
+      .eq("unidade_id", unit).eq("funcionarios.ativo", true).limit(1));
+    return ativos.length ? null : ok(await supabase.from("unidades").select("nome").eq("id", unit).single()).nome;
+  }
+
+  // Painel do celular (menos de 1024 px). O do computador usa dashboard:computador, mais abaixo.
   handle("dashboard:get", async ({ unitId }, ctx) => {
     const unit = await resolveUnit(ctx, unitId);
     const stats = await rpc("fn_dashboard_stats_v2", { p_unit: unit });
-    let semFuncionarios = null;
-    if (pode(ctx.session, "funcionarios")) {
-      const ativos = ok(await supabase.from("funcionario_unidades").select("funcionario_id, funcionarios!inner(ativo)")
-        .eq("unidade_id", unit).eq("funcionarios.ativo", true).limit(1));
-      if (!ativos.length) semFuncionarios = ok(await supabase.from("unidades").select("nome").eq("id", unit).single()).nome;
-    }
+    const semFuncionarios = await semFuncionariosDe(ctx, unit);
     return { stats, movimentacoes: await queryMovements({ unitId: unit, limit: 8, semPesagens: true }), semFuncionarios };
   });
 
@@ -2073,6 +2077,40 @@ function registerHandlers() {
     await audit(ctx, "relatorio_perdas_exportado", `${rel.unidade ? rel.unidade.nome : ""}, de ${quando(rel.de)} até ${quando(rel.ate)}`);
     return { filename, csv, total: rel.chopes.length };
   }, { perm: "exportar" });
+
+  /* ======== Painel do computador (1024 px ou mais) ========
+     A perda vem das mesmas funções do relatório de perdas: os 8 últimos períodos seguidos (lista e gráfico de linhas)
+     e o período escolhido por chope (inventarioId = o inventário do fim; sem ele, ou se ele não está mais entre os 8,
+     o último). Junto: o estoque por chope (regra do estoque baixo do sino), os barris no estoque, os vazios, as
+     movimentações e o aviso de funcionários, como no dashboard:get. As consultas saem juntas. Montagem em painel.js;
+     dinheiro só para quem tem "catalogo:editar". Sem o SQL do relatório de perdas, o resto do Painel continua. */
+  handle("dashboard:computador", async (p, ctx) => {
+    const { unitId, inventarioId } = p || {};
+    const unit = await resolveUnit(ctx, unitId);
+    const escolhido = idInventario(inventarioId);
+    const perdasDoPainel = async () => {
+      try {
+        const periodos = await rpcPerdas("fn_perdas_periodos", { p_unidade: unit, p_limite: painel.PAINEL_PERIODOS });
+        const lista = periodos.periodos || []; // do mais novo para o mais velho
+        const par = lista.find((x) => x.inventario_ate === escolhido) || lista[0];
+        const relatorio = par
+          ? await rpcPerdas("fn_perdas_periodo", { p_unidade: unit, p_inv_de: par.inventario_de, p_inv_ate: par.inventario_ate })
+          : null;
+        return { periodos, relatorio };
+      } catch (e) {
+        if (e instanceof AppError && /ainda não foi instalado/.test(e.message)) return { periodos: null, relatorio: null, semPerdas: e.message };
+        throw e;
+      }
+    };
+    const [perda, estoque, movimentacoes, semFuncionarios] = await Promise.all([
+      perdasDoPainel(),
+      supabase.from("barris").select("chope_id, chope_nome, estilo, status")
+        .eq("unidade_id", unit).neq("status", "recolhido").limit(5000).then((r) => ok(r)),
+      queryMovements({ unitId: unit, limit: 8, semPesagens: true }),
+      semFuncionariosDe(ctx, unit),
+    ]);
+    return painel.montarPainelComputador({ ...perda, estoque, movimentacoes, semFuncionarios }, { dinheiro: veDinheiro(ctx), fmtTs });
+  });
 
   /* ======== Vendas (hoje só o relatório da Teknisa) ========
      Importa o relatório "Vendas Realizadas no Período" (XLSX) com o horário de cada venda (leitura em teknisa.js).

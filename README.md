@@ -134,8 +134,35 @@ registrado está no banco.
 O Painel tem duas versões na mesma página (`src/renderer/dashboard.html` e `js/dashboard.js`). O CSS mostra uma ou a
 outra pela largura da tela, e girar o tablet ou mudar o tamanho da janela troca a versão sem recarregar.
 
-- **Computador** (1024 px ou mais): a saudação, o botão *Relatório de barris*, os cinco cartões de estoque e as
-  movimentações recentes.
+- **Computador** (1024 px ou mais): a perda de chope, o estoque por chope e os chopes que mais saíram. Usa a rota
+  `dashboard:computador` (`{ unitId, inventarioId? }`), montada em `src/server/painel.js`, e é desenhado por
+  `js/painel-computador.js` (CSS em `css/painel-computador.css`, prefixo `pp-`). De cima para baixo:
+  - **Saudação** igual à de antes, o aviso de funcionários e, na mesma linha, a escolha do **Inventário** (os períodos do
+    Relatório de perdas, do mais novo para o mais velho; o último vem marcado *(último)* e escolhido ao abrir) e o botão
+    *Relatório de barris*.
+  - **Perda em dinheiro** e **Perda em litros** (com o % do que saiu dos barris), cada uma com a diferença para o
+    inventário anterior: ▲ vermelho se a perda subiu, ▼ verde se caiu. Embaixo, o período e, se algum chope com perda
+    está sem preço, *Fora da conta (sem preço): nomes*. Perda negativa (vendeu mais do que saiu) fica em azul.
+  - **Litros perdidos a cada inventário**: gráfico de linhas *Saiu dos barris* (dourado) × *Vendido* (azul), com a área
+    entre elas em vermelho claro, um ponto por período (os 8 últimos). O período escolhido fica em destaque, com a perda
+    em litros. Clicar num ponto (ou Enter no teclado) troca o período do Painel inteiro.
+  - **Estoque por chope** (os chopes com algum barril não recolhido na unidade): engatados, disponíveis, o que saiu no
+    período e a situação. *Sem estoque* com 0 disponíveis, *Acabando* com 1 ou 2, *OK* com 3 ou mais: a mesma regra do
+    sino (`situacaoEstoque` e `estoquePorChope` em `src/server/alertas.js`, usadas pelos dois). A ordem é sem estoque,
+    acabando e ok; dentro de cada grupo, o que mais saiu no período primeiro. No título, *barris no estoque*
+    (disponíveis e engatados) e *vazios para recolher* abrem a aba Barris.
+  - **Movimentações recentes**: as 8 mais recentes, sem as pesagens, com o link *Ver histórico*. O estoque e as
+    movimentações têm a própria rolagem (até 330 px, com o título da tabela fixo).
+  - **Chopes que mais saíram**: duas barras por chope (*Saiu dos barris* e *Vendido*), só os que saíram no período, do
+    que mais saiu para o que menos saiu, com os litros, a perda em % e, para quem vê dinheiro, em R$.
+  - **A perda não é calculada de novo**: vem de `fn_perdas_periodos` e `fn_perdas_periodo`, as mesmas funções do
+    Relatório de perdas. O R$ só vai para quem tem `catalogo:editar`; para o operador o servidor nem manda, e a caixa
+    mostra *Só administrador e gerente veem.* Litros e % são para todos.
+  - **Sem dados**: com menos de dois inventários completos, as caixinhas, o gráfico e as barras dão lugar a *A perda
+    aparece depois do segundo inventário completo*, e o estoque (sem a coluna do que saiu) e as movimentações aparecem
+    normalmente. Período sem vendas importadas: *Sem vendas importadas neste período. Importe em Vendas.* no lugar da
+    perda, e o que saiu dos barris continua. Sem o SQL do Relatório de perdas no banco, aparece a mensagem dele e o resto
+    do Painel funciona.
 - **Celular e tablet** (menos de 1024 px): uma tela de ações rápidas para o funcionário do quiosque. É igual para todos
   os cargos e **não mostra perda nem dinheiro**, porque o celular do quiosque é usado por qualquer funcionário.
   - **Faixa escura** logo abaixo do topo, com *Olá, nome* e a unidade. Quem tem mais de uma unidade troca por ali, com a
@@ -162,7 +189,8 @@ outra pela largura da tela, e girar o tablet ou mudar o tamanho da janela troca 
   - **Últimas movimentações**: as 3 mais recentes, sem as pesagens, com a etiqueta, o código, o chope, o detalhe e a hora
     (*ontem* ou o dia, se não forem de hoje). O link *Ver todas* abre o Histórico.
   - No celular (menos de 768 px), as janelas sobem da parte de baixo da tela, como na aba Torneiras.
-- As duas versões usam `dashboard:get` e são atualizadas a cada minuto e quando a tela volta a ficar visível.
+- O celular usa `dashboard:get` (sem mudança) e o computador `dashboard:computador`. As duas versões são atualizadas a
+  cada minuto e quando a tela volta a ficar visível; no computador, o inventário escolhido continua o mesmo.
 
 ## Cargos e permissões
 
@@ -193,7 +221,7 @@ o resto depende da permissão do cargo:
   e a lógica em `src/renderer/js/tema.js`. Tela nova: use sempre as variáveis `--mc-*` (nunca cor fixa) e ela já funciona nos dois temas.
 - **Painel atualizado automaticamente:** o resumo e as movimentações recentes são recarregados a cada minuto e quando a tela volta a ficar visível.
 - **Confirmações de ações importantes:** transferências, recolhimento de barris, desativação de usuários/unidades/torneiras/funcionários, apagar usuário ou chope e geração de senha temporária pedem confirmação antes de alterar os dados. No celular do quiosque, o cadastro de barril também pede confirmação, junto com a escolha de quem está fazendo.
-- **Painel:** os cartões de estoque abrem a lista de barris já filtrada pela situação. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
+- **Painel:** no computador, *barris no estoque* e *vazios para recolher* abrem a aba Barris (os vazios já filtrados); no celular, as linhas de *Sua loja agora*. O sino atualiza os alertas a cada minuto e avisa quando um chope em operação tem 2 ou menos barris disponíveis na unidade.
 - **Relatório de estoque:** na aba Barris, *Exportar estoque (CSV)* (só administrador) baixa os barris em operação com chope, tamanho, situação, validade, unidade, torneira e o funcionário da última ação.
 - **Ordenar tabelas:** clique no título da coluna (Barris, Histórico, Transferências, Usuários e Relatório de barris). Primeiro clique ordena de forma
   crescente, o segundo decrescente, o terceiro volta à ordem original. Campos vazios ficam sempre no fim. No Histórico a ordem vale
@@ -499,7 +527,8 @@ Quanto chope saiu dos barris e quanto o caixa vendeu entre dois inventários con
 - As contas ficam no banco: `fn_perdas_periodo(unidade, inventário do início, inventário do fim)` e
   `fn_perdas_periodos(unidade, limite)` (os inventários concluídos, o aberto e os totais dos últimos pares seguidos, com a
   mesma função), em `supabase/migrations/20261127000000_relatorio_perdas.sql`. Rotas `perdas:periodos`, `perdas:relatorio`
-  e `perdas:csv` em `src/server/api.js`; a montagem das respostas e o CSV em `src/server/perdas.js`.
+  e `perdas:csv` em `src/server/api.js`; a montagem das respostas e o CSV em `src/server/perdas.js`. O Painel do
+  computador usa as mesmas funções (veja *Painel*).
 
 ## Usuários
 
@@ -586,7 +615,8 @@ recria o banco local do zero. `npx supabase stop` desliga o Supabase local.
 ## Estrutura
 
 - `src/server/` — servidor e regras (`server.js`, `api.js`, `supabase.js`; `teknisa.js` lê o XLSX de vendas da Teknisa;
-  `alertas.js` monta os alertas do sino; `perdas.js` monta o Relatório de perdas e o CSV dele)
+  `alertas.js` monta os alertas do sino e o estoque por chope; `perdas.js` monta o Relatório de perdas e o CSV dele;
+  `painel.js` monta o Painel do computador)
 - `src/renderer/` — as telas (servidas pelo servidor)
 - `src/main/` — aplicativo Windows (só abre o servidor em uma janela)
 - `supabase/migrations/` — schema e mudanças do banco (`supabase/config.toml` é do Supabase local dos testes)
