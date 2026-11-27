@@ -16,6 +16,7 @@ const crypto = require("crypto");
 const { supabase } = require("./supabase");
 const teknisa = require("./teknisa");
 const { montarAlertas } = require("./alertas");
+const perdas = require("./perdas");
 
 const handlers = new Map();   // canal -> { fn, auth, perm }
 
@@ -2028,6 +2029,49 @@ function registerHandlers() {
       csv: "﻿" + [header.map(esc).join(";"), ...lines].join("\r\n"),
       total: rel.chopes.length,
     };
+  }, { perm: "exportar" });
+
+  /* ======== Relatório de perdas (Mais > Relatório de perdas) ========
+     Saiu dos barris × vendido no caixa entre dois inventários concluídos da unidade. A conta é do banco
+     (fn_perdas_periodo; fn_perdas_periodos chama a mesma para cada par seguido de inventários).
+     Todos os cargos veem litros e %. Custo do litro, R$ e "sem preço" só para quem tem "catalogo:editar"
+     (administrador e gerente): para os outros, esses campos nem saem do servidor. Exportar CSV: só administrador. */
+  async function rpcPerdas(fn, args) {
+    const { data, error } = await supabase.rpc(fn, args);
+    if (error && error.code === "PGRST202")
+      throw new AppError("O relatório de perdas ainda não foi instalado no banco. Peça para rodar o SQL no Supabase.");
+    dbError(error);
+    return data;
+  }
+  const idInventario = (v) => { const id = Number(v); return Number.isSafeInteger(id) && id > 0 ? id : null; };
+  const veDinheiro = (ctx) => pode(ctx.session, "catalogo:editar");
+  // Quantos períodos seguidos a tela precisa: o último e até 4 anteriores (os atalhos "Entre inventários")
+  const PERDAS_ATALHOS = 5;
+
+  // Inventários concluídos da unidade (do mais novo para o mais velho), o aberto e os totais dos últimos períodos
+  handle("perdas:periodos", async (p, ctx) => {
+    const unit = await resolveUnit(ctx, (p || {}).unitId);
+    const r = await rpcPerdas("fn_perdas_periodos", { p_unidade: unit, p_limite: PERDAS_ATALHOS });
+    return perdas.montarPeriodos(r, { dinheiro: veDinheiro(ctx), fmtTs });
+  });
+
+  async function relatorioPerdas(ctx, p) {
+    const unit = await resolveUnit(ctx, p.unitId);
+    const de = idInventario(p.inventarioDe);
+    const ate = idInventario(p.inventarioAte);
+    if (!de || !ate) throw new AppError("Escolha o inventário do início e o do fim.");
+    const r = await rpcPerdas("fn_perdas_periodo", { p_unidade: unit, p_inv_de: de, p_inv_ate: ate });
+    return perdas.montarRelatorio(r, { dinheiro: veDinheiro(ctx), fmtTs });
+  }
+
+  handle("perdas:relatorio", (p, ctx) => relatorioPerdas(ctx, p || {}));
+
+  handle("perdas:csv", async (p, ctx) => {
+    const rel = await relatorioPerdas(ctx, p || {});
+    const { filename, csv } = perdas.csv(rel);
+    const quando = (ts) => (ts ? `${diaMes(ts.slice(0, 10))} ${ts.slice(11, 16)}` : "");
+    await audit(ctx, "relatorio_perdas_exportado", `${rel.unidade ? rel.unidade.nome : ""}, de ${quando(rel.de)} até ${quando(rel.ate)}`);
+    return { filename, csv, total: rel.chopes.length };
   }, { perm: "exportar" });
 
   /* ======== Vendas (hoje só o relatório da Teknisa) ========
